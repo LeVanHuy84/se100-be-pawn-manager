@@ -1,8 +1,24 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/exceptions/http-exception.filter';
+import { ConfigService } from '@nestjs/config';
+import { VersioningType } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  await app.listen(process.env.PORT ?? 3000);
+  const globalPrefix = 'api';
+  app.setGlobalPrefix(globalPrefix);
+  app.enableVersioning({
+    type: VersioningType.URI,
+    prefix: 'v',
+  });
+
+  const configService = app.get(ConfigService);
+  const port = configService.get<number>('PORT') || 4000;
+
+  app.useGlobalFilters(new AllExceptionsFilter());
+
+  await app.listen(port);
+  console.log(`🚀 Server running on http://localhost:${port}`);
 }
 bootstrap();
