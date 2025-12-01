@@ -4,12 +4,15 @@ import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { verifyToken } from '@clerk/backend';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY } from 'src/common/decorators/public.decorator';
 import { clerkClient } from 'src/clerk/clerk.config';
+import { IS_PUBLIC_KEY } from 'src/common/decorators/public.decorator';
+import { ROLES_KEY } from 'src/common/decorators/role.decorator';
+import { Role } from 'src/modules/employee/enum/role.enum';
 
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {
@@ -19,32 +22,41 @@ export class ClerkAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // 🟢 check decorator @Public()
+    const handler = context.getHandler();
+    const clazz = context.getClass();
+
+    // ---------------------------
+    // 1) Check @Public()
+    // ---------------------------
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
+      handler,
+      clazz,
     ]);
     if (isPublic) return true;
 
+    // ---------------------------
+    // 2) Get Auth Header
+    // ---------------------------
     const req = context.switchToHttp().getRequest();
     const token = req.headers.authorization?.split(' ')?.[1];
 
-    if (!token) {
-      throw new UnauthorizedException('No authorization token');
-    }
+    if (!token) throw new UnauthorizedException('No authorization token');
 
     try {
-      // 🟢 verify JWT
+      // ---------------------------
+      // 3) Verify JWT bằng Clerk
+      // ---------------------------
       const payload = await verifyToken(token, {
         secretKey: this.config.get('CLERK_SECRET_KEY'),
       });
 
-      // 🟢 fetch user profile from Clerk
+      // ---------------------------
+      // 4) Fetch user từ Clerk API
+      // ---------------------------
       const user = await clerkClient.users.getUser(payload.sub);
+      const role = (user.privateMetadata.role as Role) || Role.STAFF;
 
-      const role = user.privateMetadata.role || 'user';
-
-      // attach to request
+      // Gắn user vào request
       req.user = {
         userId: payload.sub,
         email: payload.email,
@@ -53,6 +65,22 @@ export class ClerkAuthGuard implements CanActivate {
         role,
         clerkUser: user,
       };
+
+      // ---------------------------
+      // 5) Role checking (tích hợp RolesGuard)
+      // ---------------------------
+      const requiredRoles = this.reflector.getAllAndOverride<Role[]>(
+        ROLES_KEY,
+        [handler, clazz],
+      );
+
+      // Không có yêu cầu role → pass luôn
+      if (!requiredRoles?.length) return true;
+
+      // Nếu route có yêu cầu role mà user không thuộc
+      if (!requiredRoles.includes(role)) {
+        throw new ForbiddenException('No permission');
+      }
 
       return true;
     } catch (err) {
