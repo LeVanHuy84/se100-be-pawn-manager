@@ -1,10 +1,8 @@
 export interface PaginationMeta {
-  page: number;
-  limit: number;
-  totalRecords: number;
+  totalItems: number;
   totalPages: number;
-  hasPrev: boolean;
-  hasNext: boolean;
+  currentPage: number;
+  itemsPerPage: number;
 }
 
 export interface PaginationQuery {
