@@ -1,11 +1,9 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// ==================================================
+// GENERATOR & DATASOURCE
+// ==================================================
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -13,9 +11,312 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Users {
-  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email     String      @unique
-  name      String?
-  createdAt DateTime    @default(now())
+// ==================================================
+// ENUMS
+// ==================================================
+enum CustomerType {
+  REGULAR
+  VIP
+}
+
+enum RegistrationChannel {
+  DIRECT
+  ONLINE
+  HOME_DELIVERY
+}
+
+enum LoanApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CLOSED
+}
+
+enum RepaymentMethod {
+  EQAL_INSTALLMENT
+  INTEREST_ONLY
+}
+
+enum LoanStatus {
+  ACTIVE
+  CLOSED
+  OVERDUE
+}
+
+enum RepaymentItemStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum PaymentType {
+  PERIODIC
+  EARLY
+  LATE_FEE
+  PENALTY
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+enum PaymentComponent {
+  PRINCIPAL
+  INTEREST
+  LATE_FEE
+  PENALTY
+  SERVICE_FEE
+}
+
+enum AssetType {
+  CAR
+  MOTORBIKE
+  GOLD
+  OTHER
+}
+
+enum AssetStatus {
+  PROPOSED
+  PLEDGED
+  STORED
+  RELEASED
+}
+
+enum DocumentEntity {
+  CUSTOMER
+  COLLATERAL
+  LOAN
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DisbursementMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+// ==================================================
+// LOAN PRODUCT TYPE
+// ==================================================
+model LoanProductType {
+  id          Int         @id @default(autoincrement())
+  name        String      @unique
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @default(now())
+
+  loanProducts LoanProduct[]
+}
+
+// ==================================================
+// CUSTOMER
+// ==================================================
+model Customer {
+  id            String    @id @default(uuid()) @db.Uuid
+  fullName      String
+  dob           DateTime  @db.Date
+  nationalId    String    @unique
+  phone         String?   @unique
+  email         String?   @unique
+  address       String?
+  customerType  CustomerType
+  monthlyIncome Decimal?
+  creditScore   Int?
+
+  loans     Loan[]
+  contracts Contract[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+}
+
+// ==================================================
+// LOAN PRODUCT
+// ==================================================
+model LoanProduct {
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String
+  productTypeId   Int?
+  minLoanAmount   Decimal
+  maxLoanAmount   Decimal
+  minLoanTerm     Int
+  maxLoanTerm     Int
+  repaymentMethod RepaymentMethod
+  description     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now())
+
+  productType LoanProductType? @relation(fields: [productTypeId], references: [id])
+  loans       Loan[]
+}
+
+// ==================================================
+// LOAN
+// ==================================================
+model Loan {
+  id              String    @id @default(uuid()) @db.Uuid
+  customerId      String    @db.Uuid
+  loanProductId   String    @db.Uuid
+  loanAmount      Decimal
+  loanTermMonths  Int
+  startDate       DateTime  @db.Date
+  status          LoanStatus @default(ACTIVE)
+  approvedAt      DateTime?
+  activatedAt     DateTime?
+  totalPaidAmount Decimal?   @default(0)
+  remainingAmount Decimal?   @default(0)
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @default(now())
+
+  customer     Customer @relation(fields: [customerId], references: [id])
+  loanProduct  LoanProduct @relation(fields: [loanProductId], references: [id])
+
+  repaymentSchedule RepaymentScheduleDetail[]
+  payments          LoanPayment[]
+  collaterals       CollateralAsset[]
+  contract          Contract?    // one-to-one (Contract.loanId is unique)
+}
+
+// ==================================================
+// REPAYMENT SCHEDULE
+// ==================================================
+model RepaymentScheduleDetail {
+  id                String              @id @default(uuid()) @db.Uuid
+  loanId            String              @db.Uuid
+  periodNumber      Int
+  dueDate           DateTime            @db.Date
+  beginningBalance  Decimal
+  principalAmount   Decimal
+  interestAmount    Decimal
+  totalAmount       Decimal
+  status            RepaymentItemStatus @default(PENDING)
+  paidPrincipal     Decimal?            @default(0)
+  paidInterest      Decimal?            @default(0)
+  paidAt            DateTime?
+
+  loan Loan @relation(fields: [loanId], references: [id])
+}
+
+// ==================================================
+// PAYMENTS
+// ==================================================
+model LoanPayment {
+  id                   String         @id @default(uuid()) @db.Uuid
+  loanId               String         @db.Uuid
+  amount               Decimal
+  paymentType          PaymentType
+  paymentMethod        PaymentMethod
+  paidAt               DateTime       @default(now())
+  referenceCode        String?
+  recorderEmployeeId   String?        // clerk user id (string)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @default(now())
+
+  loan        Loan @relation(fields: [loanId], references: [id])
+  allocations PaymentAllocation[]
+}
+
+// Allocation per payment
+model PaymentAllocation {
+  id            String          @id @default(uuid()) @db.Uuid
+  paymentId     String          @db.Uuid
+  componentType PaymentComponent
+  amount        Decimal
+  note          String?
+
+  payment LoanPayment @relation(fields: [paymentId], references: [id])
+}
+
+// ==================================================
+// COLLATERAL & APPRAISAL
+// ==================================================
+model CollateralAsset {
+  id              String    @id @default(uuid()) @db.Uuid
+  assetType       AssetType
+  ownerName       String
+  brandModel      String?
+  serialNumber    String?   @unique
+  status          AssetStatus @default(PROPOSED)
+  loanId          String?   @db.Uuid
+  storageLocation String?
+  receivedDate    DateTime? @db.Date
+  releasedDate    DateTime? @db.Date
+
+  appraisedValue  Decimal?
+  ltvRatio        Decimal?
+  appraisalDate   DateTime?
+  appraisalNotes  String?
+  validUntil      DateTime? @db.Date
+
+  salePrice       Decimal?
+  isSold          Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  createdBy String?
+  updatedBy String?
+
+  loan Loan? @relation(fields: [loanId], references: [id])
+}
+
+// ==================================================
+// CONTRACT
+// ==================================================
+model Contract {
+  id               String   @id @default(uuid()) @db.Uuid
+  loanId           String   @unique @db.Uuid   // unique = one-to-one with Loan
+  customerId       String   @db.Uuid
+  employeeId       String?
+  contractDate     DateTime @db.Date
+  policyId         String?
+  digitalSignature String?
+  termsReference   String?
+
+  amount        Decimal
+  method        DisbursementMethod
+  disbursedDate DateTime @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  loan     Loan     @relation(fields: [loanId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+}
+
+// ==================================================
+// DOCUMENT RECORD
+// ==================================================
+model DocumentRecord {
+  id          String        @id @default(uuid()) @db.Uuid
+  entityType  DocumentEntity
+  entityId    String        @db.Uuid
+  docType     String
+  docNumber   String
+  issuedDate  DateTime      @db.Date
+  expiryDate  DateTime?
+  filePath    String
+  isValid     Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+}
+
+// ==================================================
+// SYSTEM PARAMETER
+// ==================================================
+model SystemParameter {
+  id          Int      @id @default(autoincrement())
+  paramGroup  String?
+  paramKey    String
+  paramValue  String
+  dataType    String?   @default("STRING")
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now())
+
+  @@unique([paramGroup, paramKey])
 }
