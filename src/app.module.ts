@@ -5,6 +5,7 @@ import Joi from 'joi';
 import { APP_GUARD } from '@nestjs/core';
 import { ClerkAuthGuard } from './clerk/clerk-auth.guard';
 import { EmployeeModule } from './modules/employee/employee.module';
+import { ConfigurationsModule } from './modules/configurations/configurations.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { EmployeeModule } from './modules/employee/employee.module';
         CLERK_SECRET_KEY: Joi.string().required(),
       }),
     }),
+    ConfigurationsModule,
   ],
   controllers: [],
   providers: [
