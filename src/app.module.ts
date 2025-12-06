@@ -6,6 +6,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { ClerkAuthGuard } from './clerk/clerk-auth.guard';
 import { EmployeeModule } from './modules/employee/employee.module';
 import { ConfigurationsModule } from './modules/configurations/configurations.module';
+import { LoanSimulationsModule } from './modules/loan-simulations/loan-simulations.module';
+import { PaymentModule } from './modules/payment/payment.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { ConfigurationsModule } from './modules/configurations/configurations.mo
       }),
     }),
     ConfigurationsModule,
+    LoanSimulationsModule,
+    PaymentModule,
   ],
   controllers: [],
   providers: [
