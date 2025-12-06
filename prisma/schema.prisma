@@ -33,14 +33,13 @@ enum LoanApplicationStatus {
 }
 
 enum RepaymentMethod {
-  EQAL_INSTALLMENT
+  EQUAL_INSTALLMENT
   INTEREST_ONLY
 }
 
 enum LoanStatus {
   ACTIVE
   CLOSED
-  OVERDUE
 }
 
 enum RepaymentItemStatus {
@@ -81,6 +80,7 @@ enum AssetStatus {
   PLEDGED
   STORED
   RELEASED
+  REJECTED
 }
 
 enum DocumentEntity {
@@ -106,10 +106,13 @@ model LoanProductType {
   id          Int         @id @default(autoincrement())
   name        String      @unique
   description String?
+  interestRate    Decimal
+  managementFee   Decimal
+  storageFee      Decimal
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @default(now())
 
-  loanProducts LoanProduct[]
+  loans Loan[]
 }
 
 // ==================================================
@@ -135,52 +138,43 @@ model Customer {
 }
 
 // ==================================================
-// LOAN PRODUCT
-// ==================================================
-model LoanProduct {
-  id              String    @id @default(uuid()) @db.Uuid
-  name            String
-  productTypeId   Int?
-  minLoanAmount   Decimal
-  maxLoanAmount   Decimal
-  minLoanTerm     Int
-  maxLoanTerm     Int
-  repaymentMethod RepaymentMethod
-  description     String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now())
-
-  productType LoanProductType? @relation(fields: [productTypeId], references: [id])
-  loans       Loan[]
-}
-
-// ==================================================
 // LOAN
 // ==================================================
 model Loan {
-  id              String    @id @default(uuid()) @db.Uuid
-  customerId      String    @db.Uuid
-  loanProductId   String    @db.Uuid
+  id              String        @id @default(uuid()) @db.Uuid
+  customerId      String        @db.Uuid
+
+  // ---- LOAN FINANCIAL TERMS ----
   loanAmount      Decimal
   loanTermMonths  Int
-  startDate       DateTime  @db.Date
+  repaymentMethod RepaymentMethod
+  loanProductTypeId   Int
+  interestRate    Decimal                     // snapshot
+  managementFee   Decimal                      // snapshot
+  storageFee      Decimal                      // snapshot
+  otherFee        Decimal?                     // optional
+
+  // ---- LIFECYCLE ----
+  startDate       DateTime @db.Date
   status          LoanStatus @default(ACTIVE)
   approvedAt      DateTime?
   activatedAt     DateTime?
-  totalPaidAmount Decimal?   @default(0)
-  remainingAmount Decimal?   @default(0)
+  totalPaidAmount Decimal @default(0)
+  remainingAmount Decimal @default(0)
   notes           String?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @default(now())
 
-  customer     Customer @relation(fields: [customerId], references: [id])
-  loanProduct  LoanProduct @relation(fields: [loanProductId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
 
+  // ---- RELATIONS ----
+  loanProductType   LoanProductType      @relation(fields: [loanProductTypeId], references: [id])
+  customer          Customer             @relation(fields: [customerId], references: [id])
   repaymentSchedule RepaymentScheduleDetail[]
   payments          LoanPayment[]
   collaterals       CollateralAsset[]
-  contract          Contract?    // one-to-one (Contract.loanId is unique)
+  contract          Contract?
 }
+
 
 // ==================================================
 // REPAYMENT SCHEDULE
@@ -240,7 +234,7 @@ model CollateralAsset {
   assetType       AssetType
   ownerName       String
   brandModel      String?
-  serialNumber    String?   @unique
+  serialNumber    String?
   status          AssetStatus @default(PROPOSED)
   loanId          String?   @db.Uuid
   storageLocation String?
@@ -277,7 +271,7 @@ model Contract {
   digitalSignature String?
   termsReference   String?
 
-  amount        Decimal
+  disbursementAmount Decimal
   method        DisbursementMethod
   disbursedDate DateTime @db.Date
 
