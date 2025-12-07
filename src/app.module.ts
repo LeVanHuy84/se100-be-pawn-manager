@@ -6,11 +6,15 @@ import { APP_GUARD } from '@nestjs/core';
 import { ClerkAuthGuard } from './clerk/clerk-auth.guard';
 import { EmployeeModule } from './modules/employee/employee.module';
 import { CustomerModule } from './modules/customer/customer.module';
+import { CollateralModule } from './modules/collateral/collateral.module';
+import { DocumentModule } from './modules/document/document.module';
 
 @Module({
   imports: [
     EmployeeModule,
     CustomerModule,
+    CollateralModule,
+    DocumentModule,
     PrismaModule,
     ConfigModule.forRoot({
       isGlobal: true,
@@ -18,6 +22,9 @@ import { CustomerModule } from './modules/customer/customer.module';
         PORT: Joi.string().required(),
         DATABASE_URL: Joi.string().required(),
         CLERK_SECRET_KEY: Joi.string().required(),
+        CLOUDINARY_CLOUD_NAME: Joi.string().required(),
+        CLOUDINARY_API_KEY: Joi.string().required(),
+        CLOUDINARY_API_SECRET: Joi.string().required(),
       }),
     }),
   ],

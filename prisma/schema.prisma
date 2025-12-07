@@ -40,6 +40,7 @@ enum RepaymentMethod {
 enum LoanStatus {
   ACTIVE
   CLOSED
+  OVERDUE
 }
 
 enum RepaymentItemStatus {
@@ -81,6 +82,8 @@ enum AssetStatus {
   STORED
   RELEASED
   REJECTED
+  LIQUIDATING
+  SOLD
 }
 
 enum DocumentEntity {
@@ -233,8 +236,11 @@ model CollateralAsset {
   id              String    @id @default(uuid()) @db.Uuid
   assetType       AssetType
   ownerName       String
+
   brandModel      String?
   serialNumber    String?
+  plateNumber     String?
+  marketValue     Decimal?
   status          AssetStatus @default(PROPOSED)
   loanId          String?   @db.Uuid
   storageLocation String?
@@ -247,8 +253,9 @@ model CollateralAsset {
   appraisalNotes  String?
   validUntil      DateTime? @db.Date
 
-  salePrice       Decimal?
+  sellPrice       Decimal?
   isSold          Boolean   @default(false)
+  sellDate       DateTime? @db.Date
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
@@ -293,7 +300,8 @@ model DocumentRecord {
   docNumber   String
   issuedDate  DateTime      @db.Date
   expiryDate  DateTime?
-  filePath    String
+  fileUrl    String
+  filePublicId String
   isValid     Boolean       @default(true)
   createdAt   DateTime      @default(now())
 }
