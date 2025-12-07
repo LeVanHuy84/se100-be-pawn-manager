@@ -5,10 +5,12 @@ import Joi from 'joi';
 import { APP_GUARD } from '@nestjs/core';
 import { ClerkAuthGuard } from './clerk/clerk-auth.guard';
 import { EmployeeModule } from './modules/employee/employee.module';
+import { CustomerModule } from './modules/customer/customer.module';
 
 @Module({
   imports: [
     EmployeeModule,
+    CustomerModule,
     PrismaModule,
     ConfigModule.forRoot({
       isGlobal: true,
@@ -20,11 +22,11 @@ import { EmployeeModule } from './modules/employee/employee.module';
     }),
   ],
   controllers: [],
-  providers: [
-    {
-      provide: APP_GUARD,
-      useClass: ClerkAuthGuard,
-    },
-  ],
+  // providers: [
+  //   {
+  //     provide: APP_GUARD,
+  //     useClass: ClerkAuthGuard,
+  //   },
+  // ],
 })
 export class AppModule {}
