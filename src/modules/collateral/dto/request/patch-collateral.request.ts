@@ -10,6 +10,7 @@ export const PatchCollateralSchema = z.object({
   appraisalNotes: z.string().optional(),
   sellPrice: z.coerce.number().int().min(0).optional(),
   isSold: z.coerce.boolean().optional(),
+  updatedBy: z.string().optional(),
 });
 
 export class PatchCollateralDTO extends createZodDto(PatchCollateralSchema) {}

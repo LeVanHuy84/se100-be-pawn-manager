@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -15,6 +16,7 @@ import { CollateralQueryDTO } from './dto/request/collateral.query';
 import { CreateCollateralDTO } from './dto/request/create-collateral.request';
 import { UpdateLocationRequest } from './dto/request/update-location.request';
 import { CreateLiquidationRequest } from './dto/request/liquidation.request';
+import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 
 @Controller({
   version: '1',
@@ -38,8 +40,15 @@ export class CollateralController {
   @Post()
   @Roles(Role.MANAGER, Role.STAFF)
   createCollateral(@Body() body: CreateCollateralDTO, @Req() req) {
-    // body.createdBy = req.user.id;
+    body.createdBy = req.user.id;
     return this.collateralService.create(body);
+  }
+
+  @Patch('/:id')
+  @Roles(Role.MANAGER, Role.STAFF)
+  updateCollateral(@Param('id') id: string, @Body() body: PatchCollateralDTO, @Req() req) {
+    body.updatedBy = req.user.id;
+    return this.collateralService.update(id, body);
   }
 }
 
@@ -53,7 +62,7 @@ export class CollateralLocationController {
   @Put('/:id/location')
   @Roles(Role.MANAGER, Role.STAFF)
   updateLocation(@Param('id') id: string, @Body() body: UpdateLocationRequest, @Req() req) {
-    // body.updatedBy = req.user.id;
+    body.updatedBy = req.user.id;
     return this.collateralService.updateLocation(id, body);
   }
 }
@@ -68,7 +77,7 @@ export class LiquidationController {
   @Post()
   @Roles(Role.MANAGER, Role.STAFF)
   createLiquidation(@Body() body: CreateLiquidationRequest, @Req() req) {
-    // body.createdBy = req.user.id;
+    body.createdBy = req.user.id;
     return this.collateralService.createLiquidation(body);
   }
 }

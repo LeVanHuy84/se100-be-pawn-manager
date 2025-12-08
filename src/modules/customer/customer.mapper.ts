@@ -1,6 +1,10 @@
-import { Customer } from '../../../generated/prisma';
-import { CustomerResponse } from './dto/response/customer.response';
+import { Customer, Loan } from '../../../generated/prisma';
+import { CustomerResponse, ActiveLoan, LoanHistory } from './dto/response/customer.response';
 import { CustomerType } from './enum/customer-type.enum';
+
+type CustomerWithLoans = Customer & {
+  loans?: Loan[];
+};
 
 export class CustomerMapper {
   static toResponse(customer: Customer): CustomerResponse {
@@ -16,6 +20,36 @@ export class CustomerMapper {
       monthlyIncome: Number(customer.monthlyIncome),
       creditScore: customer.creditScore || undefined,
       createdAt: customer.createdAt.toISOString(),
+    };
+  }
+
+  static toDetailResponse(customer: CustomerWithLoans): CustomerResponse {
+    const loans = customer.loans || [];
+    
+    // Filter active loans
+    const activeLoans: ActiveLoan[] = loans
+      .filter(loan => loan.status === 'ACTIVE')
+      .map(loan => ({
+        id: loan.id,
+        loanCode: loan.id.substring(0, 8).toUpperCase(), // Generate code from ID
+        loanAmount: Number(loan.loanAmount),
+        remainingAmount: Number(loan.remainingAmount),
+        status: loan.status,
+        startDate: loan.startDate.toISOString().split('T')[0],
+      }));
+
+    // Calculate loan history
+    const loanHistory: LoanHistory = {
+      totalLoans: loans.length,
+      totalBorrowed: loans.reduce((sum, loan) => sum + Number(loan.loanAmount), 0),
+      totalRepaid: loans.reduce((sum, loan) => sum + Number(loan.totalPaidAmount), 0),
+      defaultCount: loans.filter(loan => loan.status === 'OVERDUE').length,
+    };
+
+    return {
+      ...this.toResponse(customer),
+      activeLoans,
+      loanHistory,
     };
   }
 

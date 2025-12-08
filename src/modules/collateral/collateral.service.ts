@@ -12,6 +12,7 @@ import { CollateralAssetResponse } from './dto/response/collateral.response';
 import { CollateralMapper } from './collateral.mapper';
 import { BaseResult } from 'src/common/dto/base.response';
 import { AssetType, AssetStatus, Prisma } from '../../../generated/prisma';
+import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 
 @Injectable()
 export class CollateralService {
@@ -118,6 +119,42 @@ export class CollateralService {
         throw error;
       }
       throw new BadRequestException('Failed to create collateral asset');
+    }
+  }
+
+  async update(
+    id: string,
+    data: PatchCollateralDTO,
+  ) : Promise<CollateralAssetResponse> {
+    // Check if collateral exists
+    const existing = await this.prisma.collateralAsset.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Collateral asset with ID ${id} not found`);
+    }
+
+    try {
+      const updateData: Prisma.CollateralAssetUpdateInput = {};
+
+      if (data.status !== undefined) updateData.status = data.status as AssetStatus;
+      if (data.storageLocation !== undefined) updateData.storageLocation = data.storageLocation;
+      if (data.marketValue !== undefined) updateData.marketValue = data.marketValue;
+      if (data.appraisedValue !== undefined) updateData.appraisedValue = data.appraisedValue;
+      if (data.appraisalNotes !== undefined) updateData.appraisalNotes = data.appraisalNotes;
+      if (data.sellPrice !== undefined) updateData.sellPrice = data.sellPrice;
+      if (data.isSold !== undefined) updateData.isSold = data.isSold;
+      updateData.updatedBy = data.updatedBy;
+
+      const collateral = await this.prisma.collateralAsset.update({
+        where: { id },
+        data: updateData,
+      });
+
+      return CollateralMapper.toResponse(collateral);
+    } catch (error) {
+      throw new BadRequestException('Failed to update collateral asset');
     }
   }
 
