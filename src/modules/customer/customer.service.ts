@@ -64,13 +64,16 @@ export class CustomerService {
   async findOne(id: string): Promise<CustomerResponse> {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
+      include: {
+        loans: true,
+      },
     });
 
     if (!customer) {
       throw new NotFoundException(`Customer with ID ${id} not found`);
     }
 
-    return CustomerMapper.toResponse(customer);
+    return CustomerMapper.toDetailResponse(customer);
   }
 
   async create(data: CreateCustomerDTO): Promise<CustomerResponse> {
@@ -112,7 +115,7 @@ export class CustomerService {
         },
       });
 
-      return CustomerMapper.toResponse(customer);
+      return CustomerMapper.toDetailResponse(customer);
     } catch (error) {
       if (error instanceof ConflictException) {
         throw error;
@@ -183,9 +186,10 @@ export class CustomerService {
       const customer = await this.prisma.customer.update({
         where: { id },
         data: updateData,
+        include: { loans: true },
       });
 
-      return CustomerMapper.toResponse(customer);
+      return CustomerMapper.toDetailResponse(customer);
     } catch (error) {
       throw new BadRequestException('Failed to update customer');
     }

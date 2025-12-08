@@ -34,11 +34,11 @@ import { ContractModule } from './modules/contract/contract.module';
     }),
   ],
   controllers: [],
-  providers: [
-    {
-      provide: APP_GUARD,
-      useClass: ClerkAuthGuard,
-    },
-  ],
+  // providers: [
+  //   {
+  //     provide: APP_GUARD,
+  //     useClass: ClerkAuthGuard,
+  //   },
+  // ],
 })
 export class AppModule {}
