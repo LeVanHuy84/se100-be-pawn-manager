@@ -9,6 +9,7 @@ import { CustomerModule } from './modules/customer/customer.module';
 import { CollateralModule } from './modules/collateral/collateral.module';
 import { DocumentModule } from './modules/document/document.module';
 import { ValuationModule } from './modules/valuation/valuation.module';
+import { ContractModule } from './modules/contract/contract.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ValuationModule } from './modules/valuation/valuation.module';
     CollateralModule,
     DocumentModule,
     ValuationModule,
+    ContractModule,
     PrismaModule,
     ConfigModule.forRoot({
       isGlobal: true,
