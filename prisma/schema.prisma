@@ -137,7 +137,7 @@ model Customer {
   contracts Contract[]
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ==================================================
@@ -258,7 +258,7 @@ model CollateralAsset {
   sellDate       DateTime? @db.Date
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   createdBy String?
   updatedBy String?
 

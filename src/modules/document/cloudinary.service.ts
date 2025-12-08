@@ -1,16 +1,21 @@
-import { Injectable } from '@nestjs/common';
-import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
+import { Inject, Injectable } from '@nestjs/common';
+import { v2, UploadApiResponse } from 'cloudinary';
 import { Readable } from 'stream';
 import type { File as MulterFile } from 'multer';
 
 @Injectable()
 export class CloudinaryService {
+  constructor(
+    @Inject('CLOUDINARY') private cloudinary: typeof v2
+  ) 
+  {}
+
   async uploadFile(
     file: MulterFile,
     folder: string,
   ): Promise<UploadApiResponse> {
     return new Promise<UploadApiResponse>((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
+      const uploadStream = this.cloudinary.uploader.upload_stream(
         {
           folder,
           resource_type: 'auto',
@@ -29,6 +34,6 @@ export class CloudinaryService {
   }
 
   async deleteFile(publicId: string): Promise<void> {
-    await cloudinary.uploader.destroy(publicId);
+    await this.cloudinary.uploader.destroy(publicId);
   }
 }

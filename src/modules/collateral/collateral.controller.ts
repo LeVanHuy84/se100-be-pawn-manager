@@ -38,7 +38,7 @@ export class CollateralController {
   @Post()
   @Roles(Role.MANAGER, Role.STAFF)
   createCollateral(@Body() body: CreateCollateralDTO, @Req() req) {
-    body.createdBy = req.user.id;
+    // body.createdBy = req.user.id;
     return this.collateralService.create(body);
   }
 }
@@ -53,7 +53,7 @@ export class CollateralLocationController {
   @Put('/:id/location')
   @Roles(Role.MANAGER, Role.STAFF)
   updateLocation(@Param('id') id: string, @Body() body: UpdateLocationRequest, @Req() req) {
-    body.updatedBy = req.user.id;
+    // body.updatedBy = req.user.id;
     return this.collateralService.updateLocation(id, body);
   }
 }
@@ -68,7 +68,7 @@ export class LiquidationController {
   @Post()
   @Roles(Role.MANAGER, Role.STAFF)
   createLiquidation(@Body() body: CreateLiquidationRequest, @Req() req) {
-    body.createdBy = req.user.id;
+    // body.createdBy = req.user.id;
     return this.collateralService.createLiquidation(body);
   }
 }

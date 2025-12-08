@@ -10,6 +10,7 @@ import { UploadDocumentDto } from './dto/request/upload-document.request';
 import { DocumentMapper } from './document.mapper';
 import { DocumentResponse } from './dto/response/document.response';
 import { EntityType } from './enum/entity-type.enum';
+import { DocumentType } from './enum/document-type.enum';
 
 @Injectable()
 export class DocumentService {
@@ -66,13 +67,12 @@ export class DocumentService {
       data: {
         entityType: dto.entityType as EntityType,
         entityId: dto.entityId,
-        docType: dto.docType,
+        docType: dto.docType as DocumentType,
         docNumber: dto.docNumber || "",
         expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null,
         issuedDate: issuedDate || "",
         fileUrl: uploadResult.secure_url,
         filePublicId: uploadResult.public_id,
-        createdAt: new Date(),
       },
     });
 

@@ -8,6 +8,7 @@ import { EmployeeModule } from './modules/employee/employee.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CollateralModule } from './modules/collateral/collateral.module';
 import { DocumentModule } from './modules/document/document.module';
+import { ValuationModule } from './modules/valuation/valuation.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { DocumentModule } from './modules/document/document.module';
     CustomerModule,
     CollateralModule,
     DocumentModule,
+    ValuationModule,
     PrismaModule,
     ConfigModule.forRoot({
       isGlobal: true,
@@ -25,6 +27,7 @@ import { DocumentModule } from './modules/document/document.module';
         CLOUDINARY_CLOUD_NAME: Joi.string().required(),
         CLOUDINARY_API_KEY: Joi.string().required(),
         CLOUDINARY_API_SECRET: Joi.string().required(),
+        GEMINI_API_KEY: Joi.string().required(),
       }),
     }),
   ],

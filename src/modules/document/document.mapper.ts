@@ -4,17 +4,17 @@ import { DocumentResponse } from './dto/response/document.response';
 export class DocumentMapper {
   static toResponse(document: DocumentRecord): DocumentResponse {
     return {
-      id: document.id,
+      documentId: document.id,
       entityType: document.entityType,
       entityId: document.entityId,
       docType: document.docType,
       docNumber: document.docNumber,
       issuedDate: document.issuedDate,
       expiryDate: document.expiryDate || undefined,
-      fileUrl: document.fileUrl,
+      filePath: document.fileUrl,
       filePublicId: document.filePublicId,
       isValid: document.isValid,
-      createdAt: document.createdAt,
+      uploadedAt: document.createdAt,
     };
   }
 

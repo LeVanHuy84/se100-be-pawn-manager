@@ -1,13 +1,13 @@
 export interface DocumentResponse {
-  id: string;
+  documentId: string;
   entityType: string;
   entityId: string;
   docType: string;
   docNumber?: string;
   issuedDate?: Date;
   expiryDate?: Date;
-  fileUrl: string;
+  filePath: string;
   filePublicId: string;
   isValid: boolean;
-  createdAt: Date;
+  uploadedAt: Date;
 }

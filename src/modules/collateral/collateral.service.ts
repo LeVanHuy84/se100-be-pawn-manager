@@ -136,10 +136,11 @@ export class CollateralService {
 
     try {
       const updateData: Prisma.CollateralAssetUpdateInput = {
-        storageLocation: data.storageLocation,
+        storageLocation: data.location,
       };
 
       if (data.status) updateData.status = data.status as AssetStatus;
+      updateData.updatedBy = data.updatedBy;
 
       await this.prisma.collateralAsset.update({
         where: { id },
@@ -170,9 +171,15 @@ export class CollateralService {
       );
     }
 
+    if (collateral.loanId === null) {
+      throw new BadRequestException(
+        'Collateral is not associated with any loan, cannot proceed with liquidation',
+      );
+    }
+
     // Validate loan exists
     const loan = await this.prisma.loan.findUnique({
-      where: { id: collateral.loanId || '' },
+      where: { id: collateral.loanId },
     });
 
     if (!loan) {
@@ -200,7 +207,7 @@ export class CollateralService {
 
       return {
         message: 'Liquidation process started successfully',
-        // i ain't creating a liquidation table, have fun with null liquidationId 
+        // i ain't creating a liquidation table, have fun with null liquidationId
         liquidationId: null,
         collateralAssetId: data.collateralId,
         status: collateral.status,
