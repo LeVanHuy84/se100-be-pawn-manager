@@ -13,14 +13,12 @@ import { Role } from '../employee/enum/role.enum';
 export class ContractController {
   constructor(private readonly contractService: ContractService) {}
 
-  @Public()
   @Get()
   @Roles(Role.MANAGER, Role.STAFF)
   findAll(@Query() query: ContractQueryDto) {
     return this.contractService.findAll(query);
   }
 
-  @Public()
   @Get(':id')
   @Roles(Role.MANAGER, Role.STAFF)
   findOne(@Param('id') id: string) {

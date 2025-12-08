@@ -26,7 +26,6 @@ import { Role } from '../employee/enum/role.enum';
 export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
-  @Public()
   @Post()
   @UseInterceptors(FileInterceptor('file'))
   @Roles(Role.MANAGER, Role.STAFF)
@@ -40,7 +39,6 @@ export class DocumentController {
     return this.documentService.uploadDocument(dto, file);
   }
 
-  // @Public()
   // @Get()
   // @Roles(Role.MANAGER, Role.STAFF)
 
@@ -60,7 +58,6 @@ export class DocumentController {
     return this.documentService.findOne(id);
   }
 
-  // @Public()
   // @Delete(':id')
   // @Roles(Role.MANAGER, Role.STAFF)
   // async deleteDocument(@Param('id') id: string): Promise<{ message: string }> {
