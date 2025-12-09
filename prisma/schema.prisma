@@ -229,6 +229,7 @@ model AssetType {
   name                  String
   // mgmtFeeRateMonthly    Decimal @default(0) @db.Decimal(7, 4)  -> Parameter
   custodyFeeRateMonthly Decimal @default(0) @db.Decimal(7, 4)
+  assets    Asset[]
 }
 
 model Asset {
