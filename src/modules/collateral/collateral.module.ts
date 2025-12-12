@@ -1,0 +1,20 @@
+import { Module } from '@nestjs/common';
+import {
+  CollateralController,
+  CollateralLocationController,
+  LiquidationController,
+} from './collateral.controller';
+import { CollateralService } from './collateral.service';
+import { PrismaModule } from 'src/prisma/prisma.module';
+
+@Module({
+  imports: [PrismaModule],
+  controllers: [
+    CollateralController,
+    CollateralLocationController,
+    LiquidationController,
+  ],
+  providers: [CollateralService],
+  exports: [CollateralService],
+})
+export class CollateralModule {}
