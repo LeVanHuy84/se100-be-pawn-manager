@@ -30,4 +30,5 @@ export interface CustomerResponse {
   createdAt: string; // ISO datetime
   activeLoans?: ActiveLoan[];
   loanHistory?: LoanHistory;
+  images?: Record<string, string>[];
 }

@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import type { File as MulterFile } from 'multer';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CollateralQueryDTO } from './dto/request/collateral.query';
 import { CreateCollateralDTO } from './dto/request/create-collateral.request';
@@ -11,48 +12,58 @@ import { CreateLiquidationRequest } from './dto/request/liquidation.request';
 import { CollateralAssetResponse } from './dto/response/collateral.response';
 import { CollateralMapper } from './collateral.mapper';
 import { BaseResult } from 'src/common/dto/base.response';
-import { AssetType, AssetStatus, Prisma } from '../../../generated/prisma';
+import {
+  CollateralType,
+  CollateralStatus,
+  Prisma,
+} from '../../../generated/prisma';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Injectable()
 export class CollateralService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cloudinaryService: CloudinaryService,
+  ) {}
 
   async findAll(
     query: CollateralQueryDTO,
   ): Promise<BaseResult<CollateralAssetResponse[]>> {
-    const { page = 1, limit = 20, status, assetType, loanId, isSold } = query;
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      collateralTypeId,
+      loanId,
+    } = query;
 
     const skip = (page - 1) * limit;
 
     // Build where clause
-    const where: Prisma.CollateralAssetWhereInput = {};
+    const where: Prisma.CollateralWhereInput = {};
 
     if (status) {
-      where.status = status as AssetStatus;
+      where.status = status as CollateralStatus;
     }
 
-    if (assetType) {
-      where.assetType = assetType as AssetType;
+    if (collateralTypeId) {
+      where.collateralTypeId = collateralTypeId;
     }
 
     if (loanId) {
       where.loanId = loanId;
     }
 
-    if (isSold !== undefined) {
-      where.isSold = isSold;
-    }
-
     // Execute queries in parallel
     const [collaterals, totalItems] = await Promise.all([
-      this.prisma.collateralAsset.findMany({
+      this.prisma.collateral.findMany({
         where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.collateralAsset.count({ where }),
+      this.prisma.collateral.count({ where }),
     ]);
 
     return {
@@ -67,7 +78,7 @@ export class CollateralService {
   }
 
   async findOne(id: string): Promise<CollateralAssetResponse> {
-    const collateral = await this.prisma.collateralAsset.findUnique({
+    const collateral = await this.prisma.collateral.findUnique({
       where: { id },
     });
 
@@ -78,7 +89,10 @@ export class CollateralService {
     return CollateralMapper.toResponse(collateral);
   }
 
-  async create(data: CreateCollateralDTO): Promise<CollateralAssetResponse> {
+  async create(
+    data: CreateCollateralDTO,
+    files: MulterFile[],
+  ): Promise<CollateralAssetResponse> {
     try {
       // Validate loanId if provided
       if (data.loanId) {
@@ -93,23 +107,32 @@ export class CollateralService {
         }
       }
 
-      const collateral = await this.prisma.collateralAsset.create({
+      if (!files || files.length === 0) {
+        throw new BadRequestException('No files provided');
+      }
+
+      const folder = `pawnshop/${data.collateralTypeId.toString().toLowerCase()}/${data.ownerName.toLowerCase()}`;
+
+      const uploadResults = await Promise.all(
+        files.map(file => this.cloudinaryService.uploadFile(file, folder))
+      );
+
+      const images = uploadResults.map(result => ({
+        url: result.secure_url,
+        publicId: result.public_id,
+      }));
+
+      const collateral = await this.prisma.collateral.create({
         data: {
-          assetType: data.assetType as AssetType,
+          collateralTypeId: data.collateralTypeId,
           ownerName: data.ownerName,
-          brandModel: data.brandModel,
-          serialNumber: data.serialNumber,
-          plateNumber: data.plateNumber,
-          marketValue: data.marketValue,
           loanId: data.loanId || null,
-          status: (data.status as AssetStatus) || AssetStatus.PROPOSED,
+          collateralInfo: data.collateralInfo as Prisma.InputJsonValue,
+          images: images as Prisma.InputJsonValue,
+          status:
+            (data.status as CollateralStatus) || CollateralStatus.PROPOSED,
           storageLocation: data.storageLocation,
           receivedDate: data.receivedDate ? new Date(data.receivedDate) : null,
-          releasedDate: data.releasedDate ? new Date(data.releasedDate) : null,
-          isSold: false,
-          validUntil: data.validUntil,
-          createdBy: data.createdBy,
-          updatedBy: data.createdBy,
         },
       });
 
@@ -125,9 +148,10 @@ export class CollateralService {
   async update(
     id: string,
     data: PatchCollateralDTO,
-  ) : Promise<CollateralAssetResponse> {
+    files?: MulterFile[],
+  ): Promise<CollateralAssetResponse> {
     // Check if collateral exists
-    const existing = await this.prisma.collateralAsset.findUnique({
+    const existing = await this.prisma.collateral.findUnique({
       where: { id },
     });
 
@@ -136,18 +160,36 @@ export class CollateralService {
     }
 
     try {
-      const updateData: Prisma.CollateralAssetUpdateInput = {};
+      const updateData: Prisma.CollateralUpdateInput = {};
 
-      if (data.status !== undefined) updateData.status = data.status as AssetStatus;
-      if (data.storageLocation !== undefined) updateData.storageLocation = data.storageLocation;
-      if (data.marketValue !== undefined) updateData.marketValue = data.marketValue;
-      if (data.appraisedValue !== undefined) updateData.appraisedValue = data.appraisedValue;
-      if (data.appraisalNotes !== undefined) updateData.appraisalNotes = data.appraisalNotes;
+      if (data.status !== undefined)
+        updateData.status = data.status as CollateralStatus;
+      if (data.appraisedValue !== undefined)
+        updateData.appraisedValue = data.appraisedValue;
+      if (data.appraisalNotes !== undefined)
+        updateData.appraisalNotes = data.appraisalNotes;
       if (data.sellPrice !== undefined) updateData.sellPrice = data.sellPrice;
-      if (data.isSold !== undefined) updateData.isSold = data.isSold;
-      updateData.updatedBy = data.updatedBy;
 
-      const collateral = await this.prisma.collateralAsset.update({
+      if (data.collateralInfo !== undefined) {
+        updateData.collateralInfo = data.collateralInfo as Prisma.InputJsonValue;
+      }
+
+      if (files && files.length > 0) {
+        const folder = `pawnshop/${existing.collateralTypeId.toString().toLowerCase()}/${existing.ownerName.toLowerCase()}`;
+
+        const uploadResults = await Promise.all(
+          files.map(file => this.cloudinaryService.uploadFile(file, folder))
+        );
+
+        const images = uploadResults.map(result => ({
+          url: result.secure_url,
+          publicId: result.public_id,
+        }));
+
+        updateData.images = images as Prisma.InputJsonValue;
+      }
+
+      const collateral = await this.prisma.collateral.update({
         where: { id },
         data: updateData,
       });
@@ -163,7 +205,7 @@ export class CollateralService {
     data: UpdateLocationRequest,
   ): Promise<boolean> {
     // Check if collateral exists
-    const existing = await this.prisma.collateralAsset.findUnique({
+    const existing = await this.prisma.collateral.findUnique({
       where: { id },
     });
 
@@ -172,14 +214,12 @@ export class CollateralService {
     }
 
     try {
-      const updateData: Prisma.CollateralAssetUpdateInput = {
+      const updateData: Prisma.CollateralUpdateInput = {
         storageLocation: data.location,
       };
 
-      if (data.status) updateData.status = data.status as AssetStatus;
-      updateData.updatedBy = data.updatedBy;
-
-      await this.prisma.collateralAsset.update({
+      if (data.status) updateData.status = data.status as CollateralStatus;
+      await this.prisma.collateral.update({
         where: { id },
         data: updateData,
       });
@@ -192,13 +232,13 @@ export class CollateralService {
 
   async createLiquidation(data: CreateLiquidationRequest): Promise<{
     liquidationId: string | null;
-    status: AssetStatus;
+    status: CollateralStatus;
     createdAt: string;
     message: string;
     collateralAssetId: string;
   }> {
     // Validate collateral exists
-    const collateral = await this.prisma.collateralAsset.findUnique({
+    const collateral = await this.prisma.collateral.findUnique({
       where: { id: data.collateralId },
     });
 
@@ -233,12 +273,11 @@ export class CollateralService {
 
     try {
       // Update collateral status to indicate liquidation process started
-      await this.prisma.collateralAsset.update({
+      await this.prisma.collateral.update({
         where: { id: data.collateralId },
         data: {
-          status: AssetStatus.LIQUIDATING,
+          status: CollateralStatus.LIQUIDATING,
           sellPrice: data.minimumSalePrice,
-          updatedBy: data.createdBy,
         },
       });
 

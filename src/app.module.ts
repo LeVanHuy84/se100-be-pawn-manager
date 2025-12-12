@@ -7,7 +7,6 @@ import { ClerkAuthGuard } from './clerk/clerk-auth.guard';
 import { EmployeeModule } from './modules/employee/employee.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CollateralModule } from './modules/collateral/collateral.module';
-import { DocumentModule } from './modules/document/document.module';
 import { ValuationModule } from './modules/valuation/valuation.module';
 import { ContractModule } from './modules/contract/contract.module';
 
@@ -16,7 +15,6 @@ import { ContractModule } from './modules/contract/contract.module';
     EmployeeModule,
     CustomerModule,
     CollateralModule,
-    DocumentModule,
     ValuationModule,
     ContractModule,
     PrismaModule,
