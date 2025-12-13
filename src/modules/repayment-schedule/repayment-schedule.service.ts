@@ -1,11 +1,57 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { RepaymentScheduleDetail } from 'generated/prisma';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RepaymentScheduleItemResponse } from './dto/response/reschedule-payment-item.response';
-import { RepaymentItemStatus, RepaymentScheduleDetail } from '@prisma/client';
+import { LoanSimulationScheduleItem } from '../loan-simulations/dto/response/loan-simulation.response';
 
 @Injectable()
 export class RepaymentScheduleService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async createRepaymentItemsFromSimulation(params: {
+    loanId: string;
+    simulationItems: LoanSimulationScheduleItem[];
+    overwrite?: boolean;
+  }): Promise<void> {
+    const { loanId, simulationItems, overwrite = true } = params;
+
+    // optional: validate loan tồn tại
+    const loanExists = await this.prisma.loan.findUnique({
+      where: { id: loanId },
+      select: { id: true },
+    });
+    if (!loanExists) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1️⃣ clear cũ nếu cần
+      if (overwrite) {
+        await tx.repaymentScheduleDetail.deleteMany({
+          where: { loanId },
+        });
+      }
+
+      // 2️⃣ batch insert
+      await tx.repaymentScheduleDetail.createMany({
+        data: simulationItems.map((item) => ({
+          loanId,
+          periodNumber: item.periodNumber,
+          dueDate: new Date(item.dueDate),
+          beginningBalance: item.beginningBalance,
+          principalAmount: item.principalAmount,
+          interestAmount: item.interestAmount,
+          feeAmount: item.feeAmount,
+          totalAmount: item.totalAmount,
+          status: 'PENDING',
+          paidPrincipal: 0,
+          paidInterest: 0,
+          paidFee: 0,
+          paidAt: null,
+        })),
+      });
+    });
+  }
 
   async getLoanRepaymentSchedule(
     loanId: string,

@@ -1,6 +1,6 @@
-import { PaymentMethod } from '@prisma/client';
 import { BaseFilterQuery } from 'src/common/dto/filter.type';
 import { PaymentType } from '../../enums/payment-type.enum';
+import { PaymentMethod } from 'generated/prisma';
 
 export interface ListPaymentsQuery extends BaseFilterQuery {
   loanId?: string;

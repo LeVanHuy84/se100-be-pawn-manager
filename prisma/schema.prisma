@@ -3,6 +3,7 @@
 // ==================================================
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -40,8 +41,8 @@ enum RepaymentItemStatus {
 enum PaymentType {
   PERIODIC
   EARLY
-  LATE_FEE
-  PENALTY
+  PAYOFF
+  ADJUSTMENT
 }
 
 enum PaymentMethod {
@@ -81,12 +82,12 @@ enum DisbursementMethod {
 // LOAN PRODUCT TYPE
 // ==================================================
 model LoanType {
-  id                    Int     @id @default(autoincrement())
-  name                  String  @unique
-  description           String?
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  description String?
 
-  durationMonths        Int
-  interestRateMonthly   Decimal @db.Decimal(7, 4)
+  durationMonths      Int
+  interestRateMonthly Decimal @db.Decimal(7, 4)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
@@ -109,9 +110,9 @@ model Customer {
   monthlyIncome Decimal?
   creditScore   Int?
 
-  images      Json
+  images Json
 
-  loans     Loan[]
+  loans Loan[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
@@ -121,70 +122,72 @@ model Customer {
 // LOAN
 // ==================================================
 model Loan {
-  id              String   @id @default(uuid()) @db.Uuid
-  customerId      String   @db.Uuid
+  id         String @id @default(uuid()) @db.Uuid
+  customerId String @db.Uuid
 
   // ---- LOAN TERMS (SNAPSHOT) ----
-  loanAmount            Decimal
-  repaymentMethod       RepaymentMethod
-  loanTypeId            Int
+  loanAmount      Decimal
+  repaymentMethod RepaymentMethod
+  loanTypeId      Int
 
-  durationMonths      Int          // snapshot
-  appliedInterestRate  Decimal       // snapshot
+  durationMonths      Int // snapshot
+  appliedInterestRate Decimal // snapshot
 
   // rate phi phat
-  latePaymentPenaltyRate        Decimal @db.Decimal(7, 4)  // snapshot
+  latePaymentPenaltyRate Decimal @db.Decimal(7, 4) // snapshot
 
   // ---- CALCULATED SNAPSHOT ----
-  totalInterest   Decimal
-  totalFees       Decimal
-  totalRepayment  Decimal
-  monthlyPayment  Decimal
+  totalInterest  Decimal
+  totalFees      Decimal
+  totalRepayment Decimal
+  monthlyPayment Decimal
 
   // ---- LIFECYCLE ----
-  startDate       DateTime?
-  status          LoanStatus @default(PENDING)
+  startDate DateTime?
+  status    LoanStatus @default(PENDING)
 
-  approvedAt      DateTime?
-  approvedBy      String?
-  rejectedAt      DateTime?
-  rejectedBy      String?
+  approvedAt DateTime?
+  approvedBy String?
+  rejectedAt DateTime?
+  rejectedBy String?
 
   activatedAt     DateTime?
-  remainingAmount Decimal @default(0)
+  remainingAmount Decimal   @default(0)
 
-  notes           String?
+  notes String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 
   // ---- RELATIONS ----
-  loanProductType   LoanType      @relation(fields: [loanTypeId], references: [id])
-  customer          Customer             @relation(fields: [customerId], references: [id])
+  loanProductType   LoanType                  @relation(fields: [loanTypeId], references: [id])
+  customer          Customer                  @relation(fields: [customerId], references: [id])
   repaymentSchedule RepaymentScheduleDetail[]
   payments          LoanPayment[]
   collaterals       Asset[]
 }
 
-
 // ==================================================
 // REPAYMENT SCHEDULE
 // ==================================================
 model RepaymentScheduleDetail {
-  id               String              @id @default(uuid()) @db.Uuid
-  loanId           String              @db.Uuid
-  periodNumber     Int
-  dueDate          DateTime            @db.Date
-  beginningBalance Decimal
-  principalAmount  Decimal
-  interestAmount   Decimal
-  totalAmount      Decimal
-  status           RepaymentItemStatus @default(PENDING)
-  paidPrincipal    Decimal?            @default(0)
-  paidInterest     Decimal?            @default(0)
-  feeAmount        Decimal             @default(0) // mgmt + custody fee cho kỳ này
-  paidFee          Decimal?            @default(0)
-  paidAt           DateTime?
+  id                   String              @id @default(uuid()) @db.Uuid
+  loanId               String              @db.Uuid
+  periodNumber         Int
+  dueDate              DateTime            @db.Date
+  beginningBalance     Decimal
+  principalAmount      Decimal
+  interestAmount       Decimal
+  feeAmount            Decimal             @default(0) // mgmt + custody fee cho kỳ này
+  penaltyAmount        Decimal             @default(0)
+  totalAmount          Decimal
+  status               RepaymentItemStatus @default(PENDING)
+  paidPrincipal        Decimal?            @default(0)
+  paidInterest         Decimal?            @default(0)
+  paidFee              Decimal?            @default(0)
+  paidPenalty          Decimal?            @default(0)
+  paidAt               DateTime?
+  lastPenaltyAppliedAt DateTime?           @db.Date
 
   loan Loan @relation(fields: [loanId], references: [id])
 }
@@ -224,40 +227,40 @@ model PaymentAllocation {
 // COLLATERAL & APPRAISAL
 // ==================================================
 model AssetType {
-  id                    Int      @id @default(autoincrement())
+  id                    Int     @id @default(autoincrement())
   name                  String
   // mgmtFeeRateMonthly    Decimal @default(0) @db.Decimal(7, 4)  -> Parameter
   custodyFeeRateMonthly Decimal @default(0) @db.Decimal(7, 4)
-  assets    Asset[]
+  assets                Asset[]
 }
 
 model Asset {
-  id              String      @id @default(uuid()) @db.Uuid
-  assetTypeId         Int
-  ownerName       String
+  id          String @id @default(uuid()) @db.Uuid
+  assetTypeId Int
+  ownerName   String
 
-  assetInfo       Json
-  
+  assetInfo Json
+
   status          AssetStatus @default(PROPOSED)
   loanId          String?     @db.Uuid
   storageLocation String?
-  receivedDate    DateTime? @db.Date
+  receivedDate    DateTime?   @db.Date
 
   appraisedValue Decimal?
   ltvRatio       Decimal?
   appraisalDate  DateTime?
   appraisalNotes String?
 
-  images         Json
+  images Json
 
-  sellPrice       Decimal?
-  sellDate       DateTime? @db.Date
+  sellPrice Decimal?
+  sellDate  DateTime? @db.Date
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
 
-  loan Loan? @relation(fields: [loanId], references: [id])
-  assetType   AssetType @relation(fields: [assetTypeId], references: [id])
+  loan      Loan?     @relation(fields: [loanId], references: [id])
+  assetType AssetType @relation(fields: [assetTypeId], references: [id])
 }
 
 // ==================================================

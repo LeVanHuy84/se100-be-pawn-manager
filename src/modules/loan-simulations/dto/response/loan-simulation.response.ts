@@ -10,12 +10,12 @@ export interface LoanSimulationScheduleItem {
 
 export interface LoanSimulationResponse {
   loanAmount: number;
-  termMonths: number;
+  durationMonths: number;
   productType: string;
 
-  appliedInterestRate: number; // %/month
-  appliedMgmtFee: number; // %/month or %/loanAmount (tùy business)
-  appliedCustodyFee: number; // %/month or %/loanAmount
+  appliedInterestRate: number;
+  appliedMgmtFeeRateMonthly: number;
+  totalCustodyFeeRate: number;
 
   totalInterest: number;
   totalFees: number;

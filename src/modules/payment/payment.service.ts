@@ -2,14 +2,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
-import {
-  PaymentComponent,
-  PaymentMethod,
-  PaymentType,
-  Prisma,
-  RepaymentItemStatus,
-} from '@prisma/client';
+
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ListPaymentsQuery } from './dto/request/payment.query';
 import { BaseResult } from 'src/common/dto/base.response';
@@ -17,6 +12,20 @@ import { PaymentListItem } from './dto/response/payment-list-item.repsonse';
 
 import { PaymentRequestDto } from './dto/request/payment.request';
 import { PaymentResponse } from './dto/response/payment-details.response';
+import {
+  PaymentComponent,
+  PaymentMethod,
+  PaymentType,
+  Prisma,
+  RepaymentItemStatus,
+} from 'generated/prisma';
+
+interface AllocationDraft {
+  componentType: PaymentComponent;
+  periodNumber: number;
+  amount: number;
+  note?: string;
+}
 
 @Injectable()
 export class PaymentService {
@@ -134,66 +143,31 @@ export class PaymentService {
     payload: PaymentRequestDto,
     employeeId: string,
   ): Promise<PaymentResponse> {
-    const { loanId, amount, paymentMethod, referenceCode, notes } = payload;
+    const { loanId, amount, paymentMethod, paymentType, referenceCode, notes } =
+      payload;
 
-    if (!idempotencyKey) {
-      // controller nên đảm bảo required, đây chỉ là safety net
+    if (!idempotencyKey)
       throw new ConflictException('Idempotency-Key is required');
-    }
 
-    // 1. Check idempotency
-    const existingByKey = await this.prisma.loanPayment.findFirst({
+    const existing = await this.prisma.loanPayment.findFirst({
       where: { idempotencyKey },
+      select: { id: true },
     });
-
-    if (existingByKey) {
+    if (existing)
       throw new ConflictException(
         'Duplicate payment (Idempotency-Key already used)',
       );
-    }
 
-    // 2. Load loan + schedule
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId },
-      include: {
-        repaymentSchedule: {
-          orderBy: [{ dueDate: 'asc' }, { periodNumber: 'asc' }],
-        },
-      },
+      select: { id: true, status: true },
     });
-
-    if (!loan) {
-      throw new NotFoundException('Loan not found');
-    }
-
-    if (loan.status === 'CLOSED') {
+    if (!loan) throw new NotFoundException('Loan not found');
+    if (loan.status === 'CLOSED')
       throw new ConflictException('Loan is already closed');
-    }
 
-    // 3. Start transaction: create payment + allocation + update schedule + loan
     const result = await this.prisma.$transaction(async (tx) => {
-      // 3.1. Create LoanPayment
-      const payment = await tx.loanPayment.create({
-        data: {
-          loanId,
-          amount,
-          paymentType: PaymentType.PERIODIC, // hoặc logic để detect
-          paymentMethod: paymentMethod as PaymentMethod,
-          referenceCode,
-          idempotencyKey,
-          recorderEmployeeId: employeeId,
-        },
-      });
-
-      let remainingAmount = amount;
-      const allocationsData: {
-        componentType: PaymentComponent;
-        amount: number;
-        periodNumber: number;
-        note?: string;
-      }[] = [];
-
-      // 3.2. Load latest schedule inside transaction
+      // 1) Load schedule outstanding
       const scheduleItems = await tx.repaymentScheduleDetail.findMany({
         where: {
           loanId,
@@ -204,228 +178,197 @@ export class PaymentService {
         orderBy: [{ dueDate: 'asc' }, { periodNumber: 'asc' }],
       });
 
-      // 3.3. Waterfall allocation (Interest -> Fee -> Principal -> Late -> Penalty)
-      // NOTE: Đây là chỗ cần implement chi tiết theo business thực tế của bạn.
-      //
-      // Ý tưởng:
-      //  - For each period:
-      //      interestOutstanding = interestAmount - paidInterest
-      //      principalOutstanding = principalAmount - paidPrincipal
-      //      feeOutstanding = ... (tính/lookup)
-      //      lateFeeOutstanding = ...
-      //      penaltyOutstanding = ...
-      //
-      //      Rồi trừ dần remainingAmount theo thứ tự:
-      //        INTEREST -> SERVICE_FEE -> PRINCIPAL -> LATE_FEE -> PENALTY
-      //
-      //      Ghi nhận mỗi bước vào allocationsData, update paidPrincipal/paidInterest, status, ...
+      if (scheduleItems.length === 0) {
+        throw new UnprocessableEntityException(
+          'No outstanding schedule items to pay',
+        );
+      }
 
-      for (const period of scheduleItems) {
+      const earliest = scheduleItems[0];
+
+      // 2) Nếu PERIODIC: chỉ cho trả trong 1 kỳ (earliest)
+      const allocatableItems =
+        paymentType === PaymentType.PERIODIC ? [earliest] : scheduleItems; // EARLY/PAYOFF/ADJUSTMENT -> full list
+
+      // 3) Nếu PAYOFF: amount phải = totalOutstanding (không dư/không thiếu)
+      const totalOutstandingAll = this.calcTotalOutstanding(scheduleItems);
+      if (paymentType === PaymentType.PAYOFF) {
+        // bạn có thể cho phép lệch nhỏ do rounding, nhưng hiện tại reject strict
+        if (Number(amount) !== totalOutstandingAll) {
+          throw new UnprocessableEntityException(
+            `PAYOFF requires exact outstanding amount = ${Math.round(totalOutstandingAll)}`,
+          );
+        }
+      }
+
+      // 4) Create payment header
+      let payment;
+      try {
+        payment = await tx.loanPayment.create({
+          data: {
+            loanId,
+            amount,
+            paymentType, // ✅ dùng theo request
+            paymentMethod: paymentMethod as unknown as PaymentMethod,
+            referenceCode,
+            idempotencyKey,
+            recorderEmployeeId: employeeId,
+          },
+        });
+      } catch (e: any) {
+        if (e?.code === 'P2002') {
+          throw new ConflictException(
+            'Duplicate payment (Idempotency-Key already used)',
+          );
+        }
+        throw e;
+      }
+
+      // 5) Allocate
+      let remainingAmount = Number(amount);
+      const allocations: AllocationDraft[] = [];
+
+      for (const period of allocatableItems) {
         if (remainingAmount <= 0) break;
 
-        let paidInterest = Number(period.paidInterest ?? 0);
-        let paidPrincipal = Number(period.paidPrincipal ?? 0);
-        let paidFee = Number((period as any).paidFee ?? 0);
+        const interestOut =
+          Number(period.interestAmount) - Number(period.paidInterest ?? 0);
+        const feeOut = Number(period.feeAmount) - Number(period.paidFee ?? 0);
 
-        const interestAmount = Number(period.interestAmount);
-        const principalAmount = Number(period.principalAmount);
-        const feeAmount = Number((period as any).feeAmount ?? 0);
+        const penaltyAmount = Number((period as any).penaltyAmount ?? 0);
+        const paidPenalty = Number((period as any).paidPenalty ?? 0);
+        const penaltyOut = penaltyAmount - paidPenalty;
 
-        let interestOutstanding = interestAmount - paidInterest;
-        let principalOutstanding = principalAmount - paidPrincipal;
-        let feeOutstanding = feeAmount - paidFee;
+        const principalOut =
+          Number(period.principalAmount) - Number(period.paidPrincipal ?? 0);
 
-        // TODO: nếu có mô hình lưu lateFee / penalty riêng, ở đây sẽ load/compute ra:
-        let lateFeeOutstanding = 0;
-        let penaltyOutstanding = 0;
+        let payInterest = 0,
+          payFee = 0,
+          payPenalty = 0,
+          payPrincipal = 0;
 
-        // 1) INTEREST
-        if (interestOutstanding > 0 && remainingAmount > 0) {
-          const payInterest = Math.min(remainingAmount, interestOutstanding);
-          if (payInterest > 0) {
-            allocationsData.push({
-              componentType: PaymentComponent.INTEREST,
-              periodNumber: period.periodNumber,
-              amount: payInterest,
-              note: notes,
-            });
-            remainingAmount -= payInterest;
-            paidInterest += payInterest;
-            interestOutstanding -= payInterest;
-            await tx.repaymentScheduleDetail.update({
-              where: { id: period.id },
-              data: {
-                paidInterest,
-              },
-            });
-          }
+        // Waterfall: INTEREST -> FEE -> PENALTY -> PRINCIPAL
+        if (interestOut > 0 && remainingAmount > 0) {
+          payInterest = Math.min(remainingAmount, interestOut);
+          remainingAmount -= payInterest;
+          allocations.push({
+            componentType: PaymentComponent.INTEREST,
+            periodNumber: period.periodNumber,
+            amount: payInterest,
+            note: notes,
+          });
         }
 
-        // 2) SERVICE_FEE (mgmt + custody)
-        if (feeOutstanding > 0 && remainingAmount > 0) {
-          const payFee = Math.min(remainingAmount, feeOutstanding);
-          if (payFee > 0) {
-            allocationsData.push({
-              componentType: PaymentComponent.SERVICE_FEE,
-              periodNumber: period.periodNumber,
-              amount: payFee,
-              note: notes,
-            });
-            remainingAmount -= payFee;
-            paidFee += payFee;
-            feeOutstanding -= payFee;
-
-            await tx.repaymentScheduleDetail.update({
-              where: { id: period.id },
-              data: {
-                paidFee,
-              },
-            });
-          }
+        if (feeOut > 0 && remainingAmount > 0) {
+          payFee = Math.min(remainingAmount, feeOut);
+          remainingAmount -= payFee;
+          allocations.push({
+            componentType: PaymentComponent.SERVICE_FEE,
+            periodNumber: period.periodNumber,
+            amount: payFee,
+            note: notes,
+          });
         }
 
-        // 3) PRINCIPAL
-        if (principalOutstanding > 0 && remainingAmount > 0) {
-          const payPrincipal = Math.min(remainingAmount, principalOutstanding);
-          if (payPrincipal > 0) {
-            allocationsData.push({
-              componentType: PaymentComponent.PRINCIPAL,
-              periodNumber: period.periodNumber,
-              amount: payPrincipal,
-              note: notes,
-            });
-            remainingAmount -= payPrincipal;
-            paidPrincipal += payPrincipal;
-            principalOutstanding -= payPrincipal;
-
-            await tx.repaymentScheduleDetail.update({
-              where: { id: period.id },
-              data: {
-                paidPrincipal,
-              },
-            });
-          }
+        if (penaltyOut > 0 && remainingAmount > 0) {
+          payPenalty = Math.min(remainingAmount, penaltyOut);
+          remainingAmount -= payPenalty;
+          allocations.push({
+            componentType: PaymentComponent.PENALTY,
+            periodNumber: period.periodNumber,
+            amount: payPenalty,
+            note: notes,
+          });
         }
 
-        // 4) LATE_FEE
-        if (lateFeeOutstanding > 0 && remainingAmount > 0) {
-          const payLate = Math.min(remainingAmount, lateFeeOutstanding);
-          if (payLate > 0) {
-            allocationsData.push({
-              componentType: PaymentComponent.LATE_FEE,
-              periodNumber: period.periodNumber,
-              amount: payLate,
-              note: notes,
-            });
-            remainingAmount -= payLate;
-            lateFeeOutstanding -= payLate;
-            // TODO: update late fee tracking
-          }
+        if (principalOut > 0 && remainingAmount > 0) {
+          payPrincipal = Math.min(remainingAmount, principalOut);
+          remainingAmount -= payPrincipal;
+          allocations.push({
+            componentType: PaymentComponent.PRINCIPAL,
+            periodNumber: period.periodNumber,
+            amount: payPrincipal,
+            note: notes,
+          });
         }
 
-        // 5) PENALTY
-        if (penaltyOutstanding > 0 && remainingAmount > 0) {
-          const payPen = Math.min(remainingAmount, penaltyOutstanding);
-          if (payPen > 0) {
-            allocationsData.push({
-              componentType: PaymentComponent.PENALTY,
-              periodNumber: period.periodNumber,
-              amount: payPen,
-              note: notes,
-            });
-            remainingAmount -= payPen;
-            penaltyOutstanding -= payPen;
-            // TODO: update penalty tracking
+        // update item once
+        if (payInterest + payFee + payPenalty + payPrincipal > 0) {
+          const newPaidInterest =
+            Number(period.paidInterest ?? 0) + payInterest;
+          const newPaidFee = Number(period.paidFee ?? 0) + payFee;
+          const newPaidPrincipal =
+            Number(period.paidPrincipal ?? 0) + payPrincipal;
+
+          const updateData: any = {
+            paidInterest: newPaidInterest,
+            paidFee: newPaidFee,
+            paidPrincipal: newPaidPrincipal,
+          };
+
+          if ((period as any).paidPenalty !== undefined) {
+            updateData.paidPenalty = paidPenalty + payPenalty;
           }
-        }
 
-        // TODO: sau khi xử lý 1 period, nếu principal + interest + fees cho period đã đủ,
-        const isFullyPaid =
-          interestOutstanding <= 0 &&
-          principalOutstanding <= 0 &&
-          feeOutstanding <= 0 &&
-          lateFeeOutstanding <= 0 &&
-          penaltyOutstanding <= 0;
+          const fullyPaid =
+            Number(period.interestAmount) - newPaidInterest <= 0 &&
+            Number(period.feeAmount) - newPaidFee <= 0 &&
+            ((period as any).penaltyAmount !== undefined
+              ? penaltyAmount - (paidPenalty + payPenalty) <= 0
+              : true) &&
+            Number(period.principalAmount) - newPaidPrincipal <= 0;
 
-        if (isFullyPaid) {
+          if (fullyPaid) {
+            updateData.status = RepaymentItemStatus.PAID;
+            updateData.paidAt = new Date();
+          }
+
           await tx.repaymentScheduleDetail.update({
             where: { id: period.id },
-            data: {
-              status: RepaymentItemStatus.PAID,
-              paidAt: new Date(),
-            },
+            data: updateData,
           });
         }
       }
 
-      // 3.4. Tạo PaymentAllocation records
-      await Promise.all(
-        allocationsData.map((a) =>
-          tx.paymentAllocation.create({
-            data: {
-              paymentId: payment.id,
-              componentType: a.componentType,
-              amount: a.amount,
-              note: a.note,
-            },
-          }),
-        ),
-      );
+      // 6) Reject overpayment (strict)
+      if (remainingAmount > 0) {
+        throw new UnprocessableEntityException(
+          'Payment amount exceeds allocatable outstanding for selected paymentType',
+        );
+      }
 
-      // 3.5. Update Loan tổng số tiền đã trả + remainingAmount
-      // TODO: tính lại remainingPrincipal/remainingInterest/remainingFees từ schedule
+      // 7) Save allocations
+      await tx.paymentAllocation.createMany({
+        data: allocations.map((a) => ({
+          paymentId: payment.id,
+          componentType: a.componentType as any,
+          amount: a.amount,
+          note: a.note,
+        })),
+      });
+
+      // 8) Recompute loan remaining + close if 0
       const allSchedule = await tx.repaymentScheduleDetail.findMany({
         where: { loanId },
       });
 
-      let remainingPrincipal = 0;
-      let remainingInterest = 0;
-      let remainingFees = 0;
+      const balance = this.recalcLoanBalance(allSchedule);
 
-      for (const p of allSchedule) {
-        const principalOutstanding =
-          Number(p.principalAmount) - Number(p.paidPrincipal ?? 0);
-        const interestOutstanding =
-          Number(p.interestAmount) - Number(p.paidInterest ?? 0);
-        const feeOutstanding = Number(p.feeAmount) - Number(p.paidFee ?? 0);
-
-        if (principalOutstanding > 0) {
-          remainingPrincipal += principalOutstanding;
-        }
-        if (interestOutstanding > 0) {
-          remainingInterest += interestOutstanding;
-        }
-        if (feeOutstanding > 0) {
-          remainingFees += feeOutstanding;
-        }
-      }
-
-      const totalRemaining =
-        remainingPrincipal + remainingInterest + remainingFees;
-
-      const updatedLoan = await tx.loan.update({
+      await tx.loan.update({
         where: { id: loanId },
         data: {
-          totalPaidAmount: Number(loan.totalPaidAmount ?? 0) + Number(amount),
-          remainingAmount: totalRemaining,
-          ...(totalRemaining <= 0 && { status: 'CLOSED' }),
+          remainingAmount: balance.totalRemaining,
+          ...(balance.totalRemaining <= 0 ? { status: 'CLOSED' } : {}),
         },
       });
 
-      // 3.6. Tính loanBalance + nextPayment cho response
-      const loanBalance = {
-        totalPaidAmount: Number(updatedLoan.totalPaidAmount ?? 0),
-        remainingPrincipal,
-        remainingInterest,
-        remainingFees,
-        totalRemaining,
-      };
-
-      // tìm kỳ tiếp theo còn PENDING
+      // 9) Next payment
       const next = await tx.repaymentScheduleDetail.findFirst({
         where: {
           loanId,
-          status: RepaymentItemStatus.PENDING,
+          status: {
+            in: [RepaymentItemStatus.PENDING, RepaymentItemStatus.OVERDUE],
+          },
         },
         orderBy: [{ dueDate: 'asc' }, { periodNumber: 'asc' }],
       });
@@ -436,57 +379,109 @@ export class PaymentService {
             amount: Number(next.totalAmount),
             periodNumber: next.periodNumber,
           }
-        : {
-            dueDate: null,
-            amount: null,
-            periodNumber: null,
-          };
+        : { dueDate: null, amount: null, periodNumber: null };
 
-      return {
-        payment,
-        allocationsData,
-        loanBalance,
-        nextPayment,
-      };
+      return { payment, allocations, balance, nextPayment };
     });
 
-    // 4. Map result -> PaymentResponse
     return {
       transactionId: result.payment.id,
       loanId,
       amount,
       paymentMethod: result.payment.paymentMethod,
+      paymentType: result.payment.paymentType as any,
       paidAt: result.payment.paidAt.toISOString(),
-      allocation: result.allocationsData.map((a) => ({
+      allocation: result.allocations.map((a) => ({
+        periodNumber: a.periodNumber,
         component: a.componentType,
         amount: a.amount,
-        description: a.note ?? this.buildAllocationDescription(a),
+        description: this.buildAllocationDescription(a),
       })),
-      loanBalance: result.loanBalance,
+      loanBalance: result.balance,
       nextPayment: result.nextPayment,
       message: 'Payment processed successfully',
     };
   }
 
-  private buildAllocationDescription(a: {
-    componentType: PaymentComponent;
-    periodNumber: number;
-  }): string {
-    const periodLabel = `period ${a.periodNumber}`;
+  // ===== helpers =====
+  private calcTotalOutstanding(items: any[]): number {
+    let total = 0;
+    for (const p of items) {
+      total += Math.max(
+        0,
+        Number(p.interestAmount) - Number(p.paidInterest ?? 0),
+      );
+      total += Math.max(0, Number(p.feeAmount) - Number(p.paidFee ?? 0));
+      total += Math.max(
+        0,
+        Number(p.principalAmount) - Number(p.paidPrincipal ?? 0),
+      );
 
+      if ((p as any).penaltyAmount !== undefined) {
+        total += Math.max(
+          0,
+          Number((p as any).penaltyAmount ?? 0) -
+            Number((p as any).paidPenalty ?? 0),
+        );
+      }
+    }
+    return total;
+  }
+
+  private recalcLoanBalance(allSchedule: any[]) {
+    let remainingPrincipal = 0;
+    let remainingInterest = 0;
+    let remainingFees = 0;
+    let remainingPenalty = 0;
+
+    for (const p of allSchedule) {
+      remainingPrincipal += Math.max(
+        0,
+        Number(p.principalAmount) - Number(p.paidPrincipal ?? 0),
+      );
+      remainingInterest += Math.max(
+        0,
+        Number(p.interestAmount) - Number(p.paidInterest ?? 0),
+      );
+      remainingFees += Math.max(
+        0,
+        Number(p.feeAmount) - Number(p.paidFee ?? 0),
+      );
+
+      if ((p as any).penaltyAmount !== undefined) {
+        remainingPenalty += Math.max(
+          0,
+          Number((p as any).penaltyAmount ?? 0) -
+            Number((p as any).paidPenalty ?? 0),
+        );
+      }
+    }
+
+    return {
+      remainingPrincipal,
+      remainingInterest,
+      remainingFees,
+      remainingPenalty,
+      totalRemaining:
+        remainingPrincipal +
+        remainingInterest +
+        remainingFees +
+        remainingPenalty,
+    };
+  }
+
+  private buildAllocationDescription(a: AllocationDraft): string {
     switch (a.componentType) {
       case PaymentComponent.INTEREST:
-        return `Interest for ${periodLabel}`;
+        return `Interest for period ${a.periodNumber}`;
       case PaymentComponent.SERVICE_FEE:
-        return `Management and custody fees for ${periodLabel}`;
-      case PaymentComponent.PRINCIPAL:
-        return `Principal payment for ${periodLabel}`;
-      case PaymentComponent.LATE_FEE:
-        return `Late fee for ${periodLabel}`;
+        return `Service fee for period ${a.periodNumber}`;
       case PaymentComponent.PENALTY:
-        return `Penalty for ${periodLabel}`;
+        return `Penalty for period ${a.periodNumber}`;
+      case PaymentComponent.PRINCIPAL:
+        return `Principal for period ${a.periodNumber}`;
       default:
-        return `Allocation for ${periodLabel}`;
+        return `Payment for period ${a.periodNumber}`;
     }
   }
 }

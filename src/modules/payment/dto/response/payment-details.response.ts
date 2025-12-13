@@ -1,16 +1,17 @@
-import { PaymentComponent } from '@prisma/client';
+import { PaymentComponent, PaymentMethod, PaymentType } from 'generated/prisma';
 
 export interface PaymentAllocationItem {
+  periodNumber: number;
   component: PaymentComponent;
   amount: number;
   description?: string;
 }
 
 export interface LoanBalanceSummary {
-  totalPaidAmount: number;
   remainingPrincipal: number;
   remainingInterest: number;
   remainingFees: number;
+  remainingPenalty: number;
   totalRemaining: number;
 }
 
@@ -24,7 +25,8 @@ export interface PaymentResponse {
   transactionId: string;
   loanId: string;
   amount: number;
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
+  paymentType: PaymentType;
   paidAt: string;
   allocation: PaymentAllocationItem[];
   loanBalance: LoanBalanceSummary;

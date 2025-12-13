@@ -1,4 +1,3 @@
-import { DocumentRecord } from '../../../generated/prisma';
 import { DocumentResponse } from './dto/response/document.response';
 
 export class DocumentMapper {

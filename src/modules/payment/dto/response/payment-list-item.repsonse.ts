@@ -1,4 +1,4 @@
-import { PaymentMethod, PaymentType } from '@prisma/client';
+import { PaymentMethod, PaymentType } from 'generated/prisma';
 
 export interface PaymentListItem {
   id: string;

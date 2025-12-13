@@ -1,4 +1,4 @@
-import { RepaymentItemStatus } from '@prisma/client';
+import { RepaymentItemStatus } from 'generated/prisma';
 
 export interface RepaymentScheduleItemResponse {
   id: string;

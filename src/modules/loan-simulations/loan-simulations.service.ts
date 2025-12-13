@@ -5,6 +5,7 @@ import {
   LoanSimulationScheduleItem,
 } from './dto/response/loan-simulation.response';
 import { LoanSimulationRequestDto } from './dto/request/loan-simulation.request';
+import { RepaymentMethod } from 'generated/prisma';
 
 @Injectable()
 export class LoanSimulationsService {
@@ -13,68 +14,132 @@ export class LoanSimulationsService {
   async createSimulation(
     payload: LoanSimulationRequestDto,
   ): Promise<LoanSimulationResponse> {
-    const { amount, termMonths, productType } = payload;
+    const { loanAmount, totalCustodyFeeRate, loanTypeId, repaymentMethod } =
+      payload;
 
-    const { interestRate, mgmtFeeRate, custodyFeeRate } =
-      await this.getRatesFromProductType(productType);
+    // 1) Load LoanType
+    const loanType = await this.prisma.loanType.findUnique({
+      where: { id: loanTypeId },
+    });
 
-    // gốc đều, lãi trên dư nợ, fee %/tháng trên loanAmount (cố định mỗi tháng)
-    const principalPerMonth = amount / termMonths;
+    if (!loanType) {
+      throw new UnprocessableEntityException(
+        `LoanType with id "${loanTypeId}" not found`,
+      );
+    }
 
-    const monthlyMgmtFee = amount * (mgmtFeeRate / 100);
-    const monthlyCustodyFee = amount * (custodyFeeRate / 100);
-    const monthlyFee = monthlyMgmtFee + monthlyCustodyFee;
+    const durationMonths = loanType.durationMonths;
+    if (durationMonths <= 0) {
+      throw new UnprocessableEntityException(
+        `LoanType "${loanType.name}" has invalid durationMonths = ${durationMonths}`,
+      );
+    }
+
+    const interestRateMonthly = loanType.interestRateMonthly.toNumber(); // %/month
+    const mgmtFeeRateMonthly = await this.getDecimalParam(
+      'RATES',
+      'MANAGEMENT_FEE_RATE_MONTHLY',
+    );
+
+    const totalFeeRateMonthly = mgmtFeeRateMonthly + totalCustodyFeeRate;
+
+    // fee cố định theo loanAmount mỗi tháng
+    const monthlyFee = loanAmount * (totalFeeRateMonthly / 100);
 
     const schedule: LoanSimulationScheduleItem[] = [];
-    let remaining = amount;
     let totalInterest = 0;
     let totalFees = 0;
 
     const today = new Date();
 
-    for (let i = 1; i <= termMonths; i++) {
-      const beginningBalance = remaining;
-
-      const interestAmount = beginningBalance * (interestRate / 100);
-      const principalAmount =
-        i === termMonths ? beginningBalance : principalPerMonth;
-      const feeAmount = monthlyFee;
-
-      const totalAmount = principalAmount + interestAmount + feeAmount;
-
-      totalInterest += interestAmount;
-      totalFees += feeAmount;
-      remaining = beginningBalance - principalAmount;
-
+    // helper tạo dueDate
+    const dueDateStr = (i: number) => {
       const dueDate = new Date(
         today.getFullYear(),
         today.getMonth() + i,
         today.getDate(),
       );
-      const dueDateStr = dueDate.toISOString().slice(0, 10);
+      return dueDate.toISOString().slice(0, 10);
+    };
 
-      schedule.push({
-        periodNumber: i,
-        dueDate: dueDateStr,
-        beginningBalance: Math.round(beginningBalance),
-        principalAmount: Math.round(principalAmount),
-        interestAmount: Math.round(interestAmount),
-        feeAmount: Math.round(feeAmount),
-        totalAmount: Math.round(totalAmount),
-      });
+    // 2) Calculate schedule theo method
+    if (repaymentMethod === RepaymentMethod.EQUAL_INSTALLMENT) {
+      // gốc đều, lãi giảm dần, fee cố định theo tháng
+      const principalPerMonth = loanAmount / durationMonths;
+      let remaining = loanAmount;
+
+      for (let i = 1; i <= durationMonths; i++) {
+        const beginningBalance = remaining;
+
+        const interestAmount = beginningBalance * (interestRateMonthly / 100);
+        const principalAmount =
+          i === durationMonths ? beginningBalance : principalPerMonth;
+        const feeAmount = monthlyFee;
+
+        const totalAmount = principalAmount + interestAmount + feeAmount;
+
+        totalInterest += interestAmount;
+        totalFees += feeAmount;
+        remaining = beginningBalance - principalAmount;
+
+        schedule.push({
+          periodNumber: i,
+          dueDate: dueDateStr(i),
+          beginningBalance: Math.round(beginningBalance),
+          principalAmount: Math.round(principalAmount),
+          interestAmount: Math.round(interestAmount),
+          feeAmount: Math.round(feeAmount),
+          totalAmount: Math.round(totalAmount),
+        });
+      }
+    } else if (repaymentMethod === RepaymentMethod.INTEREST_ONLY) {
+      // mỗi tháng: interest + fee; tháng cuối: interest + fee + full principal
+      for (let i = 1; i <= durationMonths; i++) {
+        const beginningBalance = loanAmount; // giữ nguyên tới cuối kỳ
+
+        const interestAmount = loanAmount * (interestRateMonthly / 100);
+        const feeAmount = monthlyFee;
+
+        const principalAmount = i === durationMonths ? loanAmount : 0;
+        const totalAmount = principalAmount + interestAmount + feeAmount;
+
+        totalInterest += interestAmount;
+        totalFees += feeAmount;
+
+        schedule.push({
+          periodNumber: i,
+          dueDate: dueDateStr(i),
+          beginningBalance: Math.round(beginningBalance),
+          principalAmount: Math.round(principalAmount),
+          interestAmount: Math.round(interestAmount),
+          feeAmount: Math.round(feeAmount),
+          totalAmount: Math.round(totalAmount),
+        });
+      }
+    } else {
+      // future-proof: nếu thêm enum mới mà quên handle
+      throw new UnprocessableEntityException(
+        `Unsupported repaymentMethod "${repaymentMethod}"`,
+      );
     }
 
-    const totalRepayment = totalInterest + totalFees + amount;
-    const monthlyPayment = totalRepayment / termMonths;
+    // 3) Totals
+    const totalRepayment = loanAmount + totalInterest + totalFees;
+
+    // monthlyPayment:
+    // - equal_installment: có thể dùng trung bình, hoặc dùng kỳ 1 (tuỳ UX)
+    // - interest_only: trung bình sẽ “ảo” vì kỳ cuối to, nhưng vẫn ok để hiển thị thêm
+    const monthlyPayment = totalRepayment / durationMonths;
 
     return {
-      loanAmount: amount,
-      termMonths,
-      productType, // string
+      loanAmount,
+      durationMonths,
+      productType: loanType.name,
 
-      appliedInterestRate: interestRate,
-      appliedMgmtFee: mgmtFeeRate,
-      appliedCustodyFee: custodyFeeRate,
+      appliedInterestRate: interestRateMonthly,
+      appliedMgmtFeeRateMonthly: mgmtFeeRateMonthly,
+
+      totalCustodyFeeRate,
 
       totalInterest: Math.round(totalInterest),
       totalFees: Math.round(totalFees),
@@ -84,26 +149,28 @@ export class LoanSimulationsService {
       schedule,
     };
   }
-  private async getRatesFromProductType(productTypeCode: string): Promise<{
-    interestRate: number;
-    mgmtFeeRate: number;
-    custodyFeeRate: number;
-  }> {
-    const formatProductTypeCode = productTypeCode.trim().toUpperCase();
-    const productType = await this.prisma.loanProductType.findUnique({
-      where: { name: formatProductTypeCode },
+
+  private async getDecimalParam(
+    paramGroup: string,
+    paramKey: string,
+  ): Promise<number> {
+    const row = await this.prisma.systemParameter.findFirst({
+      where: { paramGroup, paramKey, isActive: true },
     });
 
-    if (!productType) {
+    if (!row) {
       throw new UnprocessableEntityException(
-        `Unknown productType "${productTypeCode}"`,
+        `Missing SystemParameter: ${paramGroup}.${paramKey}`,
       );
     }
 
-    return {
-      interestRate: productType.interestRateMonthly.toNumber(),
-      mgmtFeeRate: productType.mgmtFeeRateMonthly.toNumber(),
-      custodyFeeRate: productType.custodyFeeRateMonthly.toNumber(),
-    };
+    const value = Number(row.paramValue);
+    if (Number.isNaN(value)) {
+      throw new UnprocessableEntityException(
+        `Invalid paramValue for ${paramGroup}.${paramKey}: "${row.paramValue}"`,
+      );
+    }
+
+    return value;
   }
 }

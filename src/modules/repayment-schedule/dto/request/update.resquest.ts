@@ -1,4 +1,4 @@
-import { RepaymentItemStatus } from '@prisma/client';
+import { RepaymentItemStatus } from 'generated/prisma';
 import { createZodDto } from 'nestjs-zod';
 import z from 'zod';
 

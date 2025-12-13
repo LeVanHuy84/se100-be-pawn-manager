@@ -1,5 +1,6 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { PrismaService } from 'src/prisma/prisma.service';
+
+const prisma = new PrismaService();
 
 async function main() {
   console.log('🌱 Seeding SystemParameter...');
@@ -15,27 +16,7 @@ async function main() {
       dataType: 'DECIMAL',
       description: 'Default interest rate for motorbike loans (%/month)',
     },
-    {
-      paramGroup: 'RATES',
-      paramKey: 'CAR_DEFAULT_INTEREST',
-      paramValue: '1.3', // %/month
-      dataType: 'DECIMAL',
-      description: 'Default interest rate for car loans (%/month)',
-    },
-    {
-      paramGroup: 'RATES',
-      paramKey: 'GOLD_DEFAULT_INTEREST',
-      paramValue: '2.0', // %/month
-      dataType: 'DECIMAL',
-      description: 'Default interest rate for gold-backed loans (%/month)',
-    },
-    {
-      paramGroup: 'RATES',
-      paramKey: 'LATE_FEE_RATE',
-      paramValue: '0.03', // 3%/month
-      dataType: 'DECIMAL',
-      description: 'Late fee rate on overdue outstanding (%/month)',
-    },
+
     {
       paramGroup: 'RATES',
       paramKey: 'PENALTY_INTEREST_RATE',
@@ -46,17 +27,10 @@ async function main() {
     },
     {
       paramGroup: 'RATES',
-      paramKey: 'SERVICE_FEE_FLAT',
-      paramValue: '50000', // VND
+      paramKey: 'MANAGEMENT_FEE_PERCENT',
+      paramValue: '0.02', // %
       dataType: 'DECIMAL',
-      description: 'Flat service fee per loan contract (VND)',
-    },
-    {
-      paramGroup: 'RATES',
-      paramKey: 'SERVICE_FEE_PERCENT',
-      paramValue: '1.0', // %
-      dataType: 'DECIMAL',
-      description: 'Service fee as percentage of loan amount (%)',
+      description: 'Management fee as percentage of loan amount (%)',
     },
 
     // =========================
