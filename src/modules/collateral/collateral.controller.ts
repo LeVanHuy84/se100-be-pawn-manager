@@ -79,7 +79,7 @@ export class LiquidationController {
 
   @Post()
   @Roles(Role.MANAGER, Role.STAFF)
-  createLiquidation(@Body() body: CreateLiquidationRequest, @Req() req) {
+  createLiquidation(@Body() body: CreateLiquidationRequest) {
     return this.collateralService.createLiquidation(body);
   }
 }
