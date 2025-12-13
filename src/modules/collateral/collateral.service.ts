@@ -19,6 +19,7 @@ import {
 } from '../../../generated/prisma';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import pLimit from 'p-limit';
 
 @Injectable()
 export class CollateralService {
@@ -113,8 +114,10 @@ export class CollateralService {
 
       const folder = `pawnshop/${data.collateralTypeId.toString().toLowerCase()}/${data.ownerName.toLowerCase()}`;
 
+      const limit = pLimit(3);
+
       const uploadResults = await Promise.all(
-        files.map(file => this.cloudinaryService.uploadFile(file, folder))
+        files.map(file => limit(() => this.cloudinaryService.uploadFile(file, folder)))
       );
 
       const images = uploadResults.map(result => ({
@@ -177,8 +180,10 @@ export class CollateralService {
       if (files && files.length > 0) {
         const folder = `pawnshop/${existing.collateralTypeId.toString().toLowerCase()}/${existing.ownerName.toLowerCase()}`;
 
+        const limit = pLimit(3);
+
         const uploadResults = await Promise.all(
-          files.map(file => this.cloudinaryService.uploadFile(file, folder))
+          files.map(file => limit(() => this.cloudinaryService.uploadFile(file, folder)))
         );
 
         const images = uploadResults.map(result => ({

@@ -35,14 +35,14 @@ export class CustomerMapper {
         loanAmount: Number(loan.loanAmount),
         remainingAmount: Number(loan.remainingAmount),
         status: loan.status,
-        startDate: loan.startDate.toISOString().split('T')[0],
+        startDate: loan.activatedAt ? loan.activatedAt.toISOString().split('T')[0] : '',
       }));
 
     // Calculate loan history
     const loanHistory: LoanHistory = {
       totalLoans: loans.length,
       totalBorrowed: loans.reduce((sum, loan) => sum + Number(loan.loanAmount), 0),
-      totalRepaid: loans.reduce((sum, loan) => sum + Number(loan.totalPaidAmount), 0),
+      totalRepaid: loans.reduce((sum, loan) => sum + Number(loan.loanAmount as unknown as number - (loan.remainingAmount as unknown as number)), 0),
       defaultCount: loans.filter(loan => loan.status === 'OVERDUE').length,
     };
 

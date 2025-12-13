@@ -12,9 +12,14 @@ export class ValuationService {
   ) {}
 
   async createValuation(dto: ValuationRequestDto): Promise<ValuationResponse> {
+    const collaeralType = await this.prisma.collateralType.findUnique({
+      where: { id: dto.collateralTypeId },
+      select: { name: true },
+    });
+
     // Get AI-powered market price estimate
     const marketEstimate = await this.geminiService.getMarketPriceEstimate(
-      dto.assetType,
+      collaeralType?.name || 'UNKNOWN',
       dto.brand,
       dto.model,
       dto.year,
@@ -25,10 +30,10 @@ export class ValuationService {
     // Calculate depreciation rate
     const currentYear = new Date().getFullYear();
     const age = currentYear - dto.year;
-    const depreciationRate = this.calculateDepreciationRate(dto.assetType, age);
+    const depreciationRate = this.calculateDepreciationRate(collaeralType?.name || 'UNKNOWN', age);
 
     // Get LTV ratio from system parameters
-    const ltvRatio = await this.getLtvRatio(dto.assetType);
+    const ltvRatio = await this.getLtvRatio(collaeralType?.name || 'UNKNOWN');
 
     // Calculate max loan amount
     const maxLoanAmount = Math.round(
@@ -36,7 +41,7 @@ export class ValuationService {
     );
 
     return {
-      assetType: dto.assetType,
+      assetType: collaeralType?.name || 'UNKNOWN',
       brand: dto.brand,
       model: dto.model,
       year: dto.year,

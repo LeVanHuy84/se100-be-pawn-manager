@@ -13,15 +13,15 @@ import { Role } from '../employee/enum/role.enum';
 export class ContractController {
   constructor(private readonly contractService: ContractService) {}
 
-  @Get()
-  @Roles(Role.MANAGER, Role.STAFF)
-  findAll(@Query() query: ContractQueryDto) {
-    return this.contractService.findAll(query);
-  }
+  // @Get()
+  // @Roles(Role.MANAGER, Role.STAFF)
+  // findAll(@Query() query: ContractQueryDto) {
+  //   return this.contractService.findAll(query);
+  // }
 
-  @Get(':id')
-  @Roles(Role.MANAGER, Role.STAFF)
-  findOne(@Param('id') id: string) {
-    return this.contractService.findOne(id);
-  }
+  // @Get(':id')
+  // @Roles(Role.MANAGER, Role.STAFF)
+  // findOne(@Param('id') id: string) {
+  //   return this.contractService.findOne(id);
+  // }
 }
