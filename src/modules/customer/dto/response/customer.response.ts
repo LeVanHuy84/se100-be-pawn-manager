@@ -1,6 +1,6 @@
 import { CustomerType } from '../../enum/customer-type.enum';
 
-export interface ActiveLoan {
+export class ActiveLoan {
   id: string;
   loanCode: string;
   loanAmount: number;
@@ -9,14 +9,14 @@ export interface ActiveLoan {
   startDate: string; // YYYY-MM-DD
 }
 
-export interface LoanHistory {
+export class LoanHistory {
   totalLoans: number;
   totalBorrowed: number;
   totalRepaid: number;
   defaultCount: number;
 }
 
-export interface CustomerResponse {
+export class CustomerResponse {
   id: string;
   fullName: string;
   dob: string; // YYYY-MM-DD

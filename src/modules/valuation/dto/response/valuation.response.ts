@@ -1,4 +1,4 @@
-export interface ValuationResponse {
+export class ValuationResponse {
   assetType: string;
   brand: string;
   model: string;

@@ -1,4 +1,4 @@
-export interface CollateralAssetResponse {
+export class CollateralAssetResponse {
   id: string;
   collateralTypeId: number;
   ownerName: string;

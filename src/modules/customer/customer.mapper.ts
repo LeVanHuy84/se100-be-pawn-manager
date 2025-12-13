@@ -20,6 +20,7 @@ export class CustomerMapper {
       monthlyIncome: Number(customer.monthlyIncome),
       creditScore: customer.creditScore || undefined,
       createdAt: customer.createdAt.toISOString(),
+      images: customer.images as Record<string, string>[] || undefined,
     };
   }
 
