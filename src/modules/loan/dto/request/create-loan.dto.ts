@@ -2,24 +2,6 @@ import { z } from 'zod';
 import { RepaymentMethod } from 'generated/prisma';
 import { createZodDto } from 'nestjs-zod';
 
-export const CreateAssetSchema = z.object({
-  assetTypeId: z.number().int(),
-  ownerName: z.string().min(1),
-
-  assetInfo: z.record(z.string(), z.any()),
-
-  images: z.any(),
-
-  storageLocation: z.string().optional(),
-  receivedDate: z.coerce.date().optional(),
-
-  // appraisal
-  appraisedValue: z.coerce.number().optional(),
-  ltvRatio: z.coerce.number().optional(),
-  appraisalDate: z.coerce.date().optional(),
-  appraisalNotes: z.string().optional(),
-});
-
 export const CreateLoanSchema = z.object({
   customerId: z.string().min(1, 'customerId is required'),
 
@@ -33,8 +15,10 @@ export const CreateLoanSchema = z.object({
   // ---- OPTIONAL ----
   notes: z.string().optional(),
 
-  // ---- ASSETS ----
-  assets: z.array(CreateAssetSchema).min(1),
+  // ---- COLLATERALS ----
+  collateralIds: z
+    .array(z.string().min(1))
+    .min(1, 'At least one collateralId is required'),
 });
 
 export class CreateLoanDto extends createZodDto(CreateLoanSchema) {}

@@ -6,7 +6,7 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CollateralService } from '../collateral/collateral.service';
 import { CreateLoanDto } from './dto/request/create-loan.dto';
-import { AssetStatus, LoanStatus, RepaymentMethod } from 'generated/prisma';
+import { LoanStatus, RepaymentMethod } from 'generated/prisma';
 import { ApproveLoanDto } from './dto/request/approve-loan.dto';
 import { LoanSimulationsService } from '../loan-simulations/loan-simulations.service';
 import { LoanSimulationRequestDto } from '../loan-simulations/dto/request/loan-simulation.request';
@@ -27,10 +27,12 @@ export class LoanOrchestrator {
       loanAmount,
       repaymentMethod,
       notes,
-      assets,
+      collateralIds,
     } = dto;
 
-    // =============== 1. simulate ===============
+    let totalFees = 0;
+
+    // =============== 1. Loan type ===============
     const loanType = await this.prisma.loanType.findUnique({
       where: { id: loanTypeId },
     });
@@ -39,12 +41,55 @@ export class LoanOrchestrator {
       throw new NotFoundException('Loan product type not found');
     }
 
+    totalFees += loanType.interestRateMonthly?.toNumber() ?? 0;
+
+    // ================== Lấy thông tin tài sản =================
+    const collaterals = await this.prisma.collateral.findMany({
+      where: { id: { in: collateralIds } },
+      include: { collateralType: true },
+    });
+    if (collaterals.length !== collateralIds.length) {
+      throw new NotFoundException('One or more collaterals not found');
+    }
+
+    collaterals.forEach((c) => {
+      totalFees += c.collateralType.custodyFeeRateMonthly?.toNumber() ?? 0;
+    });
+
+    // =============== Lấy phí từ parameters ===============
+    const mgmtFeeRateMonthly =
+      await this.prisma.systemParameter.findFirstOrThrow({
+        where: { paramKey: 'mgmtFeeRateMonthly' },
+      });
+
+    if (mgmtFeeRateMonthly?.paramValue) {
+      const fee = Number(mgmtFeeRateMonthly.paramValue);
+
+      if (Number.isNaN(fee)) {
+        throw new Error('Invalid mgmtFeeRateMonthly value');
+      }
+
+      totalFees += fee;
+    }
+
+    const latePaymentPenaltyRate =
+      await this.prisma.systemParameter.findFirstOrThrow({
+        where: { paramKey: 'latePaymentPenaltyRate' },
+      });
+
+    if (!latePaymentPenaltyRate) {
+      throw new NotFoundException(
+        'Late payment penalty rate parameter not found',
+      );
+    }
+
+    // =============== 2. Lấy phí ===============
     const simulationRequest: LoanSimulationRequestDto = {
       amount: loanAmount,
       productType: loanType.name,
+      totalFees,
     };
 
-    // =============== 2. Lấy phí ===============
     const simulationResult =
       await this.loanSimulationsService.createSimulation(simulationRequest);
 
@@ -61,7 +106,7 @@ export class LoanOrchestrator {
           durationMonths: loanType.durationMonths,
           appliedInterestRate: loanType.interestRateMonthly,
 
-          latePaymentPenaltyRate: simulationResult.latePaymentPenaltyRate,
+          latePaymentPenaltyRate: latePaymentPenaltyRate.paramValue,
           totalInterest: simulationResult.totalInterest,
           totalFees: simulationResult.totalFees,
           totalRepayment: simulationResult.totalRepayment,
@@ -69,16 +114,10 @@ export class LoanOrchestrator {
 
           remainingAmount: simulationResult.totalRepayment,
           status: LoanStatus.PENDING,
+          collaterals: collaterals,
           notes,
         },
       });
-
-      // =============== 4. Tạo collateral ===============
-      if (assets?.length) {
-        for (const item of assets) {
-          await this.collateralService.create(item, loan.id, tx);
-        }
-      }
 
       return {
         loan,
@@ -88,9 +127,6 @@ export class LoanOrchestrator {
     });
   }
 
-  // ---------------------------------------------------------------
-  // UPDATE LOAN nếu còn PENDING
-  // ---------------------------------------------------------------
   // ---------------------------------------------------------------
   // UPDATE LOAN nếu còn PENDING
   // ---------------------------------------------------------------
