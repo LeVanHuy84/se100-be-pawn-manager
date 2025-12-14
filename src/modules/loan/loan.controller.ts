@@ -11,13 +11,20 @@ import {
 import type { CreateLoanDto } from './dto/request/create-loan.dto';
 import { LoanOrchestrator } from './loan.orchestrator';
 import type { ApproveLoanDto } from './dto/request/approve-loan.dto';
-import type { ListLoansQuery } from './dto/request/loan.query';
+import {
+  ListLoansQuerySchema,
+  type ListLoansQuery,
+} from './dto/request/loan.query';
 import { LoanService } from './loan.service';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { Role } from '../employee/enum/role.enum';
 import { UpdateLoanDto } from './dto/request/update-loan.dto';
+import { ZodValidationPipe } from 'nestjs-zod';
 
-@Controller('loans')
+@Controller({
+  version: '1',
+  path: 'loans',
+})
 export class LoanController {
   constructor(
     private loanOrchestrator: LoanOrchestrator,
@@ -36,7 +43,7 @@ export class LoanController {
     @Body() dto: ApproveLoanDto,
     @Req() req,
   ) {
-    const employeeId = req.user?.id;
+    const employeeId = req.user?.userId;
     return this.loanOrchestrator.updateStatus(id, dto, employeeId);
   }
 
@@ -46,7 +53,9 @@ export class LoanController {
   }
 
   @Get()
-  listLoans(@Query() query: ListLoansQuery) {
+  listLoans(
+    @Query(new ZodValidationPipe(ListLoansQuerySchema)) query: ListLoansQuery,
+  ) {
     return this.loanService.listLoans(query);
   }
 }

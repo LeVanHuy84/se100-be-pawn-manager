@@ -1,9 +1,9 @@
 import { LoanStatus } from 'generated/prisma';
 
 const VALID_TRANSITIONS: Record<LoanStatus, readonly LoanStatus[]> = {
-  [LoanStatus.PENDING]: [LoanStatus.APPROVED, LoanStatus.REJECTED],
-  [LoanStatus.APPROVED]: [LoanStatus.ACTIVE],
-  [LoanStatus.ACTIVE]: [LoanStatus.CLOSED],
+  [LoanStatus.PENDING]: [LoanStatus.ACTIVE, LoanStatus.REJECTED],
+  [LoanStatus.ACTIVE]: [LoanStatus.CLOSED, LoanStatus.OVERDUE],
+  [LoanStatus.OVERDUE]: [LoanStatus.CLOSED],
   [LoanStatus.REJECTED]: [],
   [LoanStatus.CLOSED]: [],
 };

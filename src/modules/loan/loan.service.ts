@@ -25,7 +25,7 @@ export class LoanService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          loanProductType: true,
+          loanType: true,
           collaterals: true,
         },
       }),

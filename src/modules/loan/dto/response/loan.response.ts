@@ -9,6 +9,8 @@ export interface LoanResponse {
   repaymentMethod: RepaymentMethod;
 
   loanTypeId: number;
+  loanTypeName: string;
+
   durationMonths: number;
   appliedInterestRate: number;
   latePaymentPenaltyRate: number;
@@ -20,7 +22,7 @@ export interface LoanResponse {
 
   status: LoanStatus;
 
-  startDate: string;
+  startDate: string | null;
   activatedAt?: string | null;
   notes?: string | null;
 

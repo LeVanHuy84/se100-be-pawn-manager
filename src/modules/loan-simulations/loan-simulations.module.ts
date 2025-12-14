@@ -5,5 +5,6 @@ import { LoanSimulationsController } from './loan-simulations.controller';
 @Module({
   controllers: [LoanSimulationsController],
   providers: [LoanSimulationsService],
+  exports: [LoanSimulationsService],
 })
 export class LoanSimulationsModule {}

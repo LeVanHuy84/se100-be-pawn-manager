@@ -42,11 +42,11 @@ import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-
     RepaymentScheduleModule,
   ],
   controllers: [],
-  // providers: [
-  //   {
-  //     provide: APP_GUARD,
-  //     useClass: ClerkAuthGuard,
-  //   },
-  // ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ClerkAuthGuard,
+    },
+  ],
 })
 export class AppModule {}
