@@ -1,3 +1,5 @@
+import { ImageItem } from "src/common/interfaces/media.interface";
+
 export class CollateralAssetResponse {
   id: string;
   collateralTypeId: number;
@@ -12,7 +14,7 @@ export class CollateralAssetResponse {
   appraisalNotes?: string | null;
   sellPrice?: number | null;
   sellDate?: string | null;
-  images?: Record<string, string>[] | null;
+  images?: ImageItem[] | null;
   collateralInfo?: Record<string, any> | null;
   createdAt: string;
   updatedAt: string;

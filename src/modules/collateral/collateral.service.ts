@@ -20,6 +20,7 @@ import {
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import pLimit from 'p-limit';
+import { ImageItem } from 'src/common/interfaces/media.interface';
 
 @Injectable()
 export class CollateralService {
@@ -186,12 +187,16 @@ export class CollateralService {
           files.map(file => limit(() => this.cloudinaryService.uploadFile(file, folder)))
         );
 
-        const images = uploadResults.map(result => ({
+        const images: ImageItem[] = uploadResults.map(result => ({
           url: result.secure_url,
           publicId: result.public_id,
         }));
 
-        updateData.images = images as Prisma.InputJsonValue;
+        const currentImages = existing.images as unknown as ImageItem[] || [];
+
+        const updatedImages = [...currentImages, ...images];
+
+        updateData.images = updatedImages as unknown as Prisma.InputJsonValue;
       }
 
       const collateral = await this.prisma.collateral.update({

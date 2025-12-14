@@ -1,3 +1,4 @@
+import { ImageItem } from 'src/common/interfaces/media.interface';
 import { Customer, Loan } from '../../../generated/prisma';
 import { CustomerResponse, ActiveLoan, LoanHistory } from './dto/response/customer.response';
 import { CustomerType } from './enum/customer-type.enum';
@@ -20,7 +21,7 @@ export class CustomerMapper {
       monthlyIncome: Number(customer.monthlyIncome),
       creditScore: customer.creditScore || undefined,
       createdAt: customer.createdAt.toISOString(),
-      images: customer.images as Record<string, string>[] || undefined,
+      images: customer.images as unknown as ImageItem[] || undefined,
     };
   }
 

@@ -1,3 +1,4 @@
+import { ImageItem } from 'src/common/interfaces/media.interface';
 import { CustomerType } from '../../enum/customer-type.enum';
 
 export class ActiveLoan {
@@ -30,5 +31,5 @@ export class CustomerResponse {
   createdAt: string; // ISO datetime
   activeLoans?: ActiveLoan[];
   loanHistory?: LoanHistory;
-  images?: Record<string, string>[];
+  images?: ImageItem[];
 }

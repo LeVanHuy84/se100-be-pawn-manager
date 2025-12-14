@@ -15,6 +15,7 @@ import { CustomerType, Prisma } from '../../../generated/prisma';
 import type { File as MulterFile } from 'multer';
 import pLimit from 'p-limit';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { ImageItem } from 'src/common/interfaces/media.interface';
 
 @Injectable()
 export class CustomerService {
@@ -113,7 +114,7 @@ export class CustomerService {
       const imagesToSave: { url: string; publicId: string }[] = [];
 
       if (files && files.length > 0) {
-        const folder = `pawnshop/${data.customerType.toString().toLowerCase()}/${data.fullName.toLowerCase()}`;
+        const folder = `pawnshop/${data.customerType.toString().toLowerCase()}/${data.nationalId}`;
 
         const limit = pLimit(3);
 
@@ -217,7 +218,7 @@ export class CustomerService {
         updateData.creditScore = data.creditScore;
 
       if (files && files.length > 0) {
-        const folder = `pawnshop/${existing.customerType.toString().toLowerCase()}/${existing.fullName.toLowerCase()}`;
+        const folder = `pawnshop/${existing.customerType.toString().toLowerCase()}/${existing.nationalId}`;
 
         const limit = pLimit(3);
 
@@ -232,7 +233,11 @@ export class CustomerService {
           publicId: result.public_id,
         }));
 
-        updateData.images = images as Prisma.InputJsonValue;
+        const currentImages = (existing.images as unknown as ImageItem[]) || [];
+
+        const updatedImages = [...currentImages, ...images];
+
+        updateData.images = updatedImages as unknown as Prisma.InputJsonValue;
       }
 
       const customer = await this.prisma.customer.update({

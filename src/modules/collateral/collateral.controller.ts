@@ -20,7 +20,7 @@ import { CreateCollateralDTO } from './dto/request/create-collateral.request';
 import { UpdateLocationRequest } from './dto/request/update-location.request';
 import { CreateLiquidationRequest } from './dto/request/liquidation.request';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller({
   version: '1',
@@ -42,14 +42,14 @@ export class CollateralController {
   }
 
   @Post()
-  @UseInterceptors(FileInterceptor('files'))
+  @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
   createCollateral(@Body() body: CreateCollateralDTO, @UploadedFiles() files: MulterFile[]) {
     return this.collateralService.create(body, files);
   }
 
   @Patch('/:id')
-  @UseInterceptors(FileInterceptor('files'))
+  @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
   updateCollateral(@Param('id') id: string, @Body() body: PatchCollateralDTO, @UploadedFiles() files: MulterFile[]) {
     return this.collateralService.update(id, body, files);

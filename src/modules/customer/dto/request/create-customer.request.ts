@@ -34,8 +34,8 @@ export const CreateCustomerSchema = z.object({
       }).optional(),
   address: z.string().optional(),
   customerType: z.enum(Object.values(CustomerType) as [string, ...string[]]),
-  monthlyIncome: z.number().int().min(3000000),
-  creditScore: z.number().int().min(0).max(1000).optional(),
+  monthlyIncome: z.coerce.number().int().min(3000000),
+  creditScore: z.coerce.number().int().min(0).max(1000).optional(),
 });
 
 export class CreateCustomerDTO extends createZodDto(CreateCustomerSchema) {}
