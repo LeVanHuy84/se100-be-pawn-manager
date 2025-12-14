@@ -6,6 +6,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ZodError } from 'zod';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -13,26 +14,32 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
 
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let message: string | object = 'Internal server error';
+    let details: any = null;
 
-    const errorResponse =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : { message: 'Internal server error' };
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const errorResponse: any = exception.getResponse();
 
-    const message =
-      typeof errorResponse === 'string'
-        ? errorResponse
-        : (errorResponse as any).message;
+      if (typeof errorResponse === 'string') {
+        message = errorResponse;
+      } else {
+        message = errorResponse.message || 'Error';
+        if (typeof errorResponse === 'object' && errorResponse !== null) {
+          if (errorResponse.errors) {
+            details = errorResponse.errors;
+          }
+        }
+      }
+    }
 
     response.status(status).json({
       error: {
         statusCode: status,
         timestamp: new Date().toISOString(),
-        message,
+        message: message,
+        details: details,
       },
     });
   }
