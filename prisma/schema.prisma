@@ -19,27 +19,17 @@ enum CustomerType {
   VIP
 }
 
-enum RegistrationChannel {
-  DIRECT
-  ONLINE
-  HOME_DELIVERY
-}
-
-enum LoanApplicationStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  CLOSED
-}
-
 enum RepaymentMethod {
   EQUAL_INSTALLMENT
   INTEREST_ONLY
 }
 
 enum LoanStatus {
+  PENDING
+  REJECTED
   ACTIVE
   CLOSED
+  OVERDUE
 }
 
 enum RepaymentItemStatus {
@@ -68,25 +58,14 @@ enum PaymentComponent {
   SERVICE_FEE
 }
 
-enum AssetType {
-  CAR
-  MOTORBIKE
-  GOLD
-  OTHER
-}
-
 enum AssetStatus {
   PROPOSED
   PLEDGED
   STORED
   RELEASED
   REJECTED
-}
-
-enum DocumentEntity {
-  CUSTOMER
-  COLLATERAL
-  LOAN
+  LIQUIDATING
+  SOLD
 }
 
 enum EmployeeStatus {
@@ -102,15 +81,16 @@ enum DisbursementMethod {
 // ==================================================
 // LOAN PRODUCT TYPE
 // ==================================================
-model LoanProductType {
-  id          Int         @id @default(autoincrement())
-  name        String      @unique
-  description String?
-  interestRate    Decimal
-  managementFee   Decimal
-  storageFee      Decimal
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @default(now())
+model LoanType {
+  id                    Int     @id @default(autoincrement())
+  name                  String  @unique
+  description           String?
+
+  durationMonths        Int
+  interestRateMonthly   Decimal @db.Decimal(7, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 
   loans Loan[]
 }
@@ -119,19 +99,20 @@ model LoanProductType {
 // CUSTOMER
 // ==================================================
 model Customer {
-  id            String    @id @default(uuid()) @db.Uuid
+  id            String       @id @default(uuid()) @db.Uuid
   fullName      String
-  dob           DateTime  @db.Date
-  nationalId    String    @unique
-  phone         String?   @unique
-  email         String?   @unique
+  dob           DateTime     @db.Date
+  nationalId    String       @unique
+  phone         String?      @unique
+  email         String?      @unique
   address       String?
   customerType  CustomerType
   monthlyIncome Decimal?
   creditScore   Int?
 
+  images      Json
+
   loans     Loan[]
-  contracts Contract[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
@@ -141,38 +122,49 @@ model Customer {
 // LOAN
 // ==================================================
 model Loan {
-  id              String        @id @default(uuid()) @db.Uuid
-  customerId      String        @db.Uuid
+  id              String   @id @default(uuid()) @db.Uuid
+  customerId      String   @db.Uuid
 
-  // ---- LOAN FINANCIAL TERMS ----
-  loanAmount      Decimal
-  loanTermMonths  Int
-  repaymentMethod RepaymentMethod
-  loanProductTypeId   Int
-  interestRate    Decimal                     // snapshot
-  managementFee   Decimal                      // snapshot
-  storageFee      Decimal                      // snapshot
-  otherFee        Decimal?                     // optional
+  // ---- LOAN TERMS (SNAPSHOT) ----
+  loanAmount            Decimal
+  repaymentMethod       RepaymentMethod
+  loanTypeId            Int
+
+  durationMonths      Int          // snapshot
+  appliedInterestRate  Decimal       // snapshot
+
+  // rate phi phat
+  latePaymentPenaltyRate        Decimal @db.Decimal(7, 4)  // snapshot
+
+  // ---- CALCULATED SNAPSHOT ----
+  totalInterest   Decimal
+  totalFees       Decimal
+  totalRepayment  Decimal
+  monthlyPayment  Decimal
 
   // ---- LIFECYCLE ----
-  startDate       DateTime @db.Date
-  status          LoanStatus @default(ACTIVE)
+  startDate       DateTime?
+  status          LoanStatus @default(PENDING)
+
   approvedAt      DateTime?
+  approvedBy      String?
+  rejectedAt      DateTime?
+  rejectedBy      String?
+
   activatedAt     DateTime?
-  totalPaidAmount Decimal @default(0)
   remainingAmount Decimal @default(0)
+
   notes           String?
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now())
 
   // ---- RELATIONS ----
-  loanProductType   LoanProductType      @relation(fields: [loanProductTypeId], references: [id])
+  loanProductType   LoanType      @relation(fields: [loanTypeId], references: [id])
   customer          Customer             @relation(fields: [customerId], references: [id])
   repaymentSchedule RepaymentScheduleDetail[]
   payments          LoanPayment[]
-  collaterals       CollateralAsset[]
-  contract          Contract?
+  collaterals       Asset[]
 }
 
 
@@ -180,18 +172,20 @@ model Loan {
 // REPAYMENT SCHEDULE
 // ==================================================
 model RepaymentScheduleDetail {
-  id                String              @id @default(uuid()) @db.Uuid
-  loanId            String              @db.Uuid
-  periodNumber      Int
-  dueDate           DateTime            @db.Date
-  beginningBalance  Decimal
-  principalAmount   Decimal
-  interestAmount    Decimal
-  totalAmount       Decimal
-  status            RepaymentItemStatus @default(PENDING)
-  paidPrincipal     Decimal?            @default(0)
-  paidInterest      Decimal?            @default(0)
-  paidAt            DateTime?
+  id               String              @id @default(uuid()) @db.Uuid
+  loanId           String              @db.Uuid
+  periodNumber     Int
+  dueDate          DateTime            @db.Date
+  beginningBalance Decimal
+  principalAmount  Decimal
+  interestAmount   Decimal
+  totalAmount      Decimal
+  status           RepaymentItemStatus @default(PENDING)
+  paidPrincipal    Decimal?            @default(0)
+  paidInterest     Decimal?            @default(0)
+  feeAmount        Decimal             @default(0) // mgmt + custody fee cho kỳ này
+  paidFee          Decimal?            @default(0)
+  paidAt           DateTime?
 
   loan Loan @relation(fields: [loanId], references: [id])
 }
@@ -200,25 +194,26 @@ model RepaymentScheduleDetail {
 // PAYMENTS
 // ==================================================
 model LoanPayment {
-  id                   String         @id @default(uuid()) @db.Uuid
-  loanId               String         @db.Uuid
-  amount               Decimal
-  paymentType          PaymentType
-  paymentMethod        PaymentMethod
-  paidAt               DateTime       @default(now())
-  referenceCode        String?
-  recorderEmployeeId   String?        // clerk user id (string)
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @default(now())
+  id                 String        @id @default(uuid()) @db.Uuid
+  idempotencyKey     String?       @unique
+  loanId             String        @db.Uuid
+  amount             Decimal
+  paymentType        PaymentType
+  paymentMethod      PaymentMethod
+  paidAt             DateTime      @default(now())
+  referenceCode      String?
+  recorderEmployeeId String? // clerk user id (string)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @default(now())
 
-  loan        Loan @relation(fields: [loanId], references: [id])
+  loan        Loan                @relation(fields: [loanId], references: [id])
   allocations PaymentAllocation[]
 }
 
 // Allocation per payment
 model PaymentAllocation {
-  id            String          @id @default(uuid()) @db.Uuid
-  paymentId     String          @db.Uuid
+  id            String           @id @default(uuid()) @db.Uuid
+  paymentId     String           @db.Uuid
   componentType PaymentComponent
   amount        Decimal
   note          String?
@@ -229,74 +224,57 @@ model PaymentAllocation {
 // ==================================================
 // COLLATERAL & APPRAISAL
 // ==================================================
-model CollateralAsset {
-  id              String    @id @default(uuid()) @db.Uuid
-  assetType       AssetType
-  ownerName       String
-  brandModel      String?
-  serialNumber    String?
-  status          AssetStatus @default(PROPOSED)
-  loanId          String?   @db.Uuid
-  storageLocation String?
-  receivedDate    DateTime? @db.Date
-  releasedDate    DateTime? @db.Date
-
-  appraisedValue  Decimal?
-  ltvRatio        Decimal?
-  appraisalDate   DateTime?
-  appraisalNotes  String?
-  validUntil      DateTime? @db.Date
-
-  salePrice       Decimal?
-  isSold          Boolean   @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
-  createdBy String?
-  updatedBy String?
-
-  loan Loan? @relation(fields: [loanId], references: [id])
+model AssetType {
+  id                    Int      @id @default(autoincrement())
+  name                  String
+  // mgmtFeeRateMonthly    Decimal @default(0) @db.Decimal(7, 4)  -> Parameter
+  custodyFeeRateMonthly Decimal @default(0) @db.Decimal(7, 4)
+  assets    Asset[]
 }
 
-// ==================================================
-// CONTRACT
-// ==================================================
-model Contract {
-  id               String   @id @default(uuid()) @db.Uuid
-  loanId           String   @unique @db.Uuid   // unique = one-to-one with Loan
-  customerId       String   @db.Uuid
-  employeeId       String?
-  contractDate     DateTime @db.Date
-  policyId         String?
-  digitalSignature String?
-  termsReference   String?
+model Asset {
+  id              String      @id @default(uuid()) @db.Uuid
+  assetTypeId         Int
+  ownerName       String
 
-  disbursementAmount Decimal
-  method        DisbursementMethod
-  disbursedDate DateTime @db.Date
+  assetInfo       Json
+  
+  status          AssetStatus @default(PROPOSED)
+  loanId          String?     @db.Uuid
+  storageLocation String?
+  receivedDate    DateTime? @db.Date
+
+  appraisedValue Decimal?
+  ltvRatio       Decimal?
+  appraisalDate  DateTime?
+  appraisalNotes String?
+
+  images         Json
+
+  sellPrice       Decimal?
+  sellDate       DateTime? @db.Date
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
 
-  loan     Loan     @relation(fields: [loanId], references: [id])
-  customer Customer @relation(fields: [customerId], references: [id])
+  loan Loan? @relation(fields: [loanId], references: [id])
+  assetType   AssetType @relation(fields: [assetTypeId], references: [id])
 }
 
 // ==================================================
 // DOCUMENT RECORD
 // ==================================================
-model DocumentRecord {
-  id          String        @id @default(uuid()) @db.Uuid
-  entityType  DocumentEntity
-  entityId    String        @db.Uuid
-  docType     String
-  docNumber   String
-  issuedDate  DateTime      @db.Date
-  expiryDate  DateTime?
-  filePath    String
-  isValid     Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-}
+// model DocumentRecord {
+//   id          String        @id @default(uuid()) @db.Uuid
+//   entityType  DocumentEntity
+//   entityId    String        @db.Uuid
+//   docType     String
+//   docNumber   String
+//   issuedDate  DateTime      @db.Date
+//   expiryDate  DateTime?
+//   isValid     Boolean       @default(true)
+//   createdAt   DateTime      @default(now())
+// }
 
 // ==================================================
 // SYSTEM PARAMETER
@@ -306,11 +284,11 @@ model SystemParameter {
   paramGroup  String?
   paramKey    String
   paramValue  String
-  dataType    String?   @default("STRING")
+  dataType    String?  @default("STRING")
   description String?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @default(now())
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
 
   @@unique([paramGroup, paramKey])
 }
