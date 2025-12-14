@@ -7,8 +7,8 @@ import { Roles } from 'src/common/decorators/role.decorator';
 import { Role } from '../employee/enum/role.enum';
 
 @Controller({
-    version: '1',
-    path: 'asset-valuations',
+  version: '1',
+  path: 'asset-valuations',
 })
 export class ValuationController {
   constructor(private readonly valuationService: ValuationService) {}

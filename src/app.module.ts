@@ -10,6 +10,10 @@ import { CustomerModule } from './modules/customer/customer.module';
 import { CollateralModule } from './modules/collateral/collateral.module';
 import { ValuationModule } from './modules/valuation/valuation.module';
 import { ContractModule } from './modules/contract/contract.module';
+import { ConfigurationsModule } from './modules/configurations/configurations.module';
+import { LoanSimulationsModule } from './modules/loan-simulations/loan-simulations.module';
+import { PaymentModule } from './modules/payment/payment.module';
+import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-schedule.module';
 
 @Module({
   imports: [
@@ -32,6 +36,10 @@ import { ContractModule } from './modules/contract/contract.module';
       }),
     }),
     LoanModule,
+    ConfigurationsModule,
+    LoanSimulationsModule,
+    PaymentModule,
+    RepaymentScheduleModule,
   ],
   controllers: [],
   // providers: [

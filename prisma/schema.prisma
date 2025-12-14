@@ -41,8 +41,8 @@ enum RepaymentItemStatus {
 enum PaymentType {
   PERIODIC
   EARLY
-  LATE_FEE
-  PENALTY
+  PAYOFF
+  ADJUSTMENT
 }
 
 enum PaymentMethod {
@@ -171,20 +171,23 @@ model Loan {
 // REPAYMENT SCHEDULE
 // ==================================================
 model RepaymentScheduleDetail {
-  id               String              @id @default(uuid()) @db.Uuid
-  loanId           String              @db.Uuid
-  periodNumber     Int
-  dueDate          DateTime            @db.Date
-  beginningBalance Decimal
-  principalAmount  Decimal
-  interestAmount   Decimal
-  totalAmount      Decimal
-  status           RepaymentItemStatus @default(PENDING)
-  paidPrincipal    Decimal?            @default(0)
-  paidInterest     Decimal?            @default(0)
-  feeAmount        Decimal             @default(0) // mgmt + custody fee cho kỳ này
-  paidFee          Decimal?            @default(0)
-  paidAt           DateTime?
+  id                   String              @id @default(uuid()) @db.Uuid
+  loanId               String              @db.Uuid
+  periodNumber         Int
+  dueDate              DateTime            @db.Date
+  beginningBalance     Decimal
+  principalAmount      Decimal
+  interestAmount       Decimal
+  feeAmount            Decimal             @default(0) // mgmt + custody fee cho kỳ này
+  penaltyAmount        Decimal             @default(0)
+  totalAmount          Decimal
+  status               RepaymentItemStatus @default(PENDING)
+  paidPrincipal        Decimal?            @default(0)
+  paidInterest         Decimal?            @default(0)
+  paidFee              Decimal?            @default(0)
+  paidPenalty          Decimal?            @default(0)
+  paidAt               DateTime?
+  lastPenaltyAppliedAt DateTime?           @db.Date
 
   loan Loan @relation(fields: [loanId], references: [id])
 }
