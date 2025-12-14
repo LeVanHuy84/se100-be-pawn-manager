@@ -270,7 +270,7 @@ model Collateral {
   status          CollateralStatus @default(PROPOSED)
   loanId          String?          @db.Uuid
   storageLocation String?
-  receivedDate    DateTime?        @db.Date
+  receivedDate    DateTime?   @db.Date
 
   appraisedValue Decimal?
   ltvRatio       Decimal?
