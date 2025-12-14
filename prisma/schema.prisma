@@ -160,7 +160,7 @@ model Loan {
   createdBy String?
 
   // ---- RELATIONS ----
-  loanProductType   LoanType                  @relation(fields: [loanTypeId], references: [id])
+  loanType   LoanType                  @relation(fields: [loanTypeId], references: [id])
   customer          Customer                  @relation(fields: [customerId], references: [id])
   repaymentSchedule RepaymentScheduleDetail[]
   payments          LoanPayment[]

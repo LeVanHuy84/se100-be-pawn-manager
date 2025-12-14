@@ -5,6 +5,7 @@ import Joi from 'joi';
 import { APP_GUARD } from '@nestjs/core';
 import { ClerkAuthGuard } from './clerk/clerk-auth.guard';
 import { EmployeeModule } from './modules/employee/employee.module';
+import { LoanModule } from './modules/loan/loan.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CollateralModule } from './modules/collateral/collateral.module';
 import { ValuationModule } from './modules/valuation/valuation.module';
@@ -34,17 +35,18 @@ import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-
         GEMINI_API_KEY: Joi.string().required(),
       }),
     }),
+    LoanModule,
     ConfigurationsModule,
     LoanSimulationsModule,
     PaymentModule,
     RepaymentScheduleModule,
   ],
   controllers: [],
-  // providers: [
-  //   {
-  //     provide: APP_GUARD,
-  //     useClass: ClerkAuthGuard,
-  //   },
-  // ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ClerkAuthGuard,
+    },
+  ],
 })
 export class AppModule {}
