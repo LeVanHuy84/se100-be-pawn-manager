@@ -58,7 +58,7 @@ enum PaymentComponent {
   SERVICE_FEE
 }
 
-enum AssetStatus {
+enum CollateralStatus {
   PROPOSED
   PLEDGED
   STORED
@@ -109,8 +109,7 @@ model Customer {
   customerType  CustomerType
   monthlyIncome Decimal?
   creditScore   Int?
-
-  images Json
+  images        Json
 
   loans Loan[]
 
@@ -158,13 +157,14 @@ model Loan {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
+  createdBy String?
 
   // ---- RELATIONS ----
   loanProductType   LoanType                  @relation(fields: [loanTypeId], references: [id])
   customer          Customer                  @relation(fields: [customerId], references: [id])
   repaymentSchedule RepaymentScheduleDetail[]
   payments          LoanPayment[]
-  collaterals       Asset[]
+  collaterals       Collateral[]
 }
 
 // ==================================================
@@ -226,23 +226,49 @@ model PaymentAllocation {
 // ==================================================
 // COLLATERAL & APPRAISAL
 // ==================================================
-model AssetType {
-  id                    Int     @id @default(autoincrement())
+model CollateralType {
+  id                    Int          @id @default(autoincrement())
   name                  String
   // mgmtFeeRateMonthly    Decimal @default(0) @db.Decimal(7, 4)  -> Parameter
-  custodyFeeRateMonthly Decimal @default(0) @db.Decimal(7, 4)
-  assets                Asset[]
+  custodyFeeRateMonthly Decimal      @default(0) @db.Decimal(7, 4)
+  collaterals           Collateral[]
 }
 
-model Asset {
-  id          String @id @default(uuid()) @db.Uuid
-  assetTypeId Int
-  ownerName   String
+model Store {
+  id        String  @id @default(uuid()) @db.Uuid
+  name      String
+  address   String?
+  storeInfo Json
+  isActive  Boolean @default(true)
 
-  assetInfo Json
+  collaterals Collateral[]
 
-  status          AssetStatus @default(PROPOSED)
-  loanId          String?     @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Storage {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  address     String
+  storageInfo Json
+  isActive    Boolean @default(true)
+
+  collaterals Collateral[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Collateral {
+  id               String @id @default(uuid()) @db.Uuid
+  collateralTypeId Int
+  ownerName        String
+
+  collateralInfo Json
+
+  status          CollateralStatus @default(PROPOSED)
+  loanId          String?          @db.Uuid
   storageLocation String?
   receivedDate    DateTime?   @db.Date
 
@@ -257,10 +283,14 @@ model Asset {
   sellDate  DateTime? @db.Date
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  loan      Loan?     @relation(fields: [loanId], references: [id])
-  assetType AssetType @relation(fields: [assetTypeId], references: [id])
+  loan           Loan?          @relation(fields: [loanId], references: [id])
+  collateralType CollateralType @relation(fields: [collateralTypeId], references: [id])
+  store          Store?         @relation(fields: [storeId], references: [id])
+  storeId        String?        @db.Uuid
+  storage        Storage?       @relation(fields: [storageId], references: [id])
+  storageId      String?        @db.Uuid
 }
 
 // ==================================================

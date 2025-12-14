@@ -6,7 +6,6 @@ export const CreateLiquidationSchema = z.object({
   collateralId: z.string().uuid(),
   minimumSalePrice: z.coerce.number().int().min(0).optional(),
   reason: z.string().optional(),
-  createdBy: z.string().min(1).optional(),
 });
 
 export class CreateLiquidationRequest extends createZodDto(CreateLiquidationSchema) {}

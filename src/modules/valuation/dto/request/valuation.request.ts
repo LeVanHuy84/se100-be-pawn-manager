@@ -1,10 +1,9 @@
 import { createZodDto } from 'nestjs-zod';
-import AssetType from 'src/modules/collateral/enum/asset-type.enum';
 import { z } from 'zod';
 import { AssetCondition } from '../../enum/asset-condition.enum';
 
 const ValuationRequestSchema = z.object({
-  assetType: z.enum(Object.values(AssetType) as [string, ...string[]]),
+  collateralTypeId: z.coerce.number().int().positive('Collateral Type ID must be a positive integer'),
   brand: z.string().min(1, 'Brand is required'),
   model: z.string().min(1, 'Model is required'),
   year: z.coerce

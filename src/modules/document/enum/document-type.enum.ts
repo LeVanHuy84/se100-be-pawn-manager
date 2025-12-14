@@ -1,8 +1,0 @@
-export enum DocumentType {
-  CCCD = 'CCCD',
-  CMND = 'CMND',
-  CAVET = 'CAVET',
-  DANG_KIEM = 'DANG_KIEM',
-  LABOR_CONTRACT = 'LABOR_CONTRACT',
-  ASSET_PHOTO = 'ASSET_PHOTO',
-}

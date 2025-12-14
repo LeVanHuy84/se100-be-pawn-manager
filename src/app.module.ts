@@ -7,7 +7,6 @@ import { ClerkAuthGuard } from './clerk/clerk-auth.guard';
 import { EmployeeModule } from './modules/employee/employee.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CollateralModule } from './modules/collateral/collateral.module';
-import { DocumentModule } from './modules/document/document.module';
 import { ValuationModule } from './modules/valuation/valuation.module';
 import { ContractModule } from './modules/contract/contract.module';
 import { ConfigurationsModule } from './modules/configurations/configurations.module';
@@ -20,7 +19,6 @@ import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-
     EmployeeModule,
     CustomerModule,
     CollateralModule,
-    DocumentModule,
     ValuationModule,
     ContractModule,
     PrismaModule,
@@ -42,11 +40,11 @@ import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-
     RepaymentScheduleModule,
   ],
   controllers: [],
-  providers: [
-    {
-      provide: APP_GUARD,
-      useClass: ClerkAuthGuard,
-    },
-  ],
+  // providers: [
+  //   {
+  //     provide: APP_GUARD,
+  //     useClass: ClerkAuthGuard,
+  //   },
+  // ],
 })
 export class AppModule {}

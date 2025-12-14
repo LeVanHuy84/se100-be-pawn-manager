@@ -151,6 +151,7 @@ async function main() {
         customerType: c.customerType as CustomerType,
         monthlyIncome: c.monthlyIncome,
         creditScore: c.creditScore,
+        images: [],
       },
     });
   }

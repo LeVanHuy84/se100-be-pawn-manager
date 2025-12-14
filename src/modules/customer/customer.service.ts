@@ -12,10 +12,17 @@ import { CustomerResponse } from './dto/response/customer.response';
 import { CustomerMapper } from './customer.mapper';
 import { BaseResult } from 'src/common/dto/base.response';
 import { CustomerType, Prisma } from '../../../generated/prisma';
+import type { File as MulterFile } from 'multer';
+import pLimit from 'p-limit';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { ImageItem } from 'src/common/interfaces/media.interface';
 
 @Injectable()
 export class CustomerService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cloudinaryService: CloudinaryService,
+  ) {}
 
   async findAll(
     query: CustomerQueryDTO,
@@ -64,16 +71,22 @@ export class CustomerService {
   async findOne(id: string): Promise<CustomerResponse> {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
+      include: {
+        loans: true,
+      },
     });
 
     if (!customer) {
       throw new NotFoundException(`Customer with ID ${id} not found`);
     }
 
-    return CustomerMapper.toResponse(customer);
+    return CustomerMapper.toDetailResponse(customer);
   }
 
-  async create(data: CreateCustomerDTO): Promise<CustomerResponse> {
+  async create(
+    data: CreateCustomerDTO,
+    files?: MulterFile[],
+  ): Promise<CustomerResponse> {
     try {
       // Check for duplicate nationalId or phone
       const existing = await this.prisma.customer.findFirst({
@@ -98,6 +111,26 @@ export class CustomerService {
         }
       }
 
+      const imagesToSave: { url: string; publicId: string }[] = [];
+
+      if (files && files.length > 0) {
+        const folder = `pawnshop/${data.customerType.toString().toLowerCase()}/${data.nationalId}`;
+
+        const limit = pLimit(3);
+
+        const uploadResults = await Promise.all(
+          files.map((file) =>
+            limit(() => this.cloudinaryService.uploadFile(file, folder)),
+          ),
+        );
+
+        const images = uploadResults.map((result) => ({
+          url: result.secure_url,
+          publicId: result.public_id,
+        }));
+        imagesToSave.push(...images);
+      }
+
       const customer = await this.prisma.customer.create({
         data: {
           fullName: data.fullName,
@@ -109,10 +142,11 @@ export class CustomerService {
           customerType: data.customerType as CustomerType,
           monthlyIncome: data.monthlyIncome,
           creditScore: data.creditScore,
+          images: imagesToSave as Prisma.InputJsonValue,
         },
       });
 
-      return CustomerMapper.toResponse(customer);
+      return CustomerMapper.toDetailResponse(customer);
     } catch (error) {
       if (error instanceof ConflictException) {
         throw error;
@@ -124,6 +158,7 @@ export class CustomerService {
   async update(
     id: string,
     data: UpdateCustomerRequest,
+    files?: MulterFile[],
   ): Promise<CustomerResponse> {
     // Check if customer exists
     const existing = await this.prisma.customer.findUnique({
@@ -168,8 +203,10 @@ export class CustomerService {
       const updateData: Prisma.CustomerUpdateInput = {};
 
       if (data.fullName !== undefined) updateData.fullName = data.fullName;
-      if (data.dob !== undefined) throw new BadRequestException('DOB cannot be updated');
-      if (data.nationalId !== undefined) throw new BadRequestException('National ID cannot be updated');
+      if (data.dob !== undefined)
+        throw new BadRequestException('DOB cannot be updated');
+      if (data.nationalId !== undefined)
+        throw new BadRequestException('National ID cannot be updated');
       if (data.phone !== undefined) updateData.phone = data.phone;
       if (data.email !== undefined) updateData.email = data.email;
       if (data.address !== undefined) updateData.address = data.address;
@@ -180,12 +217,36 @@ export class CustomerService {
       if (data.creditScore !== undefined)
         updateData.creditScore = data.creditScore;
 
+      if (files && files.length > 0) {
+        const folder = `pawnshop/${existing.customerType.toString().toLowerCase()}/${existing.nationalId}`;
+
+        const limit = pLimit(3);
+
+        const uploadResults = await Promise.all(
+          files.map((file) =>
+            limit(() => this.cloudinaryService.uploadFile(file, folder)),
+          ),
+        );
+
+        const images = uploadResults.map((result) => ({
+          url: result.secure_url,
+          publicId: result.public_id,
+        }));
+
+        const currentImages = (existing.images as unknown as ImageItem[]) || [];
+
+        const updatedImages = [...currentImages, ...images];
+
+        updateData.images = updatedImages as unknown as Prisma.InputJsonValue;
+      }
+
       const customer = await this.prisma.customer.update({
         where: { id },
         data: updateData,
+        include: { loans: true },
       });
 
-      return CustomerMapper.toResponse(customer);
+      return CustomerMapper.toDetailResponse(customer);
     } catch (error) {
       throw new BadRequestException('Failed to update customer');
     }

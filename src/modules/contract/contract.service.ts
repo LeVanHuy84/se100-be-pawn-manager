@@ -9,54 +9,54 @@ import { BaseResult } from 'src/common/dto/base.response';
 export class ContractService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: ContractQueryDto): Promise<BaseResult<ContractResponse[]>> {
-    const { page, limit, loanId, customerId } = query;
-    const skip = (page - 1) * limit;
+  // async findAll(query: ContractQueryDto): Promise<BaseResult<ContractResponse[]>> {
+  //   const { page, limit, loanId, customerId } = query;
+  //   const skip = (page - 1) * limit;
 
-    const where: any = {};
+  //   const where: any = {};
 
-    if (loanId) {
-      where.loanId = loanId;
-    }
+  //   if (loanId) {
+  //     where.loanId = loanId;
+  //   }
 
-    if (customerId) {
-      where.customerId = customerId;
-    }
+  //   if (customerId) {
+  //     where.customerId = customerId;
+  //   }
 
-    const [contracts, totalItems] = await Promise.all([
-      this.prisma.contract.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: {
-          createdAt: 'desc',
-        },
-      }),
-      this.prisma.contract.count({ where }),
-    ]);
+  //   const [contracts, totalItems] = await Promise.all([
+  //     this.prisma.contract.findMany({
+  //       where,
+  //       skip,
+  //       take: limit,
+  //       orderBy: {
+  //         createdAt: 'desc',
+  //       },
+  //     }),
+  //     this.prisma.contract.count({ where }),
+  //   ]);
 
-    const totalPages = Math.ceil(totalItems / limit);
+  //   const totalPages = Math.ceil(totalItems / limit);
 
-    return {
-      data: ContractMapper.toResponseList(contracts),
-      meta: {
-        totalItems,
-        currentPage: page,
-        totalPages,
-        itemsPerPage: limit,
-      },
-    };
-  }
+  //   return {
+  //     data: ContractMapper.toResponseList(contracts),
+  //     meta: {
+  //       totalItems,
+  //       currentPage: page,
+  //       totalPages,
+  //       itemsPerPage: limit,
+  //     },
+  //   };
+  // }
 
-  async findOne(id: string): Promise<ContractResponse> {
-    const contract = await this.prisma.contract.findUnique({
-      where: { id },
-    });
+  // async findOne(id: string): Promise<ContractResponse> {
+  //   const contract = await this.prisma.contract.findUnique({
+  //     where: { id },
+  //   });
 
-    if (!contract) {
-      throw new NotFoundException(`Contract with ID ${id} not found`);
-    }
+  //   if (!contract) {
+  //     throw new NotFoundException(`Contract with ID ${id} not found`);
+  //   }
 
-    return ContractMapper.toResponse(contract);
-  }
+  //   return ContractMapper.toResponse(contract);
+  // }
 }
