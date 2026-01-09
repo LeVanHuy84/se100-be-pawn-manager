@@ -13,7 +13,10 @@ import { Role } from './enum/role.enum';
 import { EmployeeQueryDTO } from './dto/request/employee.query';
 import { CreateEmployeeDTO } from './dto/request/create-employee.request';
 import { UpdateEmployeeRequest } from './dto/request/update-employee.request';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { EmployeeListResponse } from './dto/response/employee.response';
 
+@ApiTags('Employees')
 @Controller({
   version: '1',
   path: 'employees',
@@ -28,6 +31,8 @@ export class EmployeeController {
 
   @Get()
   @Roles(Role.MANAGER)
+  @ApiOperation({ summary: 'Get a list of employees' })
+  @ApiOkResponse({ type: EmployeeListResponse })
   getList(@Query() query: EmployeeQueryDTO) {
     return this.employeeService.findAll(query);
   }

@@ -14,8 +14,13 @@ import { ApproveLoanDto } from './dto/request/approve-loan.dto';
 import { LoanSimulationsService } from '../loan-simulations/loan-simulations.service';
 import { LoanSimulationRequestDto } from '../loan-simulations/dto/request/loan-simulation.request';
 import { UpdateLoanDto } from './dto/request/update-loan.dto';
-import e from 'express';
 import { LoanStatusMachine } from './enum/loan.status-machine';
+import {
+  CreateLoanResponseDto,
+  UpdateLoanResponseDto,
+  UpdateLoanStatusResponseDto,
+} from './dto/response/loan.response';
+import { LoanMapper } from './loan.mapper';
 
 @Injectable()
 export class LoanOrchestrator {
@@ -24,7 +29,7 @@ export class LoanOrchestrator {
     private readonly loanSimulationsService: LoanSimulationsService,
   ) {}
 
-  async createLoan(dto: CreateLoanDto) {
+  async createLoan(dto: CreateLoanDto): Promise<CreateLoanResponseDto> {
     try {
       const {
         customerId,
@@ -34,8 +39,6 @@ export class LoanOrchestrator {
         notes,
         collateralIds,
       } = dto;
-
-      const iLoanTypeId = Number(loanTypeId);
 
       // ================== Lấy thông tin tài sản =================
       const collaterals = await this.prisma.collateral.findMany({
@@ -70,7 +73,7 @@ export class LoanOrchestrator {
       // =============== 2. Lấy phí ===============
       const simulationRequest: LoanSimulationRequestDto = {
         loanAmount,
-        loanTypeId: iLoanTypeId,
+        loanTypeId,
         totalCustodyFeeRate,
         repaymentMethod: repaymentMethod as RepaymentMethod,
       };
@@ -85,7 +88,7 @@ export class LoanOrchestrator {
             customerId,
             loanAmount,
             repaymentMethod: repaymentMethod as RepaymentMethod,
-            loanTypeId: iLoanTypeId,
+            loanTypeId,
 
             // snapshot
             durationMonths: simulationResult.durationMonths,
@@ -127,8 +130,20 @@ export class LoanOrchestrator {
           });
         }
 
+        const fullLoan = await tx.loan.findUnique({
+          where: { id: loan.id },
+          include: {
+            loanType: true,
+            collaterals: {
+              include: {
+                collateralType: true,
+              },
+            },
+          },
+        });
+
         return {
-          loan,
+          loan: LoanMapper.toLoanResponse(fullLoan),
           message:
             'Loan application created successfully. Status: PENDING. Awaiting approval.',
         };
@@ -142,7 +157,10 @@ export class LoanOrchestrator {
   // ---------------------------------------------------------------
   // UPDATE LOAN nếu còn PENDING
   // ---------------------------------------------------------------
-  async updateLoan(loanId: string, dto: UpdateLoanDto) {
+  async updateLoan(
+    loanId: string,
+    dto: UpdateLoanDto,
+  ): Promise<UpdateLoanResponseDto> {
     try {
       const loan = await this.prisma.loan.findUnique({
         where: { id: loanId },
@@ -154,9 +172,6 @@ export class LoanOrchestrator {
           'Only loans with PENDING status can be updated',
         );
       }
-
-      const iLoanTypeId =
-        dto.loanTypeId !== undefined ? Number(dto.loanTypeId) : loan.loanTypeId;
 
       // kiểm tra colleteral có thay đổi không
       const finalCollateralIds =
@@ -180,7 +195,7 @@ export class LoanOrchestrator {
 
       const simulationRequest: LoanSimulationRequestDto = {
         loanAmount: dto.loanAmount ?? loan.loanAmount.toNumber(),
-        loanTypeId: iLoanTypeId,
+        loanTypeId: dto.loanTypeId ?? loan.loanTypeId,
         totalCustodyFeeRate,
         repaymentMethod:
           (dto.repaymentMethod as RepaymentMethod) ?? loan.repaymentMethod,
@@ -197,7 +212,7 @@ export class LoanOrchestrator {
             notes: dto.notes ?? loan.notes,
             repaymentMethod:
               (dto.repaymentMethod as RepaymentMethod) ?? loan.repaymentMethod,
-            loanTypeId: iLoanTypeId,
+            loanTypeId: dto.loanTypeId ?? loan.loanTypeId,
             // snapshot
             durationMonths: simulationResult.durationMonths,
             appliedInterestRate: simulationResult.appliedInterestRate,
@@ -211,7 +226,21 @@ export class LoanOrchestrator {
 
         // Nếu client không gửi collateralIds → không update collateral
         if (!dto.collateralIds) {
-          return { loan: updatedLoan };
+          const fullLoan = await tx.loan.findUnique({
+            where: { id: loan.id },
+            include: {
+              loanType: true,
+              collaterals: {
+                include: {
+                  collateralType: true,
+                },
+              },
+            },
+          });
+          return {
+            message: 'Loan updated successfully (PENDING stage)',
+            loan: LoanMapper.toLoanResponse(fullLoan),
+          };
         }
 
         // lấy collateral hiện tại
@@ -248,9 +277,21 @@ export class LoanOrchestrator {
           });
         }
 
+        const fullLoan = await tx.loan.findUnique({
+          where: { id: loan.id },
+          include: {
+            loanType: true,
+            collaterals: {
+              include: {
+                collateralType: true,
+              },
+            },
+          },
+        });
+
         return {
           message: 'Loan updated successfully (PENDING stage)',
-          loan: updatedLoan,
+          loan: LoanMapper.toLoanResponse(fullLoan),
         };
       });
     } catch (error) {
@@ -262,7 +303,11 @@ export class LoanOrchestrator {
   // ---------------------------------------------------------------
   // UPDATE STATUS (giữ nguyên)
   // ---------------------------------------------------------------
-  async updateStatus(loanId: string, dto: ApproveLoanDto, employeeId: string) {
+  async updateStatus(
+    loanId: string,
+    dto: ApproveLoanDto,
+    employeeId: string,
+  ): Promise<UpdateLoanStatusResponseDto> {
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId },
       include: { collaterals: true },
@@ -292,9 +337,9 @@ export class LoanOrchestrator {
     loan: any,
     dto: ApproveLoanDto,
     employeeId: string,
-  ) {
+  ): Promise<UpdateLoanStatusResponseDto> {
     const result = await this.prisma.$transaction(async (tx) => {
-      const updatedLoan = await tx.loan.update({
+      await tx.loan.update({
         where: { id: loan.id },
         data: {
           status: LoanStatus.ACTIVE,
@@ -312,15 +357,30 @@ export class LoanOrchestrator {
         data: { status: CollateralStatus.PLEDGED },
       });
 
-      return updatedLoan;
+      return tx.loan.findUnique({
+        where: { id: loan.id },
+        include: {
+          loanType: true,
+          collaterals: {
+            include: { collateralType: true },
+          },
+        },
+      });
     });
 
-    return { message: 'Loan approved', loan: result };
+    return {
+      message: 'Loan approved',
+      loan: LoanMapper.toLoanResponse(result),
+    };
   }
 
-  private async rejectLoan(loan: any, dto: ApproveLoanDto, employeeId: string) {
+  private async rejectLoan(
+    loan: any,
+    dto: ApproveLoanDto,
+    employeeId: string,
+  ): Promise<UpdateLoanStatusResponseDto> {
     const result = await this.prisma.$transaction(async (tx) => {
-      const updatedLoan = await tx.loan.update({
+      await tx.loan.update({
         where: { id: loan.id },
         data: {
           status: LoanStatus.REJECTED,
@@ -338,9 +398,20 @@ export class LoanOrchestrator {
         data: { status: CollateralStatus.REJECTED },
       });
 
-      return updatedLoan;
+      return tx.loan.findUnique({
+        where: { id: loan.id },
+        include: {
+          loanType: true,
+          collaterals: {
+            include: { collateralType: true },
+          },
+        },
+      });
     });
 
-    return { message: 'Loan rejected', loan: result };
+    return {
+      message: 'Loan rejected',
+      loan: LoanMapper.toLoanResponse(result),
+    };
   }
 }

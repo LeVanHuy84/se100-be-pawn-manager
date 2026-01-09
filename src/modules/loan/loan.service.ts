@@ -2,15 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ListLoansQuery } from './dto/request/loan.query';
 import { LoanStatus, Prisma } from 'generated/prisma';
-import { BaseResult } from 'src/common/dto/base.response';
-import { LoanResponse } from './dto/response/loan.response';
 import { LoanMapper } from './loan.mapper';
+import { BaseResult } from 'src/common/dto/base.response';
+import { LoanResponseDto } from './dto/response/loan.response';
 
 @Injectable()
 export class LoanService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listLoans(dto: ListLoansQuery): Promise<BaseResult<LoanResponse[]>> {
+  async listLoans(dto: ListLoansQuery): Promise<BaseResult<LoanResponseDto[]>> {
     const { status, customerId, page = 1, limit = 20 } = dto;
 
     const where: Prisma.LoanWhereInput = {};

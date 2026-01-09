@@ -7,9 +7,11 @@ export const UpdateEmployeeSchema = CreateEmployeeSchema.omit({
   hireDate: true,
 })
   .extend({
-    status: z.enum(Object.values(EmployeeStatus) as [string, ...string[]]),
+    status: z
+      .enum(Object.values(EmployeeStatus) as [string, ...string[]])
+      .optional(),
     terminatedDate: z.string().refine((val) => !val || isoDateRegex.test(val), {
-      message: 'hireDate must be in YYYY-MM-DD format',
+      message: 'terminatedDate must be in YYYY-MM-DD format',
     }),
   })
   .partial();

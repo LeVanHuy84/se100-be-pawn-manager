@@ -1,9 +1,9 @@
 import { LoanStatus } from 'generated/prisma';
-import { LoanResponse } from './dto/response/loan.response';
+import { LoanResponseDto } from './dto/response/loan.response';
 import { CollateralMapper } from '../collateral/collateral.mapper';
 
 export class LoanMapper {
-  static toLoanResponse(loan: any): LoanResponse {
+  static toLoanResponse(loan: any): LoanResponseDto {
     return {
       id: loan.id,
       customerId: loan.customerId,
@@ -35,7 +35,7 @@ export class LoanMapper {
     };
   }
 
-  static toLoanResponseList(loans: any[]): LoanResponse[] {
+  static toLoanResponseList(loans: any[]): LoanResponseDto[] {
     return loans.map(this.toLoanResponse);
   }
 }
