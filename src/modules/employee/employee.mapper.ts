@@ -12,7 +12,7 @@ export class EmployeeMapper {
       role: employee.privateMetadata?.role,
       hireDate: employee.publicMetadata?.hireDate,
       terminatedDate: employee.publicMetadata?.terminatedDate,
-      createdAt: employee.createdAt,
+      createdAt: new Date(employee.createdAt).toISOString(),
     };
   }
 

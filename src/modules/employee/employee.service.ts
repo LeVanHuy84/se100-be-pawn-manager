@@ -1,6 +1,5 @@
-import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { clerkClient } from 'src/clerk/clerk.config';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { EmployeeQueryDTO } from './dto/request/employee.query';
 import { BaseResult } from 'src/common/dto/base.response';
 import { EmployeeResponse } from './dto/response/employee.response';
@@ -11,7 +10,7 @@ import { UpdateEmployeeRequest } from './dto/request/update-employee.request';
 
 @Injectable()
 export class EmployeeService {
-  async findOne(id: string) {
+  async findOne(id: string): Promise<EmployeeResponse> {
     const employee = await clerkClient.users.getUser(id);
     return EmployeeMapper.toResponse(employee);
   }
@@ -44,8 +43,9 @@ export class EmployeeService {
     };
   }
 
-  async createEmployee(body: CreateEmployeeDTO) {
+  async createEmployee(body: CreateEmployeeDTO): Promise<EmployeeResponse> {
     try {
+      const hireDate = body.hireDate || new Date().toISOString().split('T')[0];
       const newEmployee = await clerkClient.users.createUser({
         emailAddress: [body.email],
         firstName: body.firstName,
@@ -54,7 +54,7 @@ export class EmployeeService {
         publicMetadata: {
           status: EmployeeStatus.ACTIVE,
           phoneNumber: body.phoneNumber,
-          hireDate: body.hireDate,
+          hireDate: hireDate,
         },
         privateMetadata: {
           role: body.role,
@@ -69,7 +69,10 @@ export class EmployeeService {
     }
   }
 
-  async updateEmployee(id: string, body: UpdateEmployeeRequest) {
+  async updateEmployee(
+    id: string,
+    body: UpdateEmployeeRequest,
+  ): Promise<EmployeeResponse> {
     try {
       const currentUser = await clerkClient.users.getUser(id);
 

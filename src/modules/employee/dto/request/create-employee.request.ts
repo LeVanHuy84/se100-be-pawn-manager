@@ -15,7 +15,7 @@ export const CreateEmployeeSchema = z.object({
     }),
   password: z.string().min(6).max(100),
   phoneNumber: z.string().min(10).max(15).optional(),
-  role: z.string().min(1).max(50),
+  role: z.enum(['STAFF', 'MANAGER']),
   hireDate: z
     .string()
     .optional()
