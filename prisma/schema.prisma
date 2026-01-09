@@ -78,6 +78,22 @@ enum DisbursementMethod {
   BANK_TRANSFER
 }
 
+enum AuditEntityType {
+  LOAN
+  LOAN_PAYMENT
+  REPAYMENT_SCHEDULE
+  COLLATERAL
+  CUSTOMER
+}
+
+enum RevenueType {
+  INTEREST
+  LATE_FEE
+  SERVICE_FEE
+  LIQUIDATION_EXCESS
+}
+
+
 // ==================================================
 // LOAN PRODUCT TYPE
 // ==================================================
@@ -323,4 +339,30 @@ model SystemParameter {
   updatedAt   DateTime @default(now())
 
   @@unique([paramGroup, paramKey])
+}
+
+// ==================================================
+// AUDIT LOG
+// ==================================================
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  action       String   // e.g., "SYSTEM_PENALTY", "UPDATE_LOAN", "LIQUIDATION"
+  entityId     String   // ID của đối tượng bị tác động (LoanID, RepaymentID)
+  entityType   AuditEntityType   // "LOAN", "REPAYMENT_SCHEDULE"
+  actorId      String?  // NULL nếu là SYSTEM (Cronjob), UserID nếu là nhân viên
+  oldValue     Json?    // Dữ liệu trước khi thay đổi
+  newValue     Json?    // Dữ liệu sau khi thay đổi
+  description  String?  // "Applied penalty: 50,000 VND for 2 days overdue"
+  createdAt    DateTime @default(now())
+}
+
+// ==================================================
+// REVENUE LEDGER
+// ==================================================
+model RevenueLedger {
+  id        String   @id @default(uuid()) @db.Uuid
+  type      RevenueType   // "INTEREST", "FEE", "LIQUIDATION_EXCESS"
+  amount    Decimal
+  refId     String   // LoanID hoặc PaymentID
+  recordedAt DateTime @default(now())
 }
