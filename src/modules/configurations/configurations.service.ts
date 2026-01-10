@@ -109,7 +109,7 @@ export class ConfigurationsService {
           const parsed = JSON.parse(rawValue);
           // stringify lại để lưu chuẩn, ví dụ không khoảng trắng thừa
           return JSON.stringify(parsed);
-        } catch (e) {
+        } catch {
           throw new BadRequestException(
             `Value for "${key}" must be a valid JSON string`,
           );

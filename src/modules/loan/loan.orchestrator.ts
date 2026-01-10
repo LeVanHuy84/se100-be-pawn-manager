@@ -73,8 +73,9 @@ export class LoanOrchestrator {
       // =============== 2. Lấy phí ===============
       const simulationRequest: LoanSimulationRequestDto = {
         loanAmount,
+        totalFeeRate: totalCustodyFeeRate,
         loanTypeId,
-        totalCustodyFeeRate,
+
         repaymentMethod: repaymentMethod as RepaymentMethod,
       };
 
@@ -196,7 +197,7 @@ export class LoanOrchestrator {
       const simulationRequest: LoanSimulationRequestDto = {
         loanAmount: dto.loanAmount ?? loan.loanAmount.toNumber(),
         loanTypeId: dto.loanTypeId ?? loan.loanTypeId,
-        totalCustodyFeeRate,
+        totalFeeRate: totalCustodyFeeRate,
         repaymentMethod:
           (dto.repaymentMethod as RepaymentMethod) ?? loan.repaymentMethod,
       };

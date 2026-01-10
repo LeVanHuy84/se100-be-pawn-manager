@@ -14,8 +14,7 @@ export class LoanSimulationsService {
   async createSimulation(
     payload: LoanSimulationRequestDto,
   ): Promise<LoanSimulationResponse> {
-    const { loanAmount, totalCustodyFeeRate, loanTypeId, repaymentMethod } =
-      payload;
+    const { loanAmount, totalFeeRate, loanTypeId, repaymentMethod } = payload;
 
     // 1) Load LoanType
     const loanType = await this.prisma.loanType.findUnique({
@@ -36,15 +35,10 @@ export class LoanSimulationsService {
     }
 
     const interestRateMonthly = loanType.interestRateMonthly.toNumber(); // %/month
-    const mgmtFeeRateMonthly = await this.getDecimalParam(
-      'RATES',
-      'MANAGEMENT_FEE_RATE_MONTHLY',
-    );
 
-    const totalFeeRateMonthly = mgmtFeeRateMonthly + totalCustodyFeeRate;
-
-    // fee cố định theo loanAmount mỗi tháng
-    const monthlyFee = loanAmount * (totalFeeRateMonthly / 100);
+    // Total fee = management fee + custody fees (calculated by caller)
+    // Fee is fixed per month based on loan amount (pawn shop model)
+    const monthlyFeeFixed = loanAmount * (totalFeeRate / 100);
 
     const schedule: LoanSimulationScheduleItem[] = [];
     let totalInterest = 0;
@@ -64,7 +58,7 @@ export class LoanSimulationsService {
 
     // 2) Calculate schedule theo method
     if (repaymentMethod === RepaymentMethod.EQUAL_INSTALLMENT) {
-      // gốc đều, lãi giảm dần, fee cố định theo tháng
+      // gốc đều, lãi giảm dần
       const principalPerMonth = loanAmount / durationMonths;
       let remaining = loanAmount;
 
@@ -74,7 +68,9 @@ export class LoanSimulationsService {
         const interestAmount = beginningBalance * (interestRateMonthly / 100);
         const principalAmount =
           i === durationMonths ? beginningBalance : principalPerMonth;
-        const feeAmount = monthlyFee;
+
+        // Fee is fixed per month (pawn shop model)
+        const feeAmount = monthlyFeeFixed;
 
         const totalAmount = principalAmount + interestAmount + feeAmount;
 
@@ -98,7 +94,9 @@ export class LoanSimulationsService {
         const beginningBalance = loanAmount; // giữ nguyên tới cuối kỳ
 
         const interestAmount = loanAmount * (interestRateMonthly / 100);
-        const feeAmount = monthlyFee;
+
+        // Fee is fixed per month (pawn shop model)
+        const feeAmount = monthlyFeeFixed;
 
         const principalAmount = i === durationMonths ? loanAmount : 0;
         const totalAmount = principalAmount + interestAmount + feeAmount;
@@ -137,9 +135,9 @@ export class LoanSimulationsService {
       productType: loanType.name,
 
       appliedInterestRate: interestRateMonthly,
-      appliedMgmtFeeRateMonthly: mgmtFeeRateMonthly,
+      appliedMgmtFeeRateMonthly: totalFeeRate,
 
-      totalCustodyFeeRate,
+      totalCustodyFeeRate: totalFeeRate,
 
       totalInterest: Math.round(totalInterest),
       totalFees: Math.round(totalFees),
@@ -148,29 +146,5 @@ export class LoanSimulationsService {
 
       schedule,
     };
-  }
-
-  private async getDecimalParam(
-    paramGroup: string,
-    paramKey: string,
-  ): Promise<number> {
-    const row = await this.prisma.systemParameter.findFirst({
-      where: { paramGroup, paramKey, isActive: true },
-    });
-
-    if (!row) {
-      throw new UnprocessableEntityException(
-        `Missing SystemParameter: ${paramGroup}.${paramKey}`,
-      );
-    }
-
-    const value = Number(row.paramValue);
-    if (Number.isNaN(value)) {
-      throw new UnprocessableEntityException(
-        `Invalid paramValue for ${paramGroup}.${paramKey}: "${row.paramValue}"`,
-      );
-    }
-
-    return value;
   }
 }

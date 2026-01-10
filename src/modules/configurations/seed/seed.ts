@@ -27,6 +27,14 @@ async function main() {
     },
     {
       paramGroup: 'RATES',
+      paramKey: 'LEGAL_INTEREST_CAP',
+      paramValue: '20.0', // 20% per year (Vietnam Civil Code 2015)
+      dataType: 'DECIMAL',
+      description:
+        'Legal maximum annual interest rate cap in Vietnam (%). System warns when total rate exceeds this limit (per Civil Code 2015)',
+    },
+    {
+      paramGroup: 'RATES',
       paramKey: 'MANAGEMENT_FEE_PERCENT',
       paramValue: '0.02', // %
       dataType: 'DECIMAL',

@@ -27,10 +27,12 @@ async function bootstrap() {
       .setVersion('1.0')
       .addBearerAuth()
       .build();
-      const document = SwaggerModule.createDocument(app, config);
-      SwaggerModule.setup(`${globalPrefix}/docs`, app, document);
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup(`${globalPrefix}/docs`, app, document);
 
-      console.log(`Swagger docs available at http://localhost:${port}/${globalPrefix}/docs`);
+    console.log(
+      `Swagger docs available at http://localhost:${port}/${globalPrefix}/docs`,
+    );
   }
 
   await app.listen(port);
