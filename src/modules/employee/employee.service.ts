@@ -42,13 +42,9 @@ export class EmployeeService {
   async findAll(
     query: EmployeeQueryDTO,
   ): Promise<BaseResult<EmployeeResponse[]>> {
-    const { page = 1, limit = 20, status } = query;
-    const offset = (page - 1) * limit;
+    const { page = 1, limit = 20, status, storeId } = query;
 
-    const clerkUsers = await clerkClient.users.getUserList({
-      limit: limit,
-      offset: offset,
-    });
+    const clerkUsers = await clerkClient.users.getUserList();
 
     let users = clerkUsers.data;
 
@@ -56,11 +52,19 @@ export class EmployeeService {
       users = users.filter((u) => u.publicMetadata?.status === status);
     }
 
+    if (storeId) {
+      users = users.filter((u) => u.publicMetadata?.storeId === storeId);
+    }
+
+    const totalItems = users.length;
+    const start = (page - 1) * limit;
+    const paginatedUsers = users.slice(start, start + limit);
+
     return {
-      data: EmployeeMapper.toResponseList(users),
+      data: EmployeeMapper.toResponseList(paginatedUsers),
       meta: {
-        totalItems: clerkUsers.totalCount,
-        totalPages: Math.ceil(clerkUsers.totalCount / limit),
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
         currentPage: page,
         itemsPerPage: limit,
       },
