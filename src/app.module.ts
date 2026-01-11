@@ -44,14 +44,31 @@ import { ScheduleModule } from '@nestjs/schedule';
         SMTP_PASSWORD: Joi.string().optional(),
         SMTP_FROM: Joi.string().optional(),
         // Redis config for BullMQ
-        REDIS_HOST: Joi.string().default('localhost'),
-        REDIS_PORT: Joi.number().default(6379),
+        REDIS_URL: Joi.string().required(),
       }),
     }),
     BullModule.forRoot({
       connection: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
+        url: process.env.REDIS_URL,
+        tls: {
+          rejectUnauthorized: false,
+        },
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+      },
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+        removeOnComplete: {
+          age: 3600, // 1 hour
+          count: 1000, // Keep last 1000
+        },
+        removeOnFail: {
+          age: 86400, // Keep failed jobs for 24 hours
+        },
       },
     }),
     ScheduleModule.forRoot(),

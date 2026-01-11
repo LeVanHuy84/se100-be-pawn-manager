@@ -5,7 +5,13 @@ import { EmailJobData } from '../interfaces/notification-job.interface';
 import { EmailService } from '../services/email.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 
-@Processor('email-queue')
+@Processor('email-queue', {
+  concurrency: 10, // Process max 10 emails at a time
+  limiter: {
+    max: 20, // Max 20 jobs
+    duration: 1000, // per 1 second
+  },
+})
 export class EmailQueueProcessor extends WorkerHost {
   private readonly logger = new Logger(EmailQueueProcessor.name);
 
