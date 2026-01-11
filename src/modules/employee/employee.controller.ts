@@ -15,12 +15,14 @@ import { CreateEmployeeDTO } from './dto/request/create-employee.request';
 import { UpdateEmployeeRequest } from './dto/request/update-employee.request';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EmployeeListResponse } from './dto/response/employee.response';
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 
 @ApiTags('Employees')
 @Controller({
   version: '1',
   path: 'employees',
 })
+@ApiErrorResponses()
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 

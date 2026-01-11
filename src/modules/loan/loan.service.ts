@@ -4,17 +4,23 @@ import { ListLoansQuery } from './dto/request/loan.query';
 import { LoanStatus, Prisma } from 'generated/prisma';
 import { LoanMapper } from './loan.mapper';
 import { BaseResult } from 'src/common/dto/base.response';
-import { LoanResponseDto } from './dto/response/loan.response';
+import {
+  LoanResponseDto,
+  LoanSummaryResponseDto,
+} from './dto/response/loan.response';
 
 @Injectable()
 export class LoanService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listLoans(dto: ListLoansQuery): Promise<BaseResult<LoanResponseDto[]>> {
-    const { status, customerId, page = 1, limit = 20 } = dto;
+  async listLoans(
+    dto: ListLoansQuery,
+  ): Promise<BaseResult<LoanSummaryResponseDto[]>> {
+    const { storeId, status, customerId, page = 1, limit = 20 } = dto;
 
     const where: Prisma.LoanWhereInput = {};
 
+    if (storeId) where.storeId = storeId;
     if (status) where.status = status as LoanStatus;
     if (customerId) where.customerId = customerId;
 
@@ -26,14 +32,13 @@ export class LoanService {
         orderBy: { createdAt: 'desc' },
         include: {
           loanType: true,
-          collaterals: true,
         },
       }),
       this.prisma.loan.count({ where }),
     ]);
 
     return {
-      data: LoanMapper.toLoanResponseList(items),
+      data: LoanMapper.toLoanSummaryResponseList(items),
       meta: {
         totalItems: total,
         totalPages: Math.ceil(total / limit),
@@ -41,5 +46,19 @@ export class LoanService {
         itemsPerPage: limit,
       },
     };
+  }
+
+  // get loan by id
+  async getLoanById(id: string): Promise<LoanResponseDto> {
+    const loan = await this.prisma.loan.findUnique({
+      where: { id },
+      include: {
+        loanType: true,
+        collaterals: true,
+        customer: true,
+        store: true,
+      },
+    });
+    return LoanMapper.toLoanResponse(loan);
   }
 }

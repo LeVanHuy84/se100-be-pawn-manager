@@ -32,15 +32,18 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import {
   CreateLoanResponseDto,
   ListLoansResponseDto,
+  LoanResponseDto,
   UpdateLoanResponseDto,
   UpdateLoanStatusResponseDto,
 } from './dto/response/loan.response';
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 
 @ApiTags('Loans')
 @Controller({
   version: '1',
   path: 'loans',
 })
+@ApiErrorResponses()
 export class LoanController {
   constructor(
     private loanOrchestrator: LoanOrchestrator,
@@ -54,8 +57,16 @@ export class LoanController {
     type: CreateLoanResponseDto,
   })
   @ApiBody({ type: CreateLoanDto })
-  async createLoan(@Body() dto: CreateLoanDto): Promise<CreateLoanResponseDto> {
-    return this.loanOrchestrator.createLoan(dto);
+  async createLoan(
+    @Body() dto: CreateLoanDto,
+    @Req() req,
+  ): Promise<CreateLoanResponseDto> {
+    const employee = {
+      id: req.user?.userId,
+      name: req.user?.firstName + ' ' + req.user?.lastName,
+      storeId: req.user?.clerkUser?.publicMetadata?.storeId,
+    };
+    return this.loanOrchestrator.createLoan(dto, employee);
   }
 
   @Patch(':id/status')
@@ -72,8 +83,11 @@ export class LoanController {
     @Body() dto: ApproveLoanDto,
     @Req() req,
   ): Promise<UpdateLoanStatusResponseDto> {
-    const employeeId = req.user?.userId;
-    return this.loanOrchestrator.updateStatus(id, dto, employeeId);
+    const employee = {
+      id: req.user?.userId,
+      name: req.user?.firstName + ' ' + req.user?.lastName,
+    };
+    return this.loanOrchestrator.updateStatus(id, dto, employee);
   }
 
   @Patch(':id')
@@ -87,36 +101,17 @@ export class LoanController {
   async updateLoan(
     @Param('id') id: string,
     @Body() dto: UpdateLoanDto,
+    @Req() req,
   ): Promise<UpdateLoanResponseDto> {
-    return this.loanOrchestrator.updateLoan(id, dto);
+    const employee = {
+      id: req.user?.userId,
+      name: req.user?.firstName + ' ' + req.user?.lastName,
+    };
+    return this.loanOrchestrator.updateLoan(id, dto, employee);
   }
 
   @Get()
   @ApiOperation({ summary: 'List all loans with pagination and filtering' })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    description: 'Filter by loan status',
-    example: 'PENDING',
-  })
-  @ApiQuery({
-    name: 'customerId',
-    required: false,
-    description: 'Filter by customer ID',
-    example: 'cus_123',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number',
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Items per page',
-    example: 20,
-  })
   @ApiOkResponse({
     description: 'List of loans retrieved successfully',
     type: ListLoansResponseDto,
@@ -125,5 +120,16 @@ export class LoanController {
     @Query(new ZodValidationPipe(ListLoansQuerySchema)) query: ListLoansQuery,
   ) {
     return this.loanService.listLoans(query);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get loan details by ID' })
+  @ApiParam({ name: 'id', description: 'Loan ID', example: 'clx1234567890' })
+  @ApiOkResponse({
+    description: 'Loan details retrieved successfully',
+    type: LoanResponseDto,
+  })
+  getLoanById(@Param('id') id: string): Promise<LoanResponseDto> {
+    return this.loanService.getLoanById(id);
   }
 }

@@ -14,6 +14,7 @@ import { ConfigurationsModule } from './modules/configurations/configurations.mo
 import { LoanSimulationsModule } from './modules/loan-simulations/loan-simulations.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-schedule.module';
+import { AuditLogModule } from './modules/audit-log/audit-log.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-
     LoanSimulationsModule,
     PaymentModule,
     RepaymentScheduleModule,
+    AuditLogModule,
   ],
   controllers: [],
   providers: [

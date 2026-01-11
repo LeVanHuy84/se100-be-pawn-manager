@@ -17,11 +17,13 @@ import { CustomerQueryDTO } from './dto/request/customer.query';
 import { CreateCustomerDTO } from './dto/request/create-customer.request';
 import { UpdateCustomerRequest } from './dto/request/update-customer.request';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 
 @Controller({
   version: '1',
   path: 'customers',
 })
+@ApiErrorResponses()
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 
@@ -40,14 +42,21 @@ export class CustomerController {
   @Post()
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
-  createCustomer(@Body() body: CreateCustomerDTO, @UploadedFiles() files: MulterFile[]) {
+  createCustomer(
+    @Body() body: CreateCustomerDTO,
+    @UploadedFiles() files: MulterFile[],
+  ) {
     return this.customerService.create(body, files);
   }
 
   @Patch('/:id')
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
-  updateCustomer(@Param('id') id: string, @Body() body: UpdateCustomerRequest, @UploadedFiles() files: MulterFile[]) {
+  updateCustomer(
+    @Param('id') id: string,
+    @Body() body: UpdateCustomerRequest,
+    @UploadedFiles() files: MulterFile[],
+  ) {
     return this.customerService.update(id, body, files);
   }
 }

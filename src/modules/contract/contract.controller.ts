@@ -5,11 +5,13 @@ import { ContractQueryDto } from './dto/request/contract.query';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { Role } from '../employee/enum/role.enum';
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 
 @Controller({
   version: '1',
   path: 'contracts',
 })
+@ApiErrorResponses()
 export class ContractController {
   constructor(private readonly contractService: ContractService) {}
 

@@ -6,8 +6,10 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateLoanDto } from './dto/request/create-loan.dto';
 import {
+  AuditEntityType,
   CollateralStatus,
   LoanStatus,
+  Prisma,
   RepaymentMethod,
 } from 'generated/prisma';
 import { ApproveLoanDto } from './dto/request/approve-loan.dto';
@@ -21,6 +23,7 @@ import {
   UpdateLoanStatusResponseDto,
 } from './dto/response/loan.response';
 import { LoanMapper } from './loan.mapper';
+import { AuditActionEnum } from 'src/common/enums/audit-action.enum';
 
 @Injectable()
 export class LoanOrchestrator {
@@ -29,7 +32,10 @@ export class LoanOrchestrator {
     private readonly loanSimulationsService: LoanSimulationsService,
   ) {}
 
-  async createLoan(dto: CreateLoanDto): Promise<CreateLoanResponseDto> {
+  async createLoan(
+    dto: CreateLoanDto,
+    employee: any,
+  ): Promise<CreateLoanResponseDto> {
     try {
       const {
         customerId,
@@ -39,6 +45,18 @@ export class LoanOrchestrator {
         notes,
         collateralIds,
       } = dto;
+
+      // Kiểm tra customer, store tồn tại
+      const [customer, store] = await Promise.all([
+        this.prisma.customer.findUnique({ where: { id: customerId } }),
+        this.prisma.store.findUnique({ where: { id: employee.storeId } }),
+      ]);
+
+      if (!customer) {
+        throw new NotFoundException('Customer not found');
+      } else if (!store) {
+        throw new NotFoundException('Store not found');
+      }
 
       // ================== Lấy thông tin tài sản =================
       const collaterals = await this.prisma.collateral.findMany({
@@ -82,13 +100,15 @@ export class LoanOrchestrator {
         await this.loanSimulationsService.createSimulation(simulationRequest);
 
       // =============== 3. Tạo loan + collateral trong transaction ===============
-      return this.prisma.$transaction(async (tx) => {
+      const loan = await this.prisma.$transaction(async (tx) => {
         const loan = await tx.loan.create({
           data: {
             customerId,
             loanAmount,
             repaymentMethod: repaymentMethod as RepaymentMethod,
             loanTypeId,
+            createdBy: employee.id,
+            storeId: employee.storeId,
 
             // snapshot
             durationMonths: simulationResult.durationMonths,
@@ -130,27 +150,51 @@ export class LoanOrchestrator {
           });
         }
 
-        const fullLoan = await tx.loan.findUnique({
-          where: { id: loan.id },
-          include: {
-            loanType: true,
-            collaterals: {
-              include: {
-                collateralType: true,
-              },
+        // Thêm audit log ở đây
+        await tx.auditLog.create({
+          data: {
+            action: AuditActionEnum.CREATE_LOAN,
+            entityId: loan.id,
+            entityType: AuditEntityType.LOAN,
+            actorId: employee.id,
+            actorName: employee.name,
+            newValue: {
+              loanAmount: loan.loanAmount,
+              durationMonths: loan.durationMonths,
+              appliedInterestRate: loan.appliedInterestRate,
+              repaymentMethod: loan.repaymentMethod,
+              loanTypeId: loan.loanTypeId,
+              customerId: loan.customerId,
             },
+            description: `Created loan for customer ${loan.customerId}`,
           },
         });
-
-        return {
-          loan: LoanMapper.toLoanResponse(fullLoan),
-          message:
-            'Loan application created successfully. Status: PENDING. Awaiting approval.',
-        };
+        return loan;
       });
+
+      const fullLoan = await this.prisma.loan.findUnique({
+        where: { id: loan.id },
+        include: {
+          loanType: true,
+          collaterals: {
+            include: {
+              collateralType: true,
+            },
+          },
+          store: true,
+          customer: true,
+        },
+      });
+
+      return {
+        loan: LoanMapper.toLoanResponse(fullLoan),
+        message:
+          'Loan application created successfully. Status: PENDING. Awaiting approval.',
+      };
     } catch (error) {
-      console.error('CREATE LOAN ERROR:', error);
-      throw new BadRequestException('Failed to create loan application', error);
+      throw new BadRequestException(
+        'Failed to create loan application: ' + error.message,
+      );
     }
   }
 
@@ -160,153 +204,199 @@ export class LoanOrchestrator {
   async updateLoan(
     loanId: string,
     dto: UpdateLoanDto,
+    employee: any,
   ): Promise<UpdateLoanResponseDto> {
-    try {
-      const loan = await this.prisma.loan.findUnique({
-        where: { id: loanId },
-      });
+    const loan = await this.prisma.loan.findUnique({
+      where: { id: loanId },
+      include: { collaterals: true },
+    });
 
-      if (!loan) throw new NotFoundException('Loan not found');
-      if (loan.status !== LoanStatus.PENDING) {
-        throw new BadRequestException(
-          'Only loans with PENDING status can be updated',
-        );
-      }
-
-      // kiểm tra colleteral có thay đổi không
-      const finalCollateralIds =
-        dto.collateralIds ??
-        (
-          await this.prisma.collateral.findMany({
-            where: { loanId: loan.id },
-            select: { id: true },
-          })
-        ).map((c) => c.id);
-
-      const collaterals = await this.prisma.collateral.findMany({
-        where: { id: { in: finalCollateralIds } },
-        include: { collateralType: true },
-      });
-
-      const totalCustodyFeeRate = collaterals.reduce(
-        (sum, c) => sum + c.collateralType.custodyFeeRateMonthly.toNumber(),
-        0,
+    if (!loan) throw new NotFoundException('Loan not found');
+    if (loan.status !== LoanStatus.PENDING) {
+      throw new BadRequestException(
+        'Only loans with PENDING status can be updated',
       );
+    }
 
-      const simulationRequest: LoanSimulationRequestDto = {
-        loanAmount: dto.loanAmount ?? loan.loanAmount.toNumber(),
-        loanTypeId: dto.loanTypeId ?? loan.loanTypeId,
-        totalCustodyFeeRate,
-        repaymentMethod:
-          (dto.repaymentMethod as RepaymentMethod) ?? loan.repaymentMethod,
-      };
+    // ================= SNAPSHOT BEFORE =================
+    const beforeUpdate = {
+      loanAmount: loan.loanAmount.toString(),
+      repaymentMethod: loan.repaymentMethod,
+      loanTypeId: loan.loanTypeId,
+      durationMonths: loan.durationMonths,
+      appliedInterestRate: loan.appliedInterestRate,
+      latePaymentPenaltyRate: loan.latePaymentPenaltyRate,
+      totalInterest: loan.totalInterest?.toString(),
+      totalFees: loan.totalFees?.toString(),
+      totalRepayment: loan.totalRepayment?.toString(),
+      monthlyPayment: loan.monthlyPayment?.toString(),
+    };
 
-      const simulationResult =
-        await this.loanSimulationsService.createSimulation(simulationRequest);
+    await this.validateUpdatePendingLoan(loan, dto);
 
-      return this.prisma.$transaction(async (tx) => {
-        const updatedLoan = await tx.loan.update({
-          where: { id: loanId },
-          data: {
-            loanAmount: dto.loanAmount ?? loan.loanAmount,
-            notes: dto.notes ?? loan.notes,
-            repaymentMethod:
-              (dto.repaymentMethod as RepaymentMethod) ?? loan.repaymentMethod,
-            loanTypeId: dto.loanTypeId ?? loan.loanTypeId,
-            // snapshot
-            durationMonths: simulationResult.durationMonths,
-            appliedInterestRate: simulationResult.appliedInterestRate,
-            totalInterest: simulationResult.totalInterest,
-            totalFees: simulationResult.totalFees,
-            totalRepayment: simulationResult.totalRepayment,
-            monthlyPayment: simulationResult.monthlyPayment,
-            remainingAmount: simulationResult.totalRepayment,
-          },
-        });
+    // ================= COLLATERAL FINAL IDS =================
+    const finalCollateralIds =
+      dto.collateralIds ?? loan.collaterals.map((c) => c.id);
 
-        // Nếu client không gửi collateralIds → không update collateral
-        if (!dto.collateralIds) {
-          const fullLoan = await tx.loan.findUnique({
-            where: { id: loan.id },
-            include: {
-              loanType: true,
-              collaterals: {
-                include: {
-                  collateralType: true,
-                },
-              },
-            },
-          });
-          return {
-            message: 'Loan updated successfully (PENDING stage)',
-            loan: LoanMapper.toLoanResponse(fullLoan),
-          };
-        }
+    const collaterals = await this.prisma.collateral.findMany({
+      where: { id: { in: finalCollateralIds } },
+      include: { collateralType: true },
+    });
 
-        // lấy collateral hiện tại
-        const existingCollaterals = await tx.collateral.findMany({
-          where: { loanId },
-          select: { id: true },
-        });
-        const existingIds = existingCollaterals.map((c) => c.id);
+    const totalCustodyFeeRate = collaterals.reduce(
+      (sum, c) => sum + c.collateralType.custodyFeeRateMonthly.toNumber(),
+      0,
+    );
 
-        const collateralsToAdd = finalCollateralIds.filter(
+    // ================= SIMULATION =================
+    const simulation = await this.loanSimulationsService.createSimulation({
+      loanAmount: dto.loanAmount ?? loan.loanAmount.toNumber(),
+      loanTypeId: dto.loanTypeId ?? loan.loanTypeId,
+      repaymentMethod:
+        (dto.repaymentMethod as RepaymentMethod) ?? loan.repaymentMethod,
+      totalCustodyFeeRate,
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      // ================= UPDATE LOAN =================
+      const updatedLoan = await tx.loan.update({
+        where: { id: loanId },
+        data: {
+          loanAmount: new Prisma.Decimal(
+            dto.loanAmount ?? loan.loanAmount.toNumber(),
+          ),
+          notes: dto.notes ?? loan.notes,
+          repaymentMethod:
+            (dto.repaymentMethod as RepaymentMethod) ?? loan.repaymentMethod,
+          loanTypeId: dto.loanTypeId ?? loan.loanTypeId,
+
+          // snapshot từ simulation
+          durationMonths: simulation.durationMonths,
+          appliedInterestRate: simulation.appliedInterestRate,
+          totalInterest: simulation.totalInterest,
+          totalFees: simulation.totalFees,
+          totalRepayment: simulation.totalRepayment,
+          monthlyPayment: simulation.monthlyPayment,
+          remainingAmount: simulation.totalRepayment,
+        },
+      });
+
+      // ================= COLLATERAL DIFF =================
+      if (dto.collateralIds) {
+        const existingIds = loan.collaterals.map((c) => c.id);
+
+        const toAdd = finalCollateralIds.filter(
           (id) => !existingIds.includes(id),
         );
 
-        await tx.collateral.updateMany({
-          where: { id: { in: collateralsToAdd } },
-          data: { loanId },
-        });
+        const toRemove = loan.collaterals.filter(
+          (c) => !finalCollateralIds.includes(c.id),
+        );
 
-        // Cập nhật lịch trả nợ mới
-        await tx.repaymentScheduleDetail.deleteMany({ where: { loanId } });
+        const invalidRemove = toRemove.filter(
+          (c) => c.status !== CollateralStatus.PROPOSED,
+        );
 
-        for (const item of simulationResult.schedule) {
-          await tx.repaymentScheduleDetail.create({
-            data: {
-              loanId: loan.id,
-              periodNumber: item.periodNumber,
-              dueDate: new Date(item.dueDate),
-              beginningBalance: item.beginningBalance,
-              principalAmount: item.principalAmount,
-              interestAmount: item.interestAmount,
-              feeAmount: item.feeAmount,
-              totalAmount: item.totalAmount,
-            },
+        if (invalidRemove.length > 0) {
+          throw new BadRequestException(
+            'Some collaterals cannot be removed because they are no longer PROPOSED',
+          );
+        }
+
+        if (toAdd.length > 0) {
+          await tx.collateral.updateMany({
+            where: { id: { in: toAdd } },
+            data: { loanId },
           });
         }
 
-        const fullLoan = await tx.loan.findUnique({
-          where: { id: loan.id },
-          include: {
-            loanType: true,
-            collaterals: {
-              include: {
-                collateralType: true,
-              },
+        if (toRemove.length > 0) {
+          await tx.collateral.updateMany({
+            where: { id: { in: toRemove.map((c) => c.id) } },
+            data: {
+              loanId: null,
+              status: CollateralStatus.PROPOSED,
             },
+          });
+        }
+      }
+
+      // ================= REBUILD SCHEDULE =================
+      await tx.repaymentScheduleDetail.deleteMany({
+        where: { loanId },
+      });
+
+      await tx.repaymentScheduleDetail.createMany({
+        data: simulation.schedule.map((item) => ({
+          loanId,
+          periodNumber: item.periodNumber,
+          dueDate: new Date(item.dueDate),
+          beginningBalance: item.beginningBalance,
+          principalAmount: item.principalAmount,
+          interestAmount: item.interestAmount,
+          feeAmount: item.feeAmount,
+          totalAmount: item.totalAmount,
+        })),
+      });
+
+      // ================= AUDIT LOG =================
+      const afterUpdate = {
+        loanAmount: updatedLoan.loanAmount.toString(),
+        repaymentMethod: updatedLoan.repaymentMethod,
+        loanTypeId: updatedLoan.loanTypeId,
+        durationMonths: updatedLoan.durationMonths,
+        appliedInterestRate: updatedLoan.appliedInterestRate,
+        latePaymentPenaltyRate: updatedLoan.latePaymentPenaltyRate,
+        totalInterest: updatedLoan.totalInterest?.toString(),
+        totalFees: updatedLoan.totalFees?.toString(),
+        totalRepayment: updatedLoan.totalRepayment?.toString(),
+        monthlyPayment: updatedLoan.monthlyPayment?.toString(),
+      };
+
+      const { oldValue, newValue } = this.diffObject(beforeUpdate, afterUpdate);
+
+      if (Object.keys(newValue).length > 0) {
+        await tx.auditLog.create({
+          data: {
+            action: AuditActionEnum.UPDATE_LOAN,
+            entityId: loan.id,
+            entityType: AuditEntityType.LOAN,
+            actorId: employee.id,
+            actorName: employee.name,
+            oldValue,
+            newValue,
+            description: `Updated loan ${loan.id} (PENDING)`,
           },
         });
+      }
+    });
 
-        return {
-          message: 'Loan updated successfully (PENDING stage)',
-          loan: LoanMapper.toLoanResponse(fullLoan),
-        };
-      });
-    } catch (error) {
-      console.error('CREATE LOAN ERROR:', error);
-      throw new BadRequestException('Failed to update loan', error);
-    }
+    const fullLoan = await this.prisma.loan.findUnique({
+      where: { id: loanId },
+      include: {
+        loanType: true,
+        collaterals: {
+          include: {
+            collateralType: true,
+            store: true,
+          },
+        },
+      },
+    });
+
+    return {
+      message: 'Loan updated successfully (PENDING stage)',
+      loan: LoanMapper.toLoanResponse(fullLoan),
+    };
   }
 
   // ---------------------------------------------------------------
-  // UPDATE STATUS (giữ nguyên)
+  // UPDATE STATUS
   // ---------------------------------------------------------------
   async updateStatus(
     loanId: string,
     dto: ApproveLoanDto,
-    employeeId: string,
+    employee: any,
   ): Promise<UpdateLoanStatusResponseDto> {
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId },
@@ -315,36 +405,51 @@ export class LoanOrchestrator {
 
     if (!loan) throw new NotFoundException('Loan not found');
 
+    let message: string;
+
     switch (dto.status) {
       case 'ACTIVE':
         if (!LoanStatusMachine.canTransition(loan.status, LoanStatus.ACTIVE)) {
           throw new BadRequestException('Invalid status transition');
         }
-        return this.approveLoan(loan, dto, employeeId);
+        message = await this.approveLoan(loan, dto, employee);
+        break;
       case 'REJECTED':
         if (
           !LoanStatusMachine.canTransition(loan.status, LoanStatus.REJECTED)
         ) {
           throw new BadRequestException('Invalid status transition');
         }
-        return this.rejectLoan(loan, dto, employeeId);
+        message = await this.rejectLoan(loan, dto, employee);
+        break;
       default:
         throw new BadRequestException('Invalid status update request');
     }
+
+    const fullLoan = await this.prisma.loan.findUnique({
+      where: { id: loanId },
+      include: {
+        loanType: true,
+        collaterals: {
+          include: {
+            collateralType: true,
+            store: true,
+          },
+        },
+      },
+    });
+
+    return { message, loan: LoanMapper.toLoanResponse(fullLoan) };
   }
 
-  private async approveLoan(
-    loan: any,
-    dto: ApproveLoanDto,
-    employeeId: string,
-  ): Promise<UpdateLoanStatusResponseDto> {
+  private async approveLoan(loan: any, dto: ApproveLoanDto, employee: any) {
     const result = await this.prisma.$transaction(async (tx) => {
-      await tx.loan.update({
+      const updatedLoan = await tx.loan.update({
         where: { id: loan.id },
         data: {
           status: LoanStatus.ACTIVE,
           approvedAt: new Date(),
-          approvedBy: employeeId,
+          approvedBy: employee.id,
           notes: dto.note
             ? loan.notes + '\n- Approval Note: ' + dto.note
             : loan.notes,
@@ -357,6 +462,25 @@ export class LoanOrchestrator {
         data: { status: CollateralStatus.PLEDGED },
       });
 
+      // 🔍 AUDIT LOG
+      await tx.auditLog.create({
+        data: {
+          action: AuditActionEnum.APPROVE_LOAN,
+          entityId: loan.id,
+          entityType: AuditEntityType.LOAN,
+          actorId: employee.id,
+          actorName: employee.name,
+          oldValue: {
+            status: loan.status,
+          },
+          newValue: {
+            status: LoanStatus.ACTIVE,
+            notes: dto.note,
+          },
+          description: `Loan ${loan.id} approved`,
+        },
+      });
+
       return tx.loan.findUnique({
         where: { id: loan.id },
         include: {
@@ -364,28 +488,23 @@ export class LoanOrchestrator {
           collaterals: {
             include: { collateralType: true },
           },
+          store: true,
+          customer: true,
         },
       });
     });
 
-    return {
-      message: 'Loan approved',
-      loan: LoanMapper.toLoanResponse(result),
-    };
+    return 'Loan approved';
   }
 
-  private async rejectLoan(
-    loan: any,
-    dto: ApproveLoanDto,
-    employeeId: string,
-  ): Promise<UpdateLoanStatusResponseDto> {
+  private async rejectLoan(loan: any, dto: ApproveLoanDto, employee: any) {
     const result = await this.prisma.$transaction(async (tx) => {
-      await tx.loan.update({
+      const updatedLoan = await tx.loan.update({
         where: { id: loan.id },
         data: {
           status: LoanStatus.REJECTED,
           rejectedAt: new Date(),
-          rejectedBy: employeeId,
+          rejectedBy: employee.id,
           notes: dto.note
             ? loan.notes + '\n- Rejection Note: ' + dto.note
             : loan.notes,
@@ -398,6 +517,25 @@ export class LoanOrchestrator {
         data: { status: CollateralStatus.REJECTED },
       });
 
+      // 🔍 AUDIT LOG
+      await tx.auditLog.create({
+        data: {
+          action: AuditActionEnum.REJECT_LOAN,
+          entityId: loan.id,
+          entityType: AuditEntityType.LOAN,
+          actorId: employee.id,
+          actorName: employee.name,
+          oldValue: {
+            status: loan.status,
+          },
+          newValue: {
+            status: LoanStatus.REJECTED,
+            notes: dto.note,
+          },
+          description: `Loan ${loan.id} rejected`,
+        },
+      });
+
       return tx.loan.findUnique({
         where: { id: loan.id },
         include: {
@@ -405,13 +543,68 @@ export class LoanOrchestrator {
           collaterals: {
             include: { collateralType: true },
           },
+          store: true,
+          customer: true,
         },
       });
     });
 
-    return {
-      message: 'Loan rejected',
-      loan: LoanMapper.toLoanResponse(result),
-    };
+    return 'Loan rejected';
+  }
+
+  private normalizeValue(value: any) {
+    if (value === undefined || value === null) return null;
+
+    // Prisma Decimal
+    if (typeof value === 'object' && typeof value.toString === 'function') {
+      return value.toString();
+    }
+
+    return value;
+  }
+
+  private diffObject<T extends Record<string, any>>(
+    before: T,
+    after: T,
+  ): { oldValue: Partial<T>; newValue: Partial<T> } {
+    const oldValue: Partial<T> = {};
+    const newValue: Partial<T> = {};
+
+    for (const key of Object.keys(after) as (keyof T)[]) {
+      const beforeVal = this.normalizeValue(before[key]);
+      const afterVal = this.normalizeValue(after[key]);
+
+      if (beforeVal !== afterVal) {
+        oldValue[key] = beforeVal as any;
+        newValue[key] = afterVal as any;
+      }
+    }
+
+    return { oldValue, newValue };
+  }
+
+  // ================= HELPER VALIDATE =================
+  private async validateUpdatePendingLoan(loan: any, dto: UpdateLoanDto) {
+    if (dto.loanAmount !== undefined && dto.loanAmount <= 0) {
+      throw new BadRequestException('Loan amount must be greater than 0');
+    }
+
+    if (dto.loanTypeId !== undefined) {
+      const loanType = await this.prisma.loanType.findUnique({
+        where: { id: dto.loanTypeId },
+      });
+      if (!loanType) {
+        throw new NotFoundException('Loan type not found');
+      }
+    }
+
+    if (
+      dto.repaymentMethod !== undefined &&
+      !Object.values(RepaymentMethod).includes(
+        dto.repaymentMethod as RepaymentMethod,
+      )
+    ) {
+      throw new BadRequestException('Invalid repayment method');
+    }
   }
 }

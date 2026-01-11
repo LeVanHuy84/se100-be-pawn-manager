@@ -27,7 +27,7 @@ async function main() {
     },
     {
       paramGroup: 'RATES',
-      paramKey: 'MANAGEMENT_FEE_PERCENT',
+      paramKey: 'MANAGEMENT_FEE_RATE_MONTHLY',
       paramValue: '0.02', // %
       dataType: 'DECIMAL',
       description: 'Management fee as percentage of loan amount (%)',
