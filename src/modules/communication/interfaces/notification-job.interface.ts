@@ -1,5 +1,14 @@
 import { NotificationType } from 'generated/prisma';
 
+// Optimized: Store only IDs, fetch data during processing
+export interface OptimizedNotificationJob {
+  loanId: string;
+  customerId: string;
+  periodNumber?: number;
+  type: NotificationType;
+}
+
+// Legacy: Keep for backward compatibility
 export interface NotificationJob {
   loanId: string;
   customerId: string;

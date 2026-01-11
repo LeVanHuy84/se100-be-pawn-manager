@@ -144,6 +144,7 @@ export class ReminderProcessor {
       // Schedule 3-day-before reminder if in the future
       if (reminderDate > today) {
         const delayMs = reminderDate.getTime() - Date.now();
+        const jobIdPrefix = `loan-${loanId}-period-${payment.periodNumber}-3day`;
 
         const success = await this.scheduleNotificationForPayment(
           payment,
@@ -152,6 +153,7 @@ export class ReminderProcessor {
           'Nhắc nhở thanh toán',
           0,
           delayMs,
+          jobIdPrefix,
         );
 
         if (success) {
@@ -165,6 +167,7 @@ export class ReminderProcessor {
       // Schedule due-date reminder if in the future
       if (dueDateReminder > today) {
         const delayMs = dueDateReminder.getTime() - Date.now();
+        const jobIdPrefix = `loan-${loanId}-period-${payment.periodNumber}-duedate`;
 
         const success = await this.scheduleNotificationForPayment(
           payment,
@@ -173,6 +176,7 @@ export class ReminderProcessor {
           'Nhắc nhở thanh toán hôm nay',
           1, // Higher priority for due date
           delayMs,
+          jobIdPrefix,
         );
 
         if (success) {
@@ -394,34 +398,44 @@ Cảm ơn bạn đã thanh toán!`;
     let cancelled = 0;
 
     try {
-      // Get all delayed jobs from both queues
-      const [smsJobs, emailJobs] = await Promise.all([
-        this.smsQueue.getDelayed(0, 1000),
-        this.emailQueue.getDelayed(0, 1000),
-      ]);
+      // Use jobId pattern to directly target jobs without fetching all delayed jobs
+      const jobIdsToRemove: string[] = [];
 
-      // Filter jobs that match loanId and periodNumbers
-      const smsJobsToCancel = smsJobs.filter(
-        (job) =>
-          job.data.loanId === loanId &&
-          job.data.periodNumber !== undefined &&
-          periodNumbers.includes(job.data.periodNumber),
-      );
+      for (const periodNumber of periodNumbers) {
+        // Each period has 2 reminder types (3day, duedate) × 2 channels (sms, email) = 4 jobs
+        jobIdsToRemove.push(
+          `loan-${loanId}-period-${periodNumber}-3day-sms`,
+          `loan-${loanId}-period-${periodNumber}-3day-email`,
+          `loan-${loanId}-period-${periodNumber}-duedate-sms`,
+          `loan-${loanId}-period-${periodNumber}-duedate-email`,
+        );
+      }
 
-      const emailJobsToCancel = emailJobs.filter(
-        (job) =>
-          job.data.loanId === loanId &&
-          job.data.periodNumber !== undefined &&
-          periodNumbers.includes(job.data.periodNumber),
-      );
+      // Remove jobs by ID (much faster than fetching all delayed jobs)
+      const removePromises = jobIdsToRemove.map(async (jobId) => {
+        try {
+          // Try SMS queue first
+          const smsJob = await this.smsQueue.getJob(jobId);
+          if (smsJob) {
+            await smsJob.remove();
+            cancelled++;
+            return;
+          }
+          // Then try Email queue
+          const emailJob = await this.emailQueue.getJob(jobId);
+          if (emailJob) {
+            await emailJob.remove();
+            cancelled++;
+          }
+        } catch (error) {
+          // Job might not exist or already completed - this is OK
+          this.logger.debug(
+            `No scheduled job found with ID ${jobId} to remove: ${error.message}`,
+          );
+        }
+      });
 
-      // Remove jobs
-      await Promise.all([
-        ...smsJobsToCancel.map((job) => job.remove()),
-        ...emailJobsToCancel.map((job) => job.remove()),
-      ]);
-
-      cancelled = smsJobsToCancel.length + emailJobsToCancel.length;
+      await Promise.all(removePromises);
 
       if (cancelled > 0) {
         this.logger.log(
@@ -452,6 +466,7 @@ Cảm ơn bạn đã thanh toán!`;
     subject: string,
     priority: number = 0,
     delayMs?: number,
+    jobIdPrefix?: string,
   ): Promise<boolean> {
     const { loan } = payment;
     let scheduled = 0;
@@ -489,6 +504,7 @@ Cảm ơn bạn đã thanh toán!`;
     // SMS Queue
     if (loan.customer.phone) {
       await this.smsQueue.add('reminder', baseJobData, {
+        jobId: jobIdPrefix ? `${jobIdPrefix}-sms` : undefined,
         priority,
         attempts: 3,
         backoff: {
@@ -509,6 +525,7 @@ Cảm ơn bạn đã thanh toán!`;
           subject,
         },
         {
+          jobId: jobIdPrefix ? `${jobIdPrefix}-email` : undefined,
           priority,
           attempts: 3,
           backoff: {

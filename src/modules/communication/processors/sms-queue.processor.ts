@@ -5,7 +5,13 @@ import { SmsJobData } from '../interfaces/notification-job.interface';
 import { SmsService } from '../services/sms.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 
-@Processor('sms-queue')
+@Processor('sms-queue', {
+  concurrency: 5, // Process max 5 SMS at a time to avoid rate limits
+  limiter: {
+    max: 10, // Max 10 jobs
+    duration: 1000, // per 1 second
+  },
+})
 export class SmsQueueProcessor extends WorkerHost {
   private readonly logger = new Logger(SmsQueueProcessor.name);
 
