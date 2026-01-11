@@ -1,39 +1,45 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { LoanStatus, RepaymentMethod } from 'generated/prisma';
+import { CustomerType, LoanStatus, RepaymentMethod } from 'generated/prisma';
 import { CollateralAssetResponse } from 'src/modules/collateral/dto/response/collateral.response';
 import { PaginationMeta } from 'src/common/dto/pagination.type';
+import { ImageItem } from 'src/common/interfaces/media.interface';
 
-// Keep original interface for backward compatibility
-// export interface LoanResponse {
-//   id: string;
-//   customerId: string;
+export class CustomerBasicResponse {
+  id: string;
+  fullName: string;
+  dob: string;
+  nationalId: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  customerType: CustomerType;
+  monthlyIncome: number;
+  creditScore?: number;
+  createdAt: string;
+  images?: ImageItem[];
+}
 
-//   loanAmount: number;
-//   repaymentMethod: RepaymentMethod;
+export class LoanSummaryResponseDto {
+  id: string;
+  customerId: string;
+  storeName?: string;
 
-//   loanTypeId: number;
-//   loanTypeName: string;
+  loanAmount: number;
+  totalRepayment: number;
+  monthlyPayment: number;
 
-//   durationMonths: number;
-//   appliedInterestRate: number;
-//   latePaymentPenaltyRate: number;
+  durationMonths: number;
 
-//   totalInterest: number;
-//   totalFees: number;
-//   totalRepayment: number;
-//   monthlyPayment: number;
+  loanTypeName: string;
+  repaymentMethod: RepaymentMethod;
 
-//   status: LoanStatus;
+  status: LoanStatus;
 
-//   startDate: string | null;
-//   activatedAt?: string | null;
-//   notes?: string | null;
+  startDate: string | null;
+  activatedAt?: string | null;
 
-//   createdAt: string;
-//   updatedAt: string;
-
-//   collateral?: CollateralAssetResponse[];
-// }
+  createdAt: string;
+}
 
 // Swagger-compatible Loan response DTO
 export class LoanResponseDto {
@@ -42,6 +48,9 @@ export class LoanResponseDto {
 
   @ApiProperty({ description: 'Customer ID', example: 'cus_123' })
   customerId: string;
+
+  storeId?: string;
+  storeName?: string;
 
   @ApiProperty({ description: 'Loan amount', example: 10000000 })
   loanAmount: number;
@@ -119,6 +128,12 @@ export class LoanResponseDto {
     type: [CollateralAssetResponse],
   })
   collateral?: CollateralAssetResponse[];
+
+  @ApiProperty({
+    description: 'Customer information associated with the loan',
+    type: CustomerBasicResponse,
+  })
+  customer: CustomerBasicResponse;
 }
 
 // Response for Create Loan API
@@ -168,9 +183,9 @@ export class UpdateLoanStatusResponseDto {
 export class ListLoansResponseDto {
   @ApiProperty({
     description: 'Array of loan records',
-    type: [LoanResponseDto],
+    type: [LoanSummaryResponseDto],
   })
-  data: LoanResponseDto[];
+  data: LoanSummaryResponseDto[];
 
   @ApiProperty({
     description: 'Pagination metadata',

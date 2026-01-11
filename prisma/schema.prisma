@@ -171,6 +171,8 @@ model Loan {
 
   notes String?
 
+  storeId String @db.Uuid
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
   createdBy String?
@@ -181,6 +183,7 @@ model Loan {
   repaymentSchedule RepaymentScheduleDetail[]
   payments          LoanPayment[]
   collaterals       Collateral[]
+  store             Store                     @relation(fields: [storeId], references: [id])
 }
 
 // ==================================================
@@ -258,6 +261,7 @@ model Store {
   isActive  Boolean @default(true)
 
   collaterals Collateral[]
+  loans       Loan[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -350,6 +354,7 @@ model AuditLog {
   entityId     String   // ID của đối tượng bị tác động (LoanID, RepaymentID)
   entityType   AuditEntityType   // "LOAN", "REPAYMENT_SCHEDULE"
   actorId      String?  // NULL nếu là SYSTEM (Cronjob), UserID nếu là nhân viên
+  actorName    String?  // Tên nhân viên hoặc "SYSTEM"
   oldValue     Json?    // Dữ liệu trước khi thay đổi
   newValue     Json?    // Dữ liệu sau khi thay đổi
   description  String?  // "Applied penalty: 50,000 VND for 2 days overdue"

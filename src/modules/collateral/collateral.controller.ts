@@ -21,11 +21,13 @@ import { UpdateLocationRequest } from './dto/request/update-location.request';
 import { CreateLiquidationRequest } from './dto/request/liquidation.request';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 
 @Controller({
   version: '1',
   path: 'collateral-assets',
 })
+@ApiErrorResponses()
 export class CollateralController {
   constructor(private readonly collateralService: CollateralService) {}
 
@@ -44,14 +46,21 @@ export class CollateralController {
   @Post()
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
-  createCollateral(@Body() body: CreateCollateralDTO, @UploadedFiles() files: MulterFile[]) {
+  createCollateral(
+    @Body() body: CreateCollateralDTO,
+    @UploadedFiles() files: MulterFile[],
+  ) {
     return this.collateralService.create(body, files);
   }
 
   @Patch('/:id')
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
-  updateCollateral(@Param('id') id: string, @Body() body: PatchCollateralDTO, @UploadedFiles() files: MulterFile[]) {
+  updateCollateral(
+    @Param('id') id: string,
+    @Body() body: PatchCollateralDTO,
+    @UploadedFiles() files: MulterFile[],
+  ) {
     return this.collateralService.update(id, body, files);
   }
 }
@@ -60,6 +69,7 @@ export class CollateralController {
   version: '1',
   path: 'collaterals',
 })
+@ApiErrorResponses()
 export class CollateralLocationController {
   constructor(private readonly collateralService: CollateralService) {}
 
@@ -74,6 +84,7 @@ export class CollateralLocationController {
   version: '1',
   path: 'liquidations',
 })
+@ApiErrorResponses()
 export class LiquidationController {
   constructor(private readonly collateralService: CollateralService) {}
 

@@ -6,6 +6,7 @@ import { z } from 'zod';
 // Option A: nếu bạn có LoanStatus (Prisma / TS enum)
 // -----------------------------
 export const ListLoansQuerySchema = z.object({
+  storeId: z.string().optional(),
   status: z.enum(LoanStatus).optional(),
   customerId: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),

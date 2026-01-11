@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { clerkClient } from 'src/clerk/clerk.config';
 import { EmployeeQueryDTO } from './dto/request/employee.query';
 import { BaseResult } from 'src/common/dto/base.response';
@@ -7,12 +12,31 @@ import { EmployeeMapper } from './employee.mapper';
 import { CreateEmployeeDTO } from './dto/request/create-employee.request';
 import { EmployeeStatus } from './enum/employee-status.enum';
 import { UpdateEmployeeRequest } from './dto/request/update-employee.request';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class EmployeeService {
+  constructor(private readonly prisma: PrismaService) {}
   async findOne(id: string): Promise<EmployeeResponse> {
-    const employee = await clerkClient.users.getUser(id);
-    return EmployeeMapper.toResponse(employee);
+    try {
+      const employee = await clerkClient.users.getUser(id);
+      return EmployeeMapper.toResponse(employee);
+    } catch (error: any) {
+      // Clerk user not found
+      if (error?.status === 404) {
+        throw new NotFoundException('Employee not found');
+      }
+
+      // Invalid ID or bad request
+      if (error?.status === 400) {
+        throw new BadRequestException('Invalid employee id');
+      }
+
+      // Clerk service error
+      throw new ServiceUnavailableException(
+        'Employee service is temporarily unavailable',
+      );
+    }
   }
 
   async findAll(
@@ -45,6 +69,14 @@ export class EmployeeService {
 
   async createEmployee(body: CreateEmployeeDTO): Promise<EmployeeResponse> {
     try {
+      const store = await this.prisma.store.findUnique({
+        where: { id: body.storeId },
+      });
+      if (!store) {
+        throw new BadRequestException('Store not found');
+      } else if (!store.isActive) {
+        throw new BadRequestException('Cannot add employee to inactive store');
+      }
       const hireDate = body.hireDate || new Date().toISOString().split('T')[0];
       const newEmployee = await clerkClient.users.createUser({
         emailAddress: [body.email],
@@ -52,6 +84,8 @@ export class EmployeeService {
         lastName: body.lastName,
         password: body.password,
         publicMetadata: {
+          storeId: body.storeId,
+          storeName: store.name,
           status: EmployeeStatus.ACTIVE,
           phoneNumber: body.phoneNumber,
           hireDate: hireDate,
@@ -81,13 +115,46 @@ export class EmployeeService {
 
       const clerkPayload: any = {};
 
+      // ========================
+      // BASIC INFO
+      // ========================
       if (body.firstName !== undefined) clerkPayload.firstName = body.firstName;
       if (body.lastName !== undefined) clerkPayload.lastName = body.lastName;
       if (body.password !== undefined) clerkPayload.password = body.password;
       if (body.email !== undefined) clerkPayload.emailAddress = body.email;
 
+      // ========================
+      // STORE UPDATE
+      // ========================
+      let storeUpdateMetadata = {};
+
+      if (body.storeId !== undefined) {
+        const store = await this.prisma.store.findUnique({
+          where: { id: body.storeId },
+        });
+
+        if (!store) {
+          throw new BadRequestException('Store not found');
+        }
+
+        if (!store.isActive) {
+          throw new BadRequestException(
+            'Cannot assign employee to inactive store',
+          );
+        }
+
+        storeUpdateMetadata = {
+          storeId: store.id,
+          storeName: store.name,
+        };
+      }
+
+      // ========================
+      // PUBLIC METADATA
+      // ========================
       clerkPayload.publicMetadata = {
         ...currentPublic,
+        ...storeUpdateMetadata,
         ...(body.status !== undefined && { status: body.status }),
         ...(body.phoneNumber !== undefined && {
           phoneNumber: body.phoneNumber,
@@ -97,6 +164,9 @@ export class EmployeeService {
         }),
       };
 
+      // ========================
+      // PRIVATE METADATA
+      // ========================
       clerkPayload.privateMetadata = {
         ...currentPrivate,
         ...(body.role !== undefined && { role: body.role }),
