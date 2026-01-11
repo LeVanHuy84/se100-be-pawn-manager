@@ -14,12 +14,14 @@ import { ConfigurationsService } from './configurations.service';
 import { ListConfigurationsQueryDto } from './dto/request/configurations.query';
 import { ConfigurationResponse } from './dto/request/configurations.response';
 import { UpdateConfigurationDto } from './dto/request/update-configuration.request';
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 
 @ApiTags('System Configurations')
 @Controller({
   version: '1',
   path: 'configurations',
 })
+@ApiErrorResponses()
 export class ConfigurationsController {
   constructor(private readonly configurationsService: ConfigurationsService) {}
 

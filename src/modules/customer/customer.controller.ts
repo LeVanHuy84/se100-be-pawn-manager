@@ -17,11 +17,13 @@ import { CustomerQueryDTO } from './dto/request/customer.query';
 import { CreateCustomerDTO } from './dto/request/create-customer.request';
 import { UpdateCustomerRequest } from './dto/request/update-customer.request';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 
 @Controller({
   version: '1',
   path: 'customers',
 })
+@ApiErrorResponses()
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 

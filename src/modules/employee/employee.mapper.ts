@@ -10,6 +10,8 @@ export class EmployeeMapper {
       status: employee.publicMetadata?.status as EmployeeStatus,
       phoneNumber: employee.publicMetadata?.phoneNumber,
       role: employee.privateMetadata?.role,
+      storeId: employee.publicMetadata?.storeId,
+      storeName: employee.publicMetadata?.storeName,
       hireDate: employee.publicMetadata?.hireDate,
       terminatedDate: employee.publicMetadata?.terminatedDate,
       createdAt: new Date(employee.createdAt).toISOString(),

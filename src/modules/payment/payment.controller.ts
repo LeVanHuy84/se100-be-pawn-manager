@@ -26,6 +26,7 @@ import { PaymentRequestDto } from './dto/request/payment.request';
 import { PaymentResponse } from './dto/response/payment-details.response';
 import { PaymentListItem } from './dto/response/payment-list-item.repsonse';
 import { PaymentService } from './payment.service';
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 
 @ApiTags('Payments')
 @ApiBearerAuth()
@@ -34,6 +35,7 @@ import { PaymentService } from './payment.service';
   path: 'payments',
   version: '1',
 })
+@ApiErrorResponses()
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 

@@ -94,10 +94,10 @@ enum RevenueType {
 }
 
 enum NotificationType {
-  INTEREST_REMINDER      // Nhắc trả lãi sắp tới hạn
-  OVERDUE_REMINDER       // Nhắc nợ quá hạn
-  LIQUIDATION_WARNING    // Cảnh báo sắp thanh lý
-  PAYMENT_CONFIRMATION   // Xác nhận thanh toán
+  INTEREST_REMINDER // Nhắc trả lãi sắp tới hạn
+  OVERDUE_REMINDER // Nhắc nợ quá hạn
+  LIQUIDATION_WARNING // Cảnh báo sắp thanh lý
+  PAYMENT_CONFIRMATION // Xác nhận thanh toán
 }
 
 enum NotificationChannel {
@@ -108,15 +108,14 @@ enum NotificationChannel {
 }
 
 enum NotificationStatus {
-  PENDING       // Chờ gửi
-  SENT          // Đã gửi (SMS/Email)
-  DELIVERED     // Đã nhận (SMS/Email confirmed)
-  FAILED        // Gửi thất bại
-  ANSWERED      // Khách nghe máy (Phone)
-  NO_ANSWER     // Không nghe máy (Phone)
+  PENDING // Chờ gửi
+  SENT // Đã gửi (SMS/Email)
+  DELIVERED // Đã nhận (SMS/Email confirmed)
+  FAILED // Gửi thất bại
+  ANSWERED // Khách nghe máy (Phone)
+  NO_ANSWER // Không nghe máy (Phone)
   PROMISE_TO_PAY // Khách hứa trả
 }
-
 
 // ==================================================
 // LOAN PRODUCT TYPE
@@ -151,8 +150,8 @@ model Customer {
   creditScore   Int?
   images        Json
 
-  loans             Loan[]
-  notificationLogs  NotificationLog[]
+  loans            Loan[]
+  notificationLogs NotificationLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
@@ -196,6 +195,8 @@ model Loan {
 
   notes String?
 
+  storeId String @db.Uuid
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
   createdBy String?
@@ -206,7 +207,10 @@ model Loan {
   repaymentSchedule RepaymentScheduleDetail[]
   payments          LoanPayment[]
   collaterals       Collateral[]
-  notificationLogs  NotificationLog[]
+
+  notificationLogs NotificationLog[]
+
+  store Store @relation(fields: [storeId], references: [id])
 }
 
 // ==================================================
@@ -284,6 +288,7 @@ model Store {
   isActive  Boolean @default(true)
 
   collaterals Collateral[]
+  loans       Loan[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -312,7 +317,7 @@ model Collateral {
   status          CollateralStatus @default(PROPOSED)
   loanId          String?          @db.Uuid
   storageLocation String?
-  receivedDate    DateTime?   @db.Date
+  receivedDate    DateTime?        @db.Date
 
   appraisedValue Decimal?
   ltvRatio       Decimal?
@@ -371,58 +376,59 @@ model SystemParameter {
 // AUDIT LOG
 // ==================================================
 model AuditLog {
-  id           String   @id @default(uuid()) @db.Uuid
-  action       String   // e.g., "SYSTEM_PENALTY", "UPDATE_LOAN", "LIQUIDATION"
-  entityId     String   // ID của đối tượng bị tác động (LoanID, RepaymentID)
-  entityType   AuditEntityType   // "LOAN", "REPAYMENT_SCHEDULE"
-  actorId      String?  // NULL nếu là SYSTEM (Cronjob), UserID nếu là nhân viên
-  oldValue     Json?    // Dữ liệu trước khi thay đổi
-  newValue     Json?    // Dữ liệu sau khi thay đổi
-  description  String?  // "Applied penalty: 50,000 VND for 2 days overdue"
-  createdAt    DateTime @default(now())
+  id          String          @id @default(uuid()) @db.Uuid
+  action      String // e.g., "SYSTEM_PENALTY", "UPDATE_LOAN", "LIQUIDATION"
+  entityId    String // ID của đối tượng bị tác động (LoanID, RepaymentID)
+  entityType  AuditEntityType // "LOAN", "REPAYMENT_SCHEDULE"
+  actorId     String? // NULL nếu là SYSTEM (Cronjob), UserID nếu là nhân viên
+  actorName   String? // Tên nhân viên hoặc "SYSTEM"
+  oldValue    Json? // Dữ liệu trước khi thay đổi
+  newValue    Json? // Dữ liệu sau khi thay đổi
+  description String? // "Applied penalty: 50,000 VND for 2 days overdue"
+  createdAt   DateTime        @default(now())
 }
 
 // ==================================================
 // REVENUE LEDGER
 // ==================================================
 model RevenueLedger {
-  id        String   @id @default(uuid()) @db.Uuid
-  type      RevenueType   // "INTEREST", "FEE", "LIQUIDATION_EXCESS"
-  amount    Decimal
-  refId     String   // LoanID hoặc PaymentID
-  recordedAt DateTime @default(now())
+  id         String      @id @default(uuid()) @db.Uuid
+  type       RevenueType // "INTEREST", "FEE", "LIQUIDATION_EXCESS"
+  amount     Decimal
+  refId      String // LoanID hoặc PaymentID
+  recordedAt DateTime    @default(now())
 }
 
 // ==================================================
 // NOTIFICATION / COMMUNICATION LOG
 // ==================================================
 model NotificationLog {
-  id              String              @id @default(uuid()) @db.Uuid
-  type            NotificationType    // Loại thông báo
-  channel         NotificationChannel // Kênh liên lạc
-  status          NotificationStatus  @default(PENDING)
-  
+  id      String              @id @default(uuid()) @db.Uuid
+  type    NotificationType // Loại thông báo
+  channel NotificationChannel // Kênh liên lạc
+  status  NotificationStatus  @default(PENDING)
+
   // Liên kết
-  loanId          String              @db.Uuid
-  loan            Loan                @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  customerId      String              @db.Uuid
-  customer        Customer            @relation(fields: [customerId], references: [id])
-  
+  loanId     String   @db.Uuid
+  loan       Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id])
+
   // Nội dung
-  subject         String?             // Tiêu đề (Email) hoặc mục đích
-  message         String?             // Nội dung tin nhắn
-  recipientContact String?            // Sđt hoặc email nhận
-  
+  subject          String? // Tiêu đề (Email) hoặc mục đích
+  message          String? // Nội dung tin nhắn
+  recipientContact String? // Sđt hoặc email nhận
+
   // Kết quả (cho Phone Call)
-  callDuration    Int?                // Thời lượng gọi (giây)
-  employeeId      String?             // Nhân viên xử lý (nếu Phone/In-person)
-  notes           String?             // Ghi chú kết quả: "Khách hứa thứ Hai trả"
-  promiseToPayDate DateTime?          // Ngày khách hứa trả
-  
+  callDuration     Int? // Thời lượng gọi (giây)
+  employeeId       String? // Nhân viên xử lý (nếu Phone/In-person)
+  notes            String? // Ghi chú kết quả: "Khách hứa thứ Hai trả"
+  promiseToPayDate DateTime? // Ngày khách hứa trả
+
   // Metadata
-  sentAt          DateTime?           // Thời điểm gửi/gọi
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  sentAt    DateTime? // Thời điểm gửi/gọi
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([loanId, type])
   @@index([customerId])

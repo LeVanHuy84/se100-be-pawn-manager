@@ -21,11 +21,13 @@ import { UpdateLocationRequest } from './dto/request/update-location.request';
 import { CreateLiquidationRequest } from './dto/request/liquidation.request';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 
 @Controller({
   version: '1',
   path: 'collateral-assets',
 })
+@ApiErrorResponses()
 export class CollateralController {
   constructor(private readonly collateralService: CollateralService) {}
 
@@ -67,6 +69,7 @@ export class CollateralController {
   version: '1',
   path: 'collaterals',
 })
+@ApiErrorResponses()
 export class CollateralLocationController {
   constructor(private readonly collateralService: CollateralService) {}
 
@@ -81,6 +84,7 @@ export class CollateralLocationController {
   version: '1',
   path: 'liquidations',
 })
+@ApiErrorResponses()
 export class LiquidationController {
   constructor(private readonly collateralService: CollateralService) {}
 

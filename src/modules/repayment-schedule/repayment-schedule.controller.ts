@@ -12,7 +12,10 @@ import { BaseResult } from 'src/common/dto/base.response';
 import { PaginationMeta } from 'src/common/dto/pagination.type';
 import { OverdueItemsQuery } from './dto/request/overdue-items.query';
 import { RepaymentScheduleItemResponse } from './dto/response/reschedule-payment-item.response';
+
 import { RepaymentScheduleService } from './repayment-schedule.service';
+
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 
 @ApiTags('Repayment Schedule')
 @ApiBearerAuth()
@@ -25,6 +28,7 @@ import { RepaymentScheduleService } from './repayment-schedule.service';
 @Controller({
   version: '1',
 })
+@ApiErrorResponses()
 export class RepaymentScheduleController {
   constructor(
     private readonly repaymentScheduleService: RepaymentScheduleService,

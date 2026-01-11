@@ -14,6 +14,10 @@ export class EmployeeResponse {
   phoneNumber: string;
   @ApiProperty({ description: 'Role of the employee', enum: Role })
   role: Role;
+  @ApiProperty({ description: 'Store ID where the employee works' })
+  storeId: string;
+  @ApiPropertyOptional({ description: 'Store name where the employee works' })
+  storeName: string;
   @ApiProperty({ description: 'Status of the employee', enum: EmployeeStatus })
   status: EmployeeStatus;
   @ApiProperty({
