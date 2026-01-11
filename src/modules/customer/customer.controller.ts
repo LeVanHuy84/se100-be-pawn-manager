@@ -40,14 +40,21 @@ export class CustomerController {
   @Post()
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
-  createCustomer(@Body() body: CreateCustomerDTO, @UploadedFiles() files: MulterFile[]) {
+  createCustomer(
+    @Body() body: CreateCustomerDTO,
+    @UploadedFiles() files: MulterFile[],
+  ) {
     return this.customerService.create(body, files);
   }
 
   @Patch('/:id')
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
-  updateCustomer(@Param('id') id: string, @Body() body: UpdateCustomerRequest, @UploadedFiles() files: MulterFile[]) {
+  updateCustomer(
+    @Param('id') id: string,
+    @Body() body: UpdateCustomerRequest,
+    @UploadedFiles() files: MulterFile[],
+  ) {
     return this.customerService.update(id, body, files);
   }
 }

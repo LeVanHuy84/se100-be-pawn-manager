@@ -14,14 +14,14 @@ async function main() {
         type: 'OUTDOOR_ROOFED', // Bãi ngoài trời có mái che
         manager: {
           name: 'Lê Văn Kho',
-          phone: '0909.888.777'
+          phone: '0909.888.777',
         },
         capacity: {
-          car: 100,      // Chứa được 100 ô tô
-          truck: 20      // 20 xe tải
+          car: 100, // Chứa được 100 ô tô
+          truck: 20, // 20 xe tải
         },
         facilities: ['Camera AI', 'Bảo vệ 24/7', 'Hệ thống PCCC vòi phun'],
-        pricePolicy: 'Standard' // Phân loại giá kho (nếu có)
+        pricePolicy: 'Standard', // Phân loại giá kho (nếu có)
       },
     },
     {
@@ -32,14 +32,14 @@ async function main() {
         type: 'INDOOR_BASEMENT', // Tầng hầm trong nhà
         manager: {
           name: 'Nguyễn Thị Giữ Xe',
-          phone: '0912.333.444'
+          phone: '0912.333.444',
         },
         capacity: {
           motorbike: 500, // Chứa được 500 xe máy
-          bicycle: 50
+          bicycle: 50,
         },
         facilities: ['Thẻ từ', 'Camera hồng ngoại'],
-        maxHeight: '2.2m' // Giới hạn chiều cao xe
+        maxHeight: '2.2m', // Giới hạn chiều cao xe
       },
     },
     {
@@ -50,17 +50,17 @@ async function main() {
         type: 'HIGH_SECURITY_VAULT', // Két sắt bảo mật cao
         manager: {
           name: 'Trần Bảo Mật',
-          phone: '0999.666.888'
+          phone: '0999.666.888',
         },
         capacity: {
           smallSafeBox: 200, // 200 két nhỏ (điện thoại, vàng)
-          largeSafeBox: 50   // 50 két lớn (túi xách, laptop)
+          largeSafeBox: 50, // 50 két lớn (túi xách, laptop)
         },
         conditions: {
           temperature: '25°C', // Nhiệt độ cố định bảo quản đồ da
-          humidity: '40%'      // Độ ẩm thấp chống mốc máy ảnh/túi
+          humidity: '40%', // Độ ẩm thấp chống mốc máy ảnh/túi
         },
-        insurance: 'Bảo hiểm cháy nổ 100% giá trị'
+        insurance: 'Bảo hiểm cháy nổ 100% giá trị',
       },
     },
     {
@@ -70,9 +70,9 @@ async function main() {
       storageInfo: {
         type: 'INDOOR',
         reason: 'Nâng cấp hệ thống PCCC',
-        expectedReopen: '2025-06-01'
+        expectedReopen: '2025-06-01',
       },
-    }
+    },
   ];
 
   for (const item of storages) {

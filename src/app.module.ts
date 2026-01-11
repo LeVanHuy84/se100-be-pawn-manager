@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import Joi from 'joi';
 import { APP_GUARD } from '@nestjs/core';
 import { ClerkAuthGuard } from './clerk/clerk-auth.guard';
@@ -14,6 +15,8 @@ import { ConfigurationsModule } from './modules/configurations/configurations.mo
 import { LoanSimulationsModule } from './modules/loan-simulations/loan-simulations.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-schedule.module';
+import { CommunicationModule } from './modules/communication/communication.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -33,13 +36,30 @@ import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-
         CLOUDINARY_API_KEY: Joi.string().required(),
         CLOUDINARY_API_SECRET: Joi.string().required(),
         GEMINI_API_KEY: Joi.string().required(),
+        // Email config (optional)
+        SMTP_HOST: Joi.string().optional(),
+        SMTP_PORT: Joi.number().optional(),
+        SMTP_USER: Joi.string().optional(),
+        SMTP_PASSWORD: Joi.string().optional(),
+        SMTP_FROM: Joi.string().optional(),
+        // Redis config for BullMQ
+        REDIS_HOST: Joi.string().default('localhost'),
+        REDIS_PORT: Joi.number().default(6379),
       }),
     }),
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+      },
+    }),
+    ScheduleModule.forRoot(),
     LoanModule,
     ConfigurationsModule,
     LoanSimulationsModule,
     PaymentModule,
     RepaymentScheduleModule,
+    CommunicationModule,
   ],
   controllers: [],
   providers: [

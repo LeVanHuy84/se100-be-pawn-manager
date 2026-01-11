@@ -30,7 +30,10 @@ export class ValuationService {
     // Calculate depreciation rate
     const currentYear = new Date().getFullYear();
     const age = currentYear - dto.year;
-    const depreciationRate = this.calculateDepreciationRate(collaeralType?.name || 'UNKNOWN', age);
+    const depreciationRate = this.calculateDepreciationRate(
+      collaeralType?.name || 'UNKNOWN',
+      age,
+    );
 
     // Get LTV ratio from system parameters
     const ltvRatio = await this.getLtvRatio(collaeralType?.name || 'UNKNOWN');

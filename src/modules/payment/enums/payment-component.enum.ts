@@ -1,7 +1,0 @@
-export enum PaymentComponent {
-  PRINCIPAL = 'PRINCIPAL',
-  INTEREST = 'INTEREST',
-  LATE_FEE = 'LATE_FEE',
-  PENALTY = 'PENALTY',
-  SERVICE_FEE = 'SERVICE_FEE',
-}

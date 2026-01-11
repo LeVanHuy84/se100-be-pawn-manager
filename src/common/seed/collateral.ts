@@ -11,12 +11,17 @@ async function main() {
   const stores = await prisma.store.findMany();
   const storages = await prisma.storage.findMany();
 
-  const findType = (name: string) => types.find((t) => t.name.includes(name))?.id;
-  const findStore = (name: string) => stores.find((s) => s.name.includes(name))?.id;
-  const findStorage = (name: string) => storages.find((s) => s.name.includes(name))?.id;
+  const findType = (name: string) =>
+    types.find((t) => t.name.includes(name))?.id;
+  const findStore = (name: string) =>
+    stores.find((s) => s.name.includes(name))?.id;
+  const findStorage = (name: string) =>
+    storages.find((s) => s.name.includes(name))?.id;
 
   if (types.length === 0 || stores.length === 0) {
-    console.error('Lỗi: Cần chạy seed cho CollateralType, Store và Storage trước!');
+    console.error(
+      'Lỗi: Cần chạy seed cho CollateralType, Store và Storage trước!',
+    );
     return;
   }
 
@@ -29,7 +34,7 @@ async function main() {
       storageId: findStorage('Kho Bãi Ô tô'), // Lưu tại kho ô tô
       status: 'STORED' as CollateralStatus, // Enum: Đang lưu kho
       loanId: null, // Yêu cầu để trống
-      
+
       // Thông tin chi tiết (JSON) đặc thù cho Ô tô
       collateralInfo: {
         brand: 'Mazda',
@@ -37,24 +42,24 @@ async function main() {
         year: 2022,
         color: 'Trắng',
         licensePlate: '30H-123.45', // Biển số
-        vinNumber: 'MM888...',      // Số khung
-        engineNumber: 'J202...',    // Số máy
-        odometer: 15000,            // Số ODO
-        condition: 'Mới 98%, không trầy xước'
+        vinNumber: 'MM888...', // Số khung
+        engineNumber: 'J202...', // Số máy
+        odometer: 15000, // Số ODO
+        condition: 'Mới 98%, không trầy xước',
       },
-      
+
       appraisedValue: 800000000, // Định giá 800 triệu
-      ltvRatio: 0.7,             // Tỷ lệ vay 70%
+      ltvRatio: 0.7, // Tỷ lệ vay 70%
       appraisalDate: new Date(),
       appraisalNotes: 'Xe chính chủ, giấy tờ đầy đủ, nội thất zin.',
-      
+
       storageLocation: 'Khu A - Ô số 12', // Vị trí trong kho
       receivedDate: new Date(),
-      
+
       images: [
-        'https://s3.aws.com/pawn/car_front.jpg', 
-        'https://s3.aws.com/pawn/car_interior.jpg'
-      ]
+        'https://s3.aws.com/pawn/car_front.jpg',
+        'https://s3.aws.com/pawn/car_interior.jpg',
+      ],
     },
 
     // --- Mẫu 2: iPhone 14 Pro Max (Đã nhận, chờ duyệt) ---
@@ -75,7 +80,7 @@ async function main() {
         imei: '35468800...',
         icloudStatus: 'Clean', // Quan trọng với iPhone
         batteryHealth: '92%',
-        accessories: ['Sạc', 'Cáp', 'Hộp']
+        accessories: ['Sạc', 'Cáp', 'Hộp'],
       },
 
       appraisedValue: 18000000,
@@ -86,7 +91,7 @@ async function main() {
       storageLocation: 'Tủ Két Số 05 - Ngăn 2',
       receivedDate: new Date(),
 
-      images: ['https://s3.aws.com/pawn/iphone_front.jpg']
+      images: ['https://s3.aws.com/pawn/iphone_front.jpg'],
     },
 
     // --- Mẫu 3: Xe máy SH Mode (Đang lưu kho) ---
@@ -104,16 +109,16 @@ async function main() {
         year: 2020,
         color: 'Xám Xi Măng',
         licensePlate: '59P1-555.66',
-        registrationCert: 'Có (Bản gốc)'
+        registrationCert: 'Có (Bản gốc)',
       },
 
       appraisedValue: 45000000,
       ltvRatio: 0.6, // Vay thấp
-      
+
       storageLocation: 'Hàng 3 - Vạch vàng',
       receivedDate: new Date('2023-11-01'),
 
-      images: []
+      images: [],
     },
 
     // --- Mẫu 4: Laptop Dell XPS (Đã thanh lý/Bán xong) ---
@@ -131,24 +136,26 @@ async function main() {
         cpu: 'Core i7 10750H',
         ram: '16GB',
         ssd: '512GB',
-        screen: '4K Touch'
+        screen: '4K Touch',
       },
 
       appraisedValue: 20000000,
-      
+
       // Thông tin thanh lý
       sellPrice: 22000000, // Bán được 22tr
       sellDate: new Date('2023-12-10'),
-      
-      images: ['https://s3.aws.com/pawn/laptop.jpg']
-    }
+
+      images: ['https://s3.aws.com/pawn/laptop.jpg'],
+    },
   ];
 
   for (const item of collaterals) {
     await prisma.collateral.create({
       data: item,
     });
-    console.log(`Created Collateral for owner: ${item.ownerName} (${item.status})`);
+    console.log(
+      `Created Collateral for owner: ${item.ownerName} (${item.status})`,
+    );
   }
 
   console.log('Seeding Collateral finished.');

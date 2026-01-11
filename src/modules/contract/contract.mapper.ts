@@ -18,7 +18,6 @@ export class ContractMapper {
   //     updatedAt: contract.updatedAt,
   //   };
   // }
-
   // static toResponseList(contracts: Contract[]): ContractResponse[] {
   //   return contracts.map((contract) => this.toResponse(contract));
   // }

@@ -122,6 +122,13 @@ async function main() {
     },
     {
       paramGroup: 'SYSTEM',
+      paramKey: 'AGE_REQUIREMENT_MIN',
+      paramValue: '18',
+      dataType: 'INTEGER',
+      description: 'Minimum age requirement for loan applicants',
+    },
+    {
+      paramGroup: 'SYSTEM',
       paramKey: 'ENABLE_AUTO_APPROVAL',
       paramValue: 'false',
       dataType: 'BOOLEAN',

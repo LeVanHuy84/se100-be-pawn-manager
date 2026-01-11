@@ -44,14 +44,21 @@ export class CollateralController {
   @Post()
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
-  createCollateral(@Body() body: CreateCollateralDTO, @UploadedFiles() files: MulterFile[]) {
+  createCollateral(
+    @Body() body: CreateCollateralDTO,
+    @UploadedFiles() files: MulterFile[],
+  ) {
     return this.collateralService.create(body, files);
   }
 
   @Patch('/:id')
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
-  updateCollateral(@Param('id') id: string, @Body() body: PatchCollateralDTO, @UploadedFiles() files: MulterFile[]) {
+  updateCollateral(
+    @Param('id') id: string,
+    @Body() body: PatchCollateralDTO,
+    @UploadedFiles() files: MulterFile[],
+  ) {
     return this.collateralService.update(id, body, files);
   }
 }

@@ -21,12 +21,16 @@ import {
   UpdateLoanStatusResponseDto,
 } from './dto/response/loan.response';
 import { LoanMapper } from './loan.mapper';
+import { CommunicationService } from '../communication/communication.service';
+import { ReminderProcessor } from '../communication/reminder.processor';
 
 @Injectable()
 export class LoanOrchestrator {
   constructor(
     private readonly prisma: PrismaService,
     private readonly loanSimulationsService: LoanSimulationsService,
+    private readonly communicationService: CommunicationService,
+    private readonly reminderProcessor: ReminderProcessor,
   ) {}
 
   async createLoan(dto: CreateLoanDto): Promise<CreateLoanResponseDto> {
@@ -368,6 +372,26 @@ export class LoanOrchestrator {
         },
       });
     });
+
+    // Schedule welcome notification (SMS/Email) immediately after approval
+    try {
+      await this.communicationService.scheduleWelcomeNotification(loan.id);
+    } catch (error) {
+      // Log error but don't fail the approval
+      console.error('Failed to send welcome notification:', error);
+    }
+
+    // Schedule all future payment reminders with delay
+    try {
+      const scheduled =
+        await this.reminderProcessor.scheduleAllRemindersForLoan(loan.id);
+      console.log(
+        `Scheduled ${scheduled} payment reminders for loan ${loan.id}`,
+      );
+    } catch (error) {
+      // Log error but don't fail the approval
+      console.error('Failed to schedule payment reminders:', error);
+    }
 
     return {
       message: 'Loan approved',

@@ -32,13 +32,7 @@ export class CollateralService {
   async findAll(
     query: CollateralQueryDTO,
   ): Promise<BaseResult<CollateralAssetResponse[]>> {
-    const {
-      page = 1,
-      limit = 20,
-      status,
-      collateralTypeId,
-      loanId,
-    } = query;
+    const { page = 1, limit = 20, status, collateralTypeId, loanId } = query;
 
     const skip = (page - 1) * limit;
 
@@ -118,10 +112,12 @@ export class CollateralService {
       const limit = pLimit(3);
 
       const uploadResults = await Promise.all(
-        files.map(file => limit(() => this.cloudinaryService.uploadFile(file, folder)))
+        files.map((file) =>
+          limit(() => this.cloudinaryService.uploadFile(file, folder)),
+        ),
       );
 
-      const images = uploadResults.map(result => ({
+      const images = uploadResults.map((result) => ({
         url: result.secure_url,
         publicId: result.public_id,
       }));
@@ -175,7 +171,8 @@ export class CollateralService {
       if (data.sellPrice !== undefined) updateData.sellPrice = data.sellPrice;
 
       if (data.collateralInfo !== undefined) {
-        updateData.collateralInfo = data.collateralInfo as Prisma.InputJsonValue;
+        updateData.collateralInfo =
+          data.collateralInfo as Prisma.InputJsonValue;
       }
 
       if (files && files.length > 0) {
@@ -184,15 +181,17 @@ export class CollateralService {
         const limit = pLimit(3);
 
         const uploadResults = await Promise.all(
-          files.map(file => limit(() => this.cloudinaryService.uploadFile(file, folder)))
+          files.map((file) =>
+            limit(() => this.cloudinaryService.uploadFile(file, folder)),
+          ),
         );
 
-        const images: ImageItem[] = uploadResults.map(result => ({
+        const images: ImageItem[] = uploadResults.map((result) => ({
           url: result.secure_url,
           publicId: result.public_id,
         }));
 
-        const currentImages = existing.images as unknown as ImageItem[] || [];
+        const currentImages = (existing.images as unknown as ImageItem[]) || [];
 
         const updatedImages = [...currentImages, ...images];
 
