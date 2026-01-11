@@ -14,8 +14,7 @@ export class LoanSimulationsService {
   async createSimulation(
     payload: LoanSimulationRequestDto,
   ): Promise<LoanSimulationResponse> {
-    const { loanAmount, totalCustodyFeeRate, loanTypeId, repaymentMethod } =
-      payload;
+    const { loanAmount, totalFeeRate, loanTypeId, repaymentMethod } = payload;
 
     // 1) Load LoanType
     const loanType = await this.prisma.loanType.findUnique({
@@ -36,15 +35,10 @@ export class LoanSimulationsService {
     }
 
     const interestRateMonthly = loanType.interestRateMonthly.toNumber(); // %/month
-    const mgmtFeeRateMonthly = await this.getDecimalParam(
-      'RATES',
-      'MANAGEMENT_FEE_RATE_MONTHLY',
-    );
 
-    const totalFeeRateMonthly = mgmtFeeRateMonthly + totalCustodyFeeRate;
-
-    // fee cố định theo loanAmount mỗi tháng
-    const monthlyFee = loanAmount * (totalFeeRateMonthly / 100);
+    // Total fee = management fee + custody fees (calculated by caller)
+    // Fee is fixed per month based on loan amount (pawn shop model)
+    const monthlyFeeFixed = loanAmount * (totalFeeRate / 100);
 
     const schedule: LoanSimulationScheduleItem[] = [];
     let totalInterest = 0;
@@ -64,22 +58,33 @@ export class LoanSimulationsService {
 
     // 2) Calculate schedule theo method
     if (repaymentMethod === RepaymentMethod.EQUAL_INSTALLMENT) {
-      // gốc đều, lãi giảm dần, fee cố định theo tháng
-      const principalPerMonth = loanAmount / durationMonths;
+      // gốc đều, lãi giảm dần
+      const principalPerMonth = Math.round(loanAmount / durationMonths);
       let remaining = loanAmount;
+      let totalPrincipalPaid = 0;
 
       for (let i = 1; i <= durationMonths; i++) {
         const beginningBalance = remaining;
 
-        const interestAmount = beginningBalance * (interestRateMonthly / 100);
+        // Làm tròn từng khoản ngay khi tính
+        const interestAmount = Math.round(
+          beginningBalance * (interestRateMonthly / 100),
+        );
+
+        // Kỳ cuối: trả hết phần còn lại để đảm bảo tổng chính xác
         const principalAmount =
-          i === durationMonths ? beginningBalance : principalPerMonth;
-        const feeAmount = monthlyFee;
+          i === durationMonths
+            ? loanAmount - totalPrincipalPaid
+            : principalPerMonth;
+
+        // Fee is fixed per month (pawn shop model)
+        const feeAmount = Math.round(monthlyFeeFixed);
 
         const totalAmount = principalAmount + interestAmount + feeAmount;
 
         totalInterest += interestAmount;
         totalFees += feeAmount;
+        totalPrincipalPaid += principalAmount;
         remaining = beginningBalance - principalAmount;
 
         schedule.push({
@@ -87,33 +92,56 @@ export class LoanSimulationsService {
           dueDate: dueDateStr(i),
           beginningBalance: Math.round(beginningBalance),
           principalAmount: Math.round(principalAmount),
-          interestAmount: Math.round(interestAmount),
-          feeAmount: Math.round(feeAmount),
-          totalAmount: Math.round(totalAmount),
+          interestAmount: interestAmount,
+          feeAmount: feeAmount,
+          totalAmount: totalAmount,
         });
       }
     } else if (repaymentMethod === RepaymentMethod.INTEREST_ONLY) {
       // mỗi tháng: interest + fee; tháng cuối: interest + fee + full principal
+      let totalInterestPaid = 0;
+      let totalFeesPaid = 0;
+
       for (let i = 1; i <= durationMonths; i++) {
         const beginningBalance = loanAmount; // giữ nguyên tới cuối kỳ
 
-        const interestAmount = loanAmount * (interestRateMonthly / 100);
-        const feeAmount = monthlyFee;
+        // Làm tròn từng khoản ngay khi tính
+        let interestAmount = Math.round(
+          loanAmount * (interestRateMonthly / 100),
+        );
+
+        // Fee is fixed per month (pawn shop model)
+        let feeAmount = Math.round(monthlyFeeFixed);
+
+        // Kỳ cuối: điều chỉnh interest và fee nếu có sai lệch tích lũy
+        if (i === durationMonths) {
+          const expectedTotalInterest = Math.round(
+            loanAmount * (interestRateMonthly / 100) * durationMonths,
+          );
+          const expectedTotalFees = Math.round(
+            monthlyFeeFixed * durationMonths,
+          );
+
+          interestAmount = expectedTotalInterest - totalInterestPaid;
+          feeAmount = expectedTotalFees - totalFeesPaid;
+        }
 
         const principalAmount = i === durationMonths ? loanAmount : 0;
         const totalAmount = principalAmount + interestAmount + feeAmount;
 
         totalInterest += interestAmount;
         totalFees += feeAmount;
+        totalInterestPaid += interestAmount;
+        totalFeesPaid += feeAmount;
 
         schedule.push({
           periodNumber: i,
           dueDate: dueDateStr(i),
-          beginningBalance: Math.round(beginningBalance),
-          principalAmount: Math.round(principalAmount),
-          interestAmount: Math.round(interestAmount),
-          feeAmount: Math.round(feeAmount),
-          totalAmount: Math.round(totalAmount),
+          beginningBalance: beginningBalance,
+          principalAmount: principalAmount,
+          interestAmount: interestAmount,
+          feeAmount: feeAmount,
+          totalAmount: totalAmount,
         });
       }
     } else {
@@ -123,13 +151,13 @@ export class LoanSimulationsService {
       );
     }
 
-    // 3) Totals
+    // 3) Totals - đã được làm tròn trong quá trình tính
     const totalRepayment = loanAmount + totalInterest + totalFees;
 
     // monthlyPayment:
     // - equal_installment: có thể dùng trung bình, hoặc dùng kỳ 1 (tuỳ UX)
-    // - interest_only: trung bình sẽ “ảo” vì kỳ cuối to, nhưng vẫn ok để hiển thị thêm
-    const monthlyPayment = totalRepayment / durationMonths;
+    // - interest_only: trung bình sẽ "ảo" vì kỳ cuối to, nhưng vẫn ok để hiển thị thêm
+    const monthlyPayment = Math.round(totalRepayment / durationMonths);
 
     return {
       loanAmount,
@@ -137,40 +165,16 @@ export class LoanSimulationsService {
       productType: loanType.name,
 
       appliedInterestRate: interestRateMonthly,
-      appliedMgmtFeeRateMonthly: mgmtFeeRateMonthly,
+      appliedMgmtFeeRateMonthly: totalFeeRate,
 
-      totalCustodyFeeRate,
+      totalCustodyFeeRate: totalFeeRate,
 
-      totalInterest: Math.round(totalInterest),
-      totalFees: Math.round(totalFees),
-      totalRepayment: Math.round(totalRepayment),
-      monthlyPayment: Math.round(monthlyPayment),
+      totalInterest: totalInterest, // Đã được làm tròn trong loop
+      totalFees: totalFees, // Đã được làm tròn trong loop
+      totalRepayment: totalRepayment,
+      monthlyPayment: monthlyPayment,
 
       schedule,
     };
-  }
-
-  private async getDecimalParam(
-    paramGroup: string,
-    paramKey: string,
-  ): Promise<number> {
-    const row = await this.prisma.systemParameter.findFirst({
-      where: { paramGroup, paramKey, isActive: true },
-    });
-
-    if (!row) {
-      throw new UnprocessableEntityException(
-        `Missing SystemParameter: ${paramGroup}.${paramKey}`,
-      );
-    }
-
-    const value = Number(row.paramValue);
-    if (Number.isNaN(value)) {
-      throw new UnprocessableEntityException(
-        `Invalid paramValue for ${paramGroup}.${paramKey}: "${row.paramValue}"`,
-      );
-    }
-
-    return value;
   }
 }

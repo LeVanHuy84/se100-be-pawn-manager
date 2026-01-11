@@ -19,10 +19,15 @@ import { UpdateLoanDto } from './dto/request/update-loan.dto';
 import { LoanStatusMachine } from './enum/loan.status-machine';
 import {
   CreateLoanResponseDto,
+  LoanResponseDto,
   UpdateLoanResponseDto,
   UpdateLoanStatusResponseDto,
 } from './dto/response/loan.response';
 import { LoanMapper } from './loan.mapper';
+
+import { CommunicationService } from '../communication/communication.service';
+import { ReminderProcessor } from '../communication/reminder.processor';
+
 import { AuditActionEnum } from 'src/common/enums/audit-action.enum';
 
 @Injectable()
@@ -30,6 +35,8 @@ export class LoanOrchestrator {
   constructor(
     private readonly prisma: PrismaService,
     private readonly loanSimulationsService: LoanSimulationsService,
+    private readonly communicationService: CommunicationService,
+    private readonly reminderProcessor: ReminderProcessor,
   ) {}
 
   async createLoan(
@@ -91,8 +98,9 @@ export class LoanOrchestrator {
       // =============== 2. Lấy phí ===============
       const simulationRequest: LoanSimulationRequestDto = {
         loanAmount,
+        totalFeeRate: totalCustodyFeeRate,
         loanTypeId,
-        totalCustodyFeeRate,
+
         repaymentMethod: repaymentMethod as RepaymentMethod,
       };
 
@@ -254,7 +262,7 @@ export class LoanOrchestrator {
       loanTypeId: dto.loanTypeId ?? loan.loanTypeId,
       repaymentMethod:
         (dto.repaymentMethod as RepaymentMethod) ?? loan.repaymentMethod,
-      totalCustodyFeeRate,
+      totalFeeRate: totalCustodyFeeRate,
     });
 
     await this.prisma.$transaction(async (tx) => {
@@ -405,14 +413,14 @@ export class LoanOrchestrator {
 
     if (!loan) throw new NotFoundException('Loan not found');
 
-    let message: string;
+    let result: { message: string; loan: LoanResponseDto };
 
     switch (dto.status) {
       case 'ACTIVE':
         if (!LoanStatusMachine.canTransition(loan.status, LoanStatus.ACTIVE)) {
           throw new BadRequestException('Invalid status transition');
         }
-        message = await this.approveLoan(loan, dto, employee);
+        result = await this.approveLoan(loan, dto, employee);
         break;
       case 'REJECTED':
         if (
@@ -420,31 +428,18 @@ export class LoanOrchestrator {
         ) {
           throw new BadRequestException('Invalid status transition');
         }
-        message = await this.rejectLoan(loan, dto, employee);
+        result = await this.rejectLoan(loan, dto, employee);
         break;
       default:
         throw new BadRequestException('Invalid status update request');
     }
 
-    const fullLoan = await this.prisma.loan.findUnique({
-      where: { id: loanId },
-      include: {
-        loanType: true,
-        collaterals: {
-          include: {
-            collateralType: true,
-            store: true,
-          },
-        },
-      },
-    });
-
-    return { message, loan: LoanMapper.toLoanResponse(fullLoan) };
+    return result;
   }
 
   private async approveLoan(loan: any, dto: ApproveLoanDto, employee: any) {
     const result = await this.prisma.$transaction(async (tx) => {
-      const updatedLoan = await tx.loan.update({
+      await tx.loan.update({
         where: { id: loan.id },
         data: {
           status: LoanStatus.ACTIVE,
@@ -494,12 +489,35 @@ export class LoanOrchestrator {
       });
     });
 
-    return 'Loan approved';
+    // Schedule welcome notification (SMS/Email) immediately after approval
+    try {
+      await this.communicationService.scheduleWelcomeNotification(loan.id);
+    } catch (error) {
+      // Log error but don't fail the approval
+      console.error('Failed to send welcome notification:', error);
+    }
+
+    // Schedule all future payment reminders with delay
+    try {
+      const scheduled =
+        await this.reminderProcessor.scheduleAllRemindersForLoan(loan.id);
+      console.log(
+        `Scheduled ${scheduled} payment reminders for loan ${loan.id}`,
+      );
+    } catch (error) {
+      // Log error but don't fail the approval
+      console.error('Failed to schedule payment reminders:', error);
+    }
+
+    return {
+      message: 'Loan approved',
+      loan: LoanMapper.toLoanResponse(result),
+    };
   }
 
   private async rejectLoan(loan: any, dto: ApproveLoanDto, employee: any) {
     const result = await this.prisma.$transaction(async (tx) => {
-      const updatedLoan = await tx.loan.update({
+      await tx.loan.update({
         where: { id: loan.id },
         data: {
           status: LoanStatus.REJECTED,
@@ -549,7 +567,10 @@ export class LoanOrchestrator {
       });
     });
 
-    return 'Loan rejected';
+    return {
+      message: 'Loan rejected',
+      loan: LoanMapper.toLoanResponse(result),
+    };
   }
 
   private normalizeValue(value: any) {

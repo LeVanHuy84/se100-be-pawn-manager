@@ -11,8 +11,11 @@ export class CollateralMapper {
       status: collateral.status,
       loanId: collateral.loanId,
       storageLocation: collateral.storageLocation,
-      receivedDate: collateral.receivedDate?.toISOString().split('T')[0] || null,
-      appraisedValue: collateral.appraisedValue ? Number(collateral.appraisedValue) : null,
+      receivedDate:
+        collateral.receivedDate?.toISOString().split('T')[0] || null,
+      appraisedValue: collateral.appraisedValue
+        ? Number(collateral.appraisedValue)
+        : null,
       ltvRatio: collateral.ltvRatio ? Number(collateral.ltvRatio) : null,
       appraisalDate: collateral.appraisalDate?.toISOString() || null,
       appraisalNotes: collateral.appraisalNotes,
@@ -20,12 +23,16 @@ export class CollateralMapper {
       sellDate: collateral.sellDate?.toISOString().split('T')[0] || null,
       createdAt: collateral.createdAt.toISOString(),
       updatedAt: collateral.updatedAt.toISOString(),
-      images: collateral.images ? collateral.images as unknown as ImageItem[] : null,
-      collateralInfo: collateral.collateralInfo ? collateral.collateralInfo as Record<string, any> : null,
+      images: collateral.images
+        ? (collateral.images as unknown as ImageItem[])
+        : null,
+      collateralInfo: collateral.collateralInfo
+        ? (collateral.collateralInfo as Record<string, any>)
+        : null,
     };
   }
 
   static toResponseList(collaterals: Collateral[]): CollateralAssetResponse[] {
-    return collaterals.map(c => this.toResponse(c));
+    return collaterals.map((c) => this.toResponse(c));
   }
 }

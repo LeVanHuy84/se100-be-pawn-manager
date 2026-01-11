@@ -27,7 +27,15 @@ async function main() {
     },
     {
       paramGroup: 'RATES',
-      paramKey: 'MANAGEMENT_FEE_RATE_MONTHLY',
+      paramKey: 'LEGAL_INTEREST_CAP',
+      paramValue: '20.0', // 20% per year (Vietnam Civil Code 2015)
+      dataType: 'DECIMAL',
+      description:
+        'Legal maximum annual interest rate cap in Vietnam (%). System warns when total rate exceeds this limit (per Civil Code 2015)',
+    },
+    {
+      paramGroup: 'RATES',
+      paramKey: 'MANAGEMENT_FEE_PERCENT',
       paramValue: '0.02', // %
       dataType: 'DECIMAL',
       description: 'Management fee as percentage of loan amount (%)',
@@ -111,6 +119,13 @@ async function main() {
       paramValue: 'Asia/Ho_Chi_Minh',
       dataType: 'STRING',
       description: 'Default system timezone',
+    },
+    {
+      paramGroup: 'SYSTEM',
+      paramKey: 'AGE_REQUIREMENT_MIN',
+      paramValue: '18',
+      dataType: 'INTEGER',
+      description: 'Minimum age requirement for loan applicants',
     },
     {
       paramGroup: 'SYSTEM',

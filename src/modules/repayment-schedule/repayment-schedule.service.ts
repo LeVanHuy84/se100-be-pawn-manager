@@ -3,6 +3,7 @@ import { RepaymentScheduleDetail } from 'generated/prisma';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RepaymentScheduleItemResponse } from './dto/response/reschedule-payment-item.response';
 import { LoanSimulationScheduleItem } from '../loan-simulations/dto/response/loan-simulation.response';
+import { BaseResult } from 'src/common/dto/base.response';
 
 @Injectable()
 export class RepaymentScheduleService {
@@ -85,6 +86,118 @@ export class RepaymentScheduleService {
     }
 
     return this.mapItem(item);
+  }
+
+  /**
+   * Get overdue repayment items for debt collection (Call List)
+   * Used by staff to identify customers who need to be contacted
+   */
+  async getOverdueItems(query: {
+    minDaysOverdue?: number;
+    page?: number;
+    limit?: number;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc' | '';
+  }): Promise<BaseResult<RepaymentScheduleItemResponse[]>> {
+    const {
+      minDaysOverdue = 1,
+      page = 1,
+      limit = 20,
+      search,
+      sortBy,
+      sortOrder = 'asc',
+    } = query;
+
+    const today = new Date();
+    const cutoffDate = new Date(today);
+    cutoffDate.setDate(cutoffDate.getDate() - minDaysOverdue);
+
+    const where: any = {
+      status: 'OVERDUE' as const,
+      dueDate: {
+        lte: cutoffDate, // Due date must be at least minDaysOverdue ago
+      },
+    };
+
+    // Add search filter for customer name or phone
+    if (search) {
+      where.loan = {
+        customer: {
+          OR: [
+            { fullName: { contains: search, mode: 'insensitive' } },
+            { phone: { contains: search } },
+            { nationalId: { contains: search } },
+          ],
+        },
+      };
+    }
+
+    // Build orderBy based on sortBy and sortOrder
+    const orderBy: any[] = [];
+    if (sortBy && sortOrder) {
+      // Map common sort fields
+      const sortFieldMap: Record<string, any> = {
+        dueDate: { dueDate: sortOrder },
+        periodNumber: { periodNumber: sortOrder },
+        totalAmount: { totalAmount: sortOrder },
+        customerName: { loan: { customer: { fullName: sortOrder } } },
+      };
+      orderBy.push(sortFieldMap[sortBy] || { dueDate: 'asc' });
+    } else {
+      // Default: oldest overdue first (priority)
+      orderBy.push({ dueDate: 'asc' });
+      orderBy.push({ periodNumber: 'asc' });
+    }
+
+    // Get total count and items in parallel
+    const [totalItems, items] = await Promise.all([
+      this.prisma.repaymentScheduleDetail.count({ where }),
+      this.prisma.repaymentScheduleDetail.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          loan: {
+            select: {
+              id: true,
+              customer: {
+                select: {
+                  fullName: true,
+                  phone: true,
+                  nationalId: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const mappedItems = items.map((item) => {
+      const baseItem = this.mapItem(item);
+      // Add customer info for call list (cast to any to avoid type conflicts)
+      return {
+        ...baseItem,
+        customerInfo: (item as any).loan.customer,
+        daysOverdue: Math.floor(
+          (today.getTime() - item.dueDate.getTime()) / (1000 * 60 * 60 * 24),
+        ),
+      } as any;
+    });
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: mappedItems,
+      meta: {
+        totalItems,
+        totalPages,
+        currentPage: page,
+        itemsPerPage: limit,
+      },
+    };
   }
 
   private mapItem(

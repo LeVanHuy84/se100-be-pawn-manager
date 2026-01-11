@@ -8,4 +8,6 @@ export const CreateLiquidationSchema = z.object({
   reason: z.string().optional(),
 });
 
-export class CreateLiquidationRequest extends createZodDto(CreateLiquidationSchema) {}
+export class CreateLiquidationRequest extends createZodDto(
+  CreateLiquidationSchema,
+) {}

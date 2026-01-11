@@ -1,4 +1,4 @@
 export interface ImageItem {
-    url: string;
-    publicId: string;
+  url: string;
+  publicId: string;
 }

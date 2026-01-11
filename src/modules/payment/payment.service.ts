@@ -19,6 +19,8 @@ import {
   Prisma,
   RepaymentItemStatus,
 } from 'generated/prisma';
+import { ReminderProcessor } from '../communication/reminder.processor';
+import { CommunicationService } from '../communication/communication.service';
 
 interface AllocationDraft {
   componentType: PaymentComponent;
@@ -29,7 +31,11 @@ interface AllocationDraft {
 
 @Injectable()
 export class PaymentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reminderProcessor: ReminderProcessor,
+    private readonly communicationService: CommunicationService,
+  ) {}
 
   async listPayments(
     query: ListPaymentsQuery,
@@ -93,6 +99,17 @@ export class PaymentService {
             equals: s,
           },
         },
+        {
+          loan: {
+            customer: {
+              OR: [
+                { fullName: { contains: s, mode: 'insensitive' } },
+                { phone: { contains: s } },
+                { nationalId: { contains: s } },
+              ],
+            },
+          },
+        },
       ];
     }
 
@@ -111,6 +128,18 @@ export class PaymentService {
         orderBy: { [orderByField]: direction },
         skip: (page - 1) * limit,
         take: limit,
+        include: {
+          loan: {
+            select: {
+              customer: {
+                select: {
+                  fullName: true,
+                  phone: true,
+                },
+              },
+            },
+          },
+        },
       }),
       this.prisma.loanPayment.count({ where }),
     ]);
@@ -123,6 +152,8 @@ export class PaymentService {
       paymentType: p.paymentType as PaymentType,
       paidAt: p.paidAt.toISOString(),
       referenceCode: p.referenceCode,
+      customerName: (p as any).loan?.customer?.fullName,
+      customerPhone: (p as any).loan?.customer?.phone,
     }));
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -186,19 +217,43 @@ export class PaymentService {
 
       const earliest = scheduleItems[0];
 
-      // 2) Nếu PERIODIC: chỉ cho trả trong 1 kỳ (earliest)
-      const allocatableItems =
-        paymentType === PaymentType.PERIODIC ? [earliest] : scheduleItems; // EARLY/PAYOFF/ADJUSTMENT -> full list
+      // 2) Determine allocatable items based on payment type
+      let allocatableItems;
+      let maxAllocatable = 0;
 
-      // 3) Nếu PAYOFF: amount phải = totalOutstanding (không dư/không thiếu)
-      const totalOutstandingAll = this.calcTotalOutstanding(scheduleItems);
-      if (paymentType === PaymentType.PAYOFF) {
-        // bạn có thể cho phép lệch nhỏ do rounding, nhưng hiện tại reject strict
-        if (Number(amount) !== totalOutstandingAll) {
+      if (paymentType === PaymentType.PERIODIC) {
+        // PERIODIC: Only allow payment to earliest period (can be partial)
+        allocatableItems = [earliest];
+        maxAllocatable = this.calcTotalOutstanding([earliest]);
+      } else if (paymentType === PaymentType.EARLY) {
+        // EARLY: Allow payment to multiple periods sequentially, but not beyond what's owed
+        allocatableItems = scheduleItems;
+        maxAllocatable = this.calcTotalOutstanding(scheduleItems);
+      } else if (paymentType === PaymentType.PAYOFF) {
+        // PAYOFF: Must pay ALL outstanding exactly (with small tolerance for rounding)
+        allocatableItems = scheduleItems;
+        const totalOutstandingAll = this.calcTotalOutstanding(scheduleItems);
+        const payoffDiff = Math.abs(Number(amount) - totalOutstandingAll);
+        if (payoffDiff > 1) {
           throw new UnprocessableEntityException(
-            `PAYOFF requires exact outstanding amount = ${Math.round(totalOutstandingAll)}`,
+            `PAYOFF requires exact outstanding amount = ${Math.round(totalOutstandingAll)}. Provided: ${Math.round(Number(amount))}, diff: ${payoffDiff}`,
           );
         }
+        maxAllocatable = totalOutstandingAll;
+      } else {
+        // ADJUSTMENT: Allow any amount up to total outstanding
+        allocatableItems = scheduleItems;
+        maxAllocatable = this.calcTotalOutstanding(scheduleItems);
+      }
+
+      // 3) Validate amount does not exceed what can be allocated
+      if (
+        paymentType !== PaymentType.PAYOFF &&
+        Number(amount) > maxAllocatable
+      ) {
+        throw new UnprocessableEntityException(
+          `Payment amount (${Math.round(Number(amount))}) exceeds allocatable outstanding (${Math.round(maxAllocatable)}) for ${paymentType} payment type`,
+        );
       }
 
       // 4) Create payment header
@@ -225,22 +280,30 @@ export class PaymentService {
       }
 
       // 5) Allocate
-      let remainingAmount = Number(amount);
+      let remainingAmount = Math.round(Number(amount));
       const allocations: AllocationDraft[] = [];
 
       for (const period of allocatableItems) {
         if (remainingAmount <= 0) break;
 
-        const interestOut =
-          Number(period.interestAmount) - Number(period.paidInterest ?? 0);
-        const feeOut = Number(period.feeAmount) - Number(period.paidFee ?? 0);
+        const interestOut = Math.round(
+          Number(period.interestAmount) - Number(period.paidInterest ?? 0),
+        );
+        const feeOut = Math.round(
+          Number(period.feeAmount) - Number(period.paidFee ?? 0),
+        );
 
-        const penaltyAmount = Number((period as any).penaltyAmount ?? 0);
-        const paidPenalty = Number((period as any).paidPenalty ?? 0);
+        const penaltyAmount = Math.round(
+          Number((period as any).penaltyAmount ?? 0),
+        );
+        const paidPenalty = Math.round(
+          Number((period as any).paidPenalty ?? 0),
+        );
         const penaltyOut = penaltyAmount - paidPenalty;
 
-        const principalOut =
-          Number(period.principalAmount) - Number(period.paidPrincipal ?? 0);
+        const principalOut = Math.round(
+          Number(period.principalAmount) - Number(period.paidPrincipal ?? 0),
+        );
 
         let payInterest = 0,
           payFee = 0,
@@ -249,7 +312,7 @@ export class PaymentService {
 
         // Waterfall: INTEREST -> FEE -> PENALTY -> PRINCIPAL
         if (interestOut > 0 && remainingAmount > 0) {
-          payInterest = Math.min(remainingAmount, interestOut);
+          payInterest = Math.round(Math.min(remainingAmount, interestOut));
           remainingAmount -= payInterest;
           allocations.push({
             componentType: PaymentComponent.INTEREST,
@@ -260,7 +323,7 @@ export class PaymentService {
         }
 
         if (feeOut > 0 && remainingAmount > 0) {
-          payFee = Math.min(remainingAmount, feeOut);
+          payFee = Math.round(Math.min(remainingAmount, feeOut));
           remainingAmount -= payFee;
           allocations.push({
             componentType: PaymentComponent.SERVICE_FEE,
@@ -271,7 +334,7 @@ export class PaymentService {
         }
 
         if (penaltyOut > 0 && remainingAmount > 0) {
-          payPenalty = Math.min(remainingAmount, penaltyOut);
+          payPenalty = Math.round(Math.min(remainingAmount, penaltyOut));
           remainingAmount -= payPenalty;
           allocations.push({
             componentType: PaymentComponent.PENALTY,
@@ -282,7 +345,7 @@ export class PaymentService {
         }
 
         if (principalOut > 0 && remainingAmount > 0) {
-          payPrincipal = Math.min(remainingAmount, principalOut);
+          payPrincipal = Math.round(Math.min(remainingAmount, principalOut));
           remainingAmount -= payPrincipal;
           allocations.push({
             componentType: PaymentComponent.PRINCIPAL,
@@ -330,10 +393,11 @@ export class PaymentService {
         }
       }
 
-      // 6) Reject overpayment (strict)
-      if (remainingAmount > 0) {
+      // 6) Verify all payment was allocated (should not have remainder for any type)
+      if (remainingAmount > 1) {
+        // Allow 1 VND rounding tolerance
         throw new UnprocessableEntityException(
-          'Payment amount exceeds allocatable outstanding for selected paymentType',
+          `Payment allocation failed: ${remainingAmount} VND could not be allocated. This should not happen - please contact support.`,
         );
       }
 
@@ -362,6 +426,10 @@ export class PaymentService {
         },
       });
 
+      // 8.1) Validate balance consistency (auto-heal if needed)
+      // Pass allSchedule to avoid redundant query
+      await this.validateAndReconcileLoanBalance(tx, loanId, allSchedule);
+
       // 9) Next payment
       const next = await tx.repaymentScheduleDetail.findFirst({
         where: {
@@ -376,13 +444,47 @@ export class PaymentService {
       const nextPayment = next
         ? {
             dueDate: next.dueDate.toISOString().slice(0, 10),
-            amount: Number(next.totalAmount),
+            amount: Math.round(Number(next.totalAmount)),
             periodNumber: next.periodNumber,
           }
         : { dueDate: null, amount: null, periodNumber: null };
 
-      return { payment, allocations, balance, nextPayment };
+      return { payment, allocations, balance, nextPayment, allSchedule };
     });
+
+    // Cancel scheduled reminders for periods that were fully paid
+    try {
+      const paidPeriods = result.allSchedule
+        .filter((period) => period.status === RepaymentItemStatus.PAID)
+        .map((period) => period.periodNumber);
+
+      if (paidPeriods.length > 0) {
+        await this.reminderProcessor.cancelRemindersForPayments(
+          loanId,
+          paidPeriods,
+        );
+      }
+    } catch (error) {
+      // Log error but don't fail the payment
+      console.error('Failed to cancel scheduled reminders:', error);
+    }
+
+    // Send payment confirmation notification
+    try {
+      await this.communicationService.schedulePaymentConfirmation(
+        loanId,
+        result.payment.id,
+        amount,
+        result.allocations.map((a) => ({
+          periodNumber: a.periodNumber,
+          component: a.componentType,
+          amount: Math.round(a.amount),
+        })),
+      );
+    } catch (error) {
+      // Log error but don't fail the payment
+      console.error('Failed to send payment confirmation:', error);
+    }
 
     return {
       transactionId: result.payment.id,
@@ -394,7 +496,7 @@ export class PaymentService {
       allocation: result.allocations.map((a) => ({
         periodNumber: a.periodNumber,
         component: a.componentType,
-        amount: a.amount,
+        amount: Math.round(a.amount),
         description: this.buildAllocationDescription(a),
       })),
       loanBalance: result.balance,
@@ -407,21 +509,23 @@ export class PaymentService {
   private calcTotalOutstanding(items: any[]): number {
     let total = 0;
     for (const p of items) {
-      total += Math.max(
-        0,
-        Number(p.interestAmount) - Number(p.paidInterest ?? 0),
+      total += Math.round(
+        Math.max(0, Number(p.interestAmount) - Number(p.paidInterest ?? 0)),
       );
-      total += Math.max(0, Number(p.feeAmount) - Number(p.paidFee ?? 0));
-      total += Math.max(
-        0,
-        Number(p.principalAmount) - Number(p.paidPrincipal ?? 0),
+      total += Math.round(
+        Math.max(0, Number(p.feeAmount) - Number(p.paidFee ?? 0)),
+      );
+      total += Math.round(
+        Math.max(0, Number(p.principalAmount) - Number(p.paidPrincipal ?? 0)),
       );
 
       if ((p as any).penaltyAmount !== undefined) {
-        total += Math.max(
-          0,
-          Number((p as any).penaltyAmount ?? 0) -
-            Number((p as any).paidPenalty ?? 0),
+        total += Math.round(
+          Math.max(
+            0,
+            Number((p as any).penaltyAmount ?? 0) -
+              Number((p as any).paidPenalty ?? 0),
+          ),
         );
       }
     }
@@ -435,39 +539,88 @@ export class PaymentService {
     let remainingPenalty = 0;
 
     for (const p of allSchedule) {
-      remainingPrincipal += Math.max(
-        0,
-        Number(p.principalAmount) - Number(p.paidPrincipal ?? 0),
+      remainingPrincipal += Math.round(
+        Math.max(0, Number(p.principalAmount) - Number(p.paidPrincipal ?? 0)),
       );
-      remainingInterest += Math.max(
-        0,
-        Number(p.interestAmount) - Number(p.paidInterest ?? 0),
+      remainingInterest += Math.round(
+        Math.max(0, Number(p.interestAmount) - Number(p.paidInterest ?? 0)),
       );
-      remainingFees += Math.max(
-        0,
-        Number(p.feeAmount) - Number(p.paidFee ?? 0),
+      remainingFees += Math.round(
+        Math.max(0, Number(p.feeAmount) - Number(p.paidFee ?? 0)),
       );
 
       if ((p as any).penaltyAmount !== undefined) {
-        remainingPenalty += Math.max(
-          0,
-          Number((p as any).penaltyAmount ?? 0) -
-            Number((p as any).paidPenalty ?? 0),
+        remainingPenalty += Math.round(
+          Math.max(
+            0,
+            Number((p as any).penaltyAmount ?? 0) -
+              Number((p as any).paidPenalty ?? 0),
+          ),
         );
       }
     }
 
     return {
-      remainingPrincipal,
-      remainingInterest,
-      remainingFees,
-      remainingPenalty,
+      remainingPrincipal: Math.round(remainingPrincipal),
+      remainingInterest: Math.round(remainingInterest),
+      remainingFees: Math.round(remainingFees),
+      remainingPenalty: Math.round(remainingPenalty),
       totalRemaining:
         remainingPrincipal +
         remainingInterest +
         remainingFees +
         remainingPenalty,
     };
+  }
+
+  /**
+   * Validates and reconciles loan balance against schedule items.
+   * If discrepancy detected, automatically heals by trusting calculated value.
+   * @param tx - Transaction context
+   * @param loanId - Loan ID to validate
+   * @param scheduleItems - Optional pre-fetched schedule items (optimization)
+   */
+  private async validateAndReconcileLoanBalance(
+    tx: any,
+    loanId: string,
+    scheduleItems?: any[],
+  ): Promise<void> {
+    const loan = await tx.loan.findUnique({
+      where: { id: loanId },
+      select: { remainingAmount: true },
+    });
+
+    // Reuse scheduleItems if provided to avoid redundant query
+    const items =
+      scheduleItems ??
+      (await tx.repaymentScheduleDetail.findMany({
+        where: { loanId },
+      }));
+
+    const calculatedBalance = this.recalcLoanBalance(items);
+    const calculatedTotal = calculatedBalance.totalRemaining;
+    const storedRemaining = Math.round(Number(loan.remainingAmount));
+
+    // Allow small rounding tolerance (5 VND)
+    const diff = Math.abs(calculatedTotal - storedRemaining);
+
+    if (diff > 5) {
+      // TODO: Replace console with proper logger (Winston/Pino) for production
+      console.warn(
+        `⚠️ Loan balance mismatch detected for ${loanId}:`,
+        `stored=${storedRemaining}, calculated=${calculatedTotal}, diff=${diff}`,
+      );
+
+      // Auto-heal: trust the calculated value from schedule (source of truth)
+      await tx.loan.update({
+        where: { id: loanId },
+        data: { remainingAmount: calculatedTotal },
+      });
+
+      console.log(
+        `✅ Auto-healed loan ${loanId} balance to ${calculatedTotal}`,
+      );
+    }
   }
 
   private buildAllocationDescription(a: AllocationDraft): string {

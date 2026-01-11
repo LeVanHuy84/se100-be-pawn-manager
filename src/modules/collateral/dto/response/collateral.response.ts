@@ -1,4 +1,4 @@
-import { ImageItem } from "src/common/interfaces/media.interface";
+import { ImageItem } from 'src/common/interfaces/media.interface';
 
 export class CollateralAssetResponse {
   id: string;

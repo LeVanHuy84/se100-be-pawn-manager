@@ -49,7 +49,6 @@ async function main() {
   ];
 
   for (const type of collateralTypes) {
-    
     const existingType = await prisma.collateralType.findFirst({
       where: { name: type.name },
     });

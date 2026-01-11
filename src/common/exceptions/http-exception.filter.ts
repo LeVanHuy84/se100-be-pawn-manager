@@ -40,19 +40,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
       details = (res as any).errors ?? (res as any).details;
       code = HttpStatus[status] ?? 'HTTP_EXCEPTION';
     } else if (exception instanceof ZodError) {
-
-    /**
-     * 2️⃣ Zod
-     */
+      /**
+       * 2️⃣ Zod
+       */
       status = HttpStatus.BAD_REQUEST;
       code = 'VALIDATION_ERROR';
       message = 'Validation failed';
       details = exception.flatten();
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-
-    /**
-     * 3️⃣ Prisma
-     */
+      /**
+       * 3️⃣ Prisma
+       */
       status = HttpStatus.BAD_REQUEST;
 
       switch (exception.code) {
@@ -72,10 +70,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
           message = exception.message;
       }
     } else if (exception instanceof Error) {
-
-    /**
-     * 4️⃣ Unknown / Runtime error (TypeError, ReferenceError...)
-     */
+      /**
+       * 4️⃣ Unknown / Runtime error (TypeError, ReferenceError...)
+       */
       // ⚠️ Quan trọng: giữ message thật
       message = exception.message;
 
@@ -90,10 +87,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         exception.stack,
       );
     } else {
-
-    /**
-     * 5️⃣ Non-error throw
-     */
+      /**
+       * 5️⃣ Non-error throw
+       */
       this.logger.error(
         {
           errorId,

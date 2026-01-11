@@ -15,7 +15,9 @@ export const CreateCollateralSchema = z.object({
     }
     return val;
   }, z.record(z.string(), z.any()).optional()),
-  status: z.enum(Object.values(AssetStatus) as [string, ...string[]]).optional(),
+  status: z
+    .enum(Object.values(AssetStatus) as [string, ...string[]])
+    .optional(),
   loanId: z.string().uuid().optional(),
   storageLocation: z.string().optional(),
   receivedDate: z.string().optional(),
