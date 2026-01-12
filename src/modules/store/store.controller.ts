@@ -15,6 +15,8 @@ import { CreateStoreDTO } from './dto/request/create-store.request';
 import { UpdateStoreDTO } from './dto/request/update-store.request';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 import { StoreService } from './store.service';
+import { ApiOkResponse } from '@nestjs/swagger';
+import { StoreListResponse } from './dto/response/store.response';
 
 @Controller({
   version: '1',
@@ -26,6 +28,10 @@ export class StoreController {
 
   @Get()
   @Roles(Role.MANAGER)
+  @ApiOkResponse({
+    description: 'Get a list of stores',
+    type: StoreListResponse,
+  })
   getList(@Query() query: StoreQueryDTO) {
     return this.storeService.findAll(query);
   }

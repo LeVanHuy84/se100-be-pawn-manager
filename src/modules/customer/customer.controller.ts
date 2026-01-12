@@ -18,6 +18,8 @@ import { CreateCustomerDTO } from './dto/request/create-customer.request';
 import { UpdateCustomerRequest } from './dto/request/update-customer.request';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
+import { ApiOkResponse } from '@nestjs/swagger';
+import { CustomerListResponse } from './dto/response/customer.response';
 
 @Controller({
   version: '1',
@@ -29,6 +31,10 @@ export class CustomerController {
 
   @Get()
   @Roles(Role.MANAGER, Role.STAFF)
+  @ApiOkResponse({
+    description: 'Get a list of customers',
+    type: CustomerListResponse,
+  })
   getList(@Query() query: CustomerQueryDTO) {
     return this.customerService.findAll(query);
   }

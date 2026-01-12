@@ -16,28 +16,70 @@ export class LoanService {
   async listLoans(
     dto: ListLoansQuery,
   ): Promise<BaseResult<LoanSummaryResponseDto[]>> {
-    const { loanCode, storeId, status, customerId, page = 1, limit = 20 } = dto;
+    const { q, storeId, status, customerId, page = 1, limit = 20 } = dto;
 
-    const where: Prisma.LoanWhereInput = {};
+    const andConditions: Prisma.LoanWhereInput[] = [];
 
-    if (loanCode) where.loanCode = loanCode;
-    if (storeId) where.storeId = storeId;
-    if (status) where.status = status as LoanStatus;
-    if (customerId) where.customerId = customerId;
+    if (storeId) {
+      andConditions.push({ storeId });
+    }
 
+    if (status) {
+      andConditions.push({ status: status as LoanStatus });
+    }
+
+    if (customerId) {
+      andConditions.push({ customerId });
+    }
+
+    if (q) {
+      andConditions.push({
+        OR: [
+          { loanCode: { contains: q, mode: 'insensitive' } },
+          {
+            customer: {
+              fullName: { contains: q, mode: 'insensitive' },
+            },
+          },
+          {
+            customer: {
+              phone: { contains: q },
+            },
+          },
+          {
+            customer: {
+              email: { contains: q, mode: 'insensitive' },
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.LoanWhereInput =
+      andConditions.length > 0 ? { AND: andConditions } : {};
+
+    // --------------------------------------------------
+    // QUERY DB
+    // --------------------------------------------------
     const [items, total] = await this.prisma.$transaction([
       this.prisma.loan.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: {
+          createdAt: 'desc',
+        },
         include: {
           loanType: true,
+          customer: true,
         },
       }),
       this.prisma.loan.count({ where }),
     ]);
 
+    // --------------------------------------------------
+    // RESPONSE
+    // --------------------------------------------------
     return {
       data: LoanMapper.toLoanSummaryResponseList(items),
       meta: {

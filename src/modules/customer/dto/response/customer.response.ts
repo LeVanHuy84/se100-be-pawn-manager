@@ -1,5 +1,7 @@
 import { ImageItem } from 'src/common/interfaces/media.interface';
 import { CustomerType } from '../../enum/customer-type.enum';
+import { ApiProperty } from '@nestjs/swagger';
+import { PaginationMeta } from 'src/common/dto/pagination.type';
 
 export class ActiveLoan {
   id: string;
@@ -32,4 +34,14 @@ export class CustomerResponse {
   activeLoans?: ActiveLoan[];
   loanHistory?: LoanHistory;
   images?: ImageItem[];
+}
+
+export class CustomerListResponse {
+  @ApiProperty({ description: 'List of customers', type: [CustomerResponse] })
+  data: CustomerResponse[];
+  @ApiProperty({
+    description: 'Pagination metadata',
+    type: PaginationMeta,
+  })
+  meta: PaginationMeta;
 }
