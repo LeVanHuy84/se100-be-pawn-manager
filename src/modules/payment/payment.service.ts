@@ -18,6 +18,7 @@ import {
   PaymentType,
   Prisma,
   RepaymentItemStatus,
+  RevenueType,
 } from 'generated/prisma';
 import { ReminderProcessor } from '../communication/reminder.processor';
 import { CommunicationService } from '../communication/communication.service';
@@ -233,11 +234,20 @@ export class PaymentService {
         // PAYOFF: Must pay ALL outstanding exactly (with small tolerance for rounding)
         allocatableItems = scheduleItems;
         const totalOutstandingAll = this.calcTotalOutstanding(scheduleItems);
-        const payoffDiff = Math.abs(Number(amount) - totalOutstandingAll);
-        if (payoffDiff > 1) {
-          throw new UnprocessableEntityException(
-            `PAYOFF requires exact outstanding amount = ${Math.round(totalOutstandingAll)}. Provided: ${Math.round(Number(amount))}, diff: ${payoffDiff}`,
-          );
+        const payoffDiff = Number(amount) - totalOutstandingAll;
+
+        if (Math.abs(payoffDiff) > 1) {
+          if (payoffDiff < 0) {
+            // Trả thiếu
+            throw new UnprocessableEntityException(
+              `PAYOFF yêu cầu thanh toán đủ số nợ còn lại = ${Math.round(totalOutstandingAll)} VND. Số tiền bạn trả: ${Math.round(Number(amount))} VND (thiếu ${Math.round(Math.abs(payoffDiff))} VND)`,
+            );
+          } else {
+            // Trả dư
+            throw new UnprocessableEntityException(
+              `PAYOFF yêu cầu thanh toán đúng số nợ còn lại = ${Math.round(totalOutstandingAll)} VND. Số tiền bạn trả: ${Math.round(Number(amount))} VND (dư ${Math.round(payoffDiff)} VND)`,
+            );
+          }
         }
         maxAllocatable = totalOutstandingAll;
       } else {
@@ -263,7 +273,7 @@ export class PaymentService {
           data: {
             loanId,
             amount,
-            paymentType, // ✅ dùng theo request
+            paymentType,
             paymentMethod: paymentMethod as unknown as PaymentMethod,
             referenceCode,
             idempotencyKey,
@@ -410,6 +420,14 @@ export class PaymentService {
           note: a.note,
         })),
       });
+
+      // 7.1) Record revenue in ledger
+      await this.recordRevenueFromAllocations(
+        tx,
+        payment.id,
+        loanId,
+        allocations,
+      );
 
       // 8) Recompute loan remaining + close if 0
       const allSchedule = await tx.repaymentScheduleDetail.findMany({
@@ -635,6 +653,64 @@ export class PaymentService {
         return `Principal for period ${a.periodNumber}`;
       default:
         return `Payment for period ${a.periodNumber}`;
+    }
+  }
+
+  /**
+   * Record revenue in ledger from payment allocations
+   * Only revenue-generating components are recorded: INTEREST, SERVICE_FEE, PENALTY, LATE_FEE
+   * PRINCIPAL is not revenue - it's loan repayment
+   */
+  private async recordRevenueFromAllocations(
+    tx: any,
+    paymentId: string,
+    loanId: string,
+    allocations: AllocationDraft[],
+  ): Promise<void> {
+    const revenueEntries: Array<{
+      type: RevenueType;
+      amount: number;
+      refId: string;
+    }> = [];
+
+    for (const allocation of allocations) {
+      let revenueType: RevenueType | null = null;
+
+      // Map payment component to revenue type
+      switch (allocation.componentType) {
+        case PaymentComponent.INTEREST:
+          revenueType = RevenueType.INTEREST;
+          break;
+        case PaymentComponent.SERVICE_FEE:
+          revenueType = RevenueType.SERVICE_FEE;
+          break;
+        case PaymentComponent.PENALTY:
+        case PaymentComponent.LATE_FEE:
+          revenueType = RevenueType.LATE_FEE;
+          break;
+        case PaymentComponent.PRINCIPAL:
+          // Principal is not revenue - skip
+          continue;
+      }
+
+      if (revenueType && allocation.amount > 0) {
+        revenueEntries.push({
+          type: revenueType,
+          amount: allocation.amount,
+          refId: paymentId, // Reference to payment for traceability
+        });
+      }
+    }
+
+    // Batch insert revenue entries
+    if (revenueEntries.length > 0) {
+      await tx.revenueLedger.createMany({
+        data: revenueEntries,
+      });
+
+      console.log(
+        `📊 Recorded ${revenueEntries.length} revenue entries for payment ${paymentId}, loan ${loanId}`,
+      );
     }
   }
 }

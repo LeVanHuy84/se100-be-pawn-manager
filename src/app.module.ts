@@ -17,6 +17,7 @@ import { PaymentModule } from './modules/payment/payment.module';
 import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-schedule.module';
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { CommunicationModule } from './modules/communication/communication.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -79,6 +80,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     RepaymentScheduleModule,
     AuditLogModule,
     CommunicationModule,
+    ReportsModule,
   ],
   controllers: [],
   providers: [

@@ -102,7 +102,7 @@ export class EmployeeService {
       return EmployeeMapper.toResponse(newEmployee);
     } catch (error: any) {
       throw new BadRequestException(
-        error.errors[0]?.longMessage || 'Failed to create employee',
+        error.errors?.[0]?.longMessage || error.message || 'Failed to create employee',
       );
     }
   }

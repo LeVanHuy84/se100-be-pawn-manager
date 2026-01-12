@@ -10,7 +10,7 @@ async function main() {
       dob: '1990-05-15',
       nationalId: '079090001234',
       phone: '0901234567',
-      email: 'nguyenvana@example.com',
+      email: 'pawner-test@yopmail.com',
       address: '123 Nguyen Hue, District 1, HCMC',
       customerType: 'REGULAR',
       monthlyIncome: 15000000,
