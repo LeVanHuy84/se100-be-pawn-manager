@@ -15,9 +15,23 @@ import { EmailQueueProcessor } from './processors/email-queue.processor';
     BullModule.registerQueue(
       {
         name: 'sms-queue',
+        defaultJobOptions: {
+          removeOnComplete: {
+            age: 3600, // Keep completed jobs for 1 hour
+            count: 100, // Keep last 100 completed
+          },
+          removeOnFail: false, // Keep failed jobs for analysis
+        },
       },
       {
         name: 'email-queue',
+        defaultJobOptions: {
+          removeOnComplete: {
+            age: 3600, // Keep completed jobs for 1 hour
+            count: 100, // Keep last 100 completed
+          },
+          removeOnFail: false, // Keep failed jobs for analysis
+        },
       },
     ),
   ],
