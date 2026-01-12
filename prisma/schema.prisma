@@ -300,18 +300,18 @@ model Store {
   updatedAt DateTime @updatedAt
 }
 
-model Storage {
-  id          String  @id @default(uuid()) @db.Uuid
-  name        String
-  address     String
-  storageInfo Json
-  isActive    Boolean @default(true)
+// model Storage {
+//   id          String  @id @default(uuid()) @db.Uuid
+//   name        String
+//   address     String
+//   storageInfo Json
+//   isActive    Boolean @default(true)
 
-  collaterals Collateral[]
+//   collaterals Collateral[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+// }
 
 model Collateral {
   id               String @id @default(uuid()) @db.Uuid
@@ -342,8 +342,6 @@ model Collateral {
   collateralType CollateralType @relation(fields: [collateralTypeId], references: [id])
   store          Store?         @relation(fields: [storeId], references: [id])
   storeId        String?        @db.Uuid
-  storage        Storage?       @relation(fields: [storageId], references: [id])
-  storageId      String?        @db.Uuid
 }
 
 // ==================================================
