@@ -120,7 +120,6 @@ async function main() {
       ownerName: 'Pham Van D',
       collateralTypeId: findType('Laptop')!,
       storeId: findStore('Hội Sở Chính'),
-      storageId: null, // Đã bán nên không còn trong kho
       status: 'SOLD' as CollateralStatus, // Giả định có trạng thái SOLD/LIQUIDATED
       loanId: null,
 
