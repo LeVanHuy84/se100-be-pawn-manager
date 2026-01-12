@@ -172,7 +172,7 @@ export class PaymentService {
   async createPayment(
     idempotencyKey: string,
     payload: PaymentRequestDto,
-    employeeId: string,
+    employee: any,
   ): Promise<PaymentResponse> {
     const { loanId, amount, paymentMethod, paymentType, referenceCode, notes } =
       payload;
@@ -191,7 +191,7 @@ export class PaymentService {
 
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId },
-      select: { id: true, status: true },
+      select: { id: true, loanCode: true, status: true },
     });
     if (!loan) throw new NotFoundException('Loan not found');
     if (loan.status === 'CLOSED')
@@ -267,7 +267,7 @@ export class PaymentService {
             paymentMethod: paymentMethod as unknown as PaymentMethod,
             referenceCode,
             idempotencyKey,
-            recorderEmployeeId: employeeId,
+            recorderEmployeeId: employee.id,
           },
         });
       } catch (e: any) {
@@ -418,6 +418,9 @@ export class PaymentService {
 
       const balance = this.recalcLoanBalance(allSchedule);
 
+      const wasClosedBefore = loan.status === 'CLOSED';
+      const isNowClosed = balance.totalRemaining <= 0;
+
       await tx.loan.update({
         where: { id: loanId },
         data: {
@@ -426,9 +429,51 @@ export class PaymentService {
         },
       });
 
+      if (isNowClosed && !wasClosedBefore) {
+        // audit log
+        await tx.auditLog.create({
+          data: {
+            action: 'CLOSE_LOAN',
+            entityId: loanId,
+            entityType: 'LOAN',
+            entityName: `${loan.loanCode}`,
+            actorId: null,
+            oldValue: {
+              status: loan.status,
+            },
+            newValue: {
+              status: 'CLOSED',
+            },
+            description: `Khoản vay ${loan.loanCode} đã được đóng khi thanh toán hết dư nợ.`,
+          },
+        });
+      }
+
       // 8.1) Validate balance consistency (auto-heal if needed)
       // Pass allSchedule to avoid redundant query
       await this.validateAndReconcileLoanBalance(tx, loanId, allSchedule);
+
+      // ✅ 8.2) CREATE AUDIT LOG HERE
+      await tx.auditLog.create({
+        data: {
+          action: 'CREATE_PAYMENT',
+          entityId: payment.id,
+          entityType: 'LOAN_PAYMENT',
+          entityName: `Thanh toán - ${loan.loanCode} ${payment.referenceCode ?? '(' + payment.referenceCode + ')'}`,
+          actorId: employee.id,
+          actorName: employee.name,
+          newValue: {
+            loanId: loanId,
+            loanCode: loan.loanCode,
+            amount: Number(amount),
+            paymentType: paymentType,
+            paymentMethod: paymentMethod,
+          },
+          description: `Thanh toán ${Math.round(
+            Number(amount),
+          )} VND cho khoản vay ${loan.loanCode}`,
+        },
+      });
 
       // 9) Next payment
       const next = await tx.repaymentScheduleDetail.findFirst({

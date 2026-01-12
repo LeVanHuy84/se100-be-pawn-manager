@@ -29,6 +29,7 @@ import { CommunicationService } from '../communication/communication.service';
 import { ReminderProcessor } from '../communication/reminder.processor';
 
 import { AuditActionEnum } from 'src/common/enums/audit-action.enum';
+import { LoanCodeGenerate } from './loan-code.generate';
 
 @Injectable()
 export class LoanOrchestrator {
@@ -37,6 +38,7 @@ export class LoanOrchestrator {
     private readonly loanSimulationsService: LoanSimulationsService,
     private readonly communicationService: CommunicationService,
     private readonly reminderProcessor: ReminderProcessor,
+    private readonly loanCodeGenerate: LoanCodeGenerate,
   ) {}
 
   async createLoan(
@@ -109,8 +111,10 @@ export class LoanOrchestrator {
 
       // =============== 3. Tạo loan + collateral trong transaction ===============
       const loan = await this.prisma.$transaction(async (tx) => {
+        const loanCode = await this.loanCodeGenerate.generateLoanCode(tx);
         const loan = await tx.loan.create({
           data: {
+            loanCode,
             customerId,
             loanAmount,
             repaymentMethod: repaymentMethod as RepaymentMethod,
@@ -164,6 +168,7 @@ export class LoanOrchestrator {
             action: AuditActionEnum.CREATE_LOAN,
             entityId: loan.id,
             entityType: AuditEntityType.LOAN,
+            entityName: loan.loanCode,
             actorId: employee.id,
             actorName: employee.name,
             newValue: {
@@ -369,11 +374,12 @@ export class LoanOrchestrator {
             action: AuditActionEnum.UPDATE_LOAN,
             entityId: loan.id,
             entityType: AuditEntityType.LOAN,
+            entityName: loan.loanCode,
             actorId: employee.id,
             actorName: employee.name,
             oldValue,
             newValue,
-            description: `Updated loan ${loan.id} (PENDING)`,
+            description: `Updated loan ${loan.loanCode} (PENDING)`,
           },
         });
       }
@@ -463,6 +469,7 @@ export class LoanOrchestrator {
           action: AuditActionEnum.APPROVE_LOAN,
           entityId: loan.id,
           entityType: AuditEntityType.LOAN,
+          entityName: loan.loanCode,
           actorId: employee.id,
           actorName: employee.name,
           oldValue: {
@@ -472,7 +479,7 @@ export class LoanOrchestrator {
             status: LoanStatus.ACTIVE,
             notes: dto.note,
           },
-          description: `Loan ${loan.id} approved`,
+          description: `Loan ${loan.loanCode} approved`,
         },
       });
 
@@ -541,6 +548,7 @@ export class LoanOrchestrator {
           action: AuditActionEnum.REJECT_LOAN,
           entityId: loan.id,
           entityType: AuditEntityType.LOAN,
+          entityName: loan.loanCode,
           actorId: employee.id,
           actorName: employee.name,
           oldValue: {
@@ -550,7 +558,7 @@ export class LoanOrchestrator {
             status: LoanStatus.REJECTED,
             notes: dto.note,
           },
-          description: `Loan ${loan.id} rejected`,
+          description: `Loan ${loan.loanCode} rejected`,
         },
       });
 

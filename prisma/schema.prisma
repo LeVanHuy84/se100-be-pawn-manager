@@ -160,8 +160,14 @@ model Customer {
 // ==================================================
 // LOAN
 // ==================================================
+model LoanSequence {
+  year  Int   @id
+  value Int
+}
+
 model Loan {
   id         String @id @default(uuid()) @db.Uuid
+  loanCode   String @unique
   customerId String @db.Uuid
 
   // ---- LOAN TERMS (SNAPSHOT) ----
@@ -380,6 +386,7 @@ model AuditLog {
   action      String // e.g., "SYSTEM_PENALTY", "UPDATE_LOAN", "LIQUIDATION"
   entityId    String // ID của đối tượng bị tác động (LoanID, RepaymentID)
   entityType  AuditEntityType // "LOAN", "REPAYMENT_SCHEDULE"
+  entityName  String? // Tên đối tượng bị tác động (ví dụ: Loan Code hoặc mô tả ngắn)
   actorId     String? // NULL nếu là SYSTEM (Cronjob), UserID nếu là nhân viên
   actorName   String? // Tên nhân viên hoặc "SYSTEM"
   oldValue    Json? // Dữ liệu trước khi thay đổi
