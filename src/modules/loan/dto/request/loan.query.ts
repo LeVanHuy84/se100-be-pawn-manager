@@ -5,7 +5,12 @@ import { z } from 'zod';
 // Option A: nếu bạn có LoanStatus (Prisma / TS enum)
 // -----------------------------
 export const ListLoansQuerySchema = z.object({
-  loanCode: z.string().optional(),
+  q: z
+    .string()
+    .optional()
+    .describe(
+      'Search term for loan code, customer name, email, or customer phone number',
+    ),
   storeId: z.string().optional(),
   status: z
     .enum(['PENDING', 'ACTIVE', 'REJECTED', 'CLOSED', 'OVERDUE'])
