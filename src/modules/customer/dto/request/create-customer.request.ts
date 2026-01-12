@@ -4,6 +4,7 @@ import { CustomerType } from '../../enum/customer-type.enum';
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 export const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const cccdRegex = /^\d{12}$/; // CCCD Vietnam: exactly 12 digits
 
 function isAdult(dateString: string) {
   if (!isoDateRegex.test(dateString)) return false;
@@ -16,6 +17,12 @@ function isAdult(dateString: string) {
   return age >= 18;
 }
 
+function isValidDate(dateString: string): boolean {
+  if (!isoDateRegex.test(dateString)) return false;
+  const d = new Date(dateString + 'T00:00:00');
+  return !Number.isNaN(d.getTime());
+}
+
 export const CreateCustomerSchema = z.object({
   fullName: z.string().min(1).max(200),
   dob: z
@@ -26,7 +33,22 @@ export const CreateCustomerSchema = z.object({
     .refine((val) => isAdult(val), {
       message: 'Customer must be at least 18 years old',
     }),
-  nationalId: z.string().min(6).max(30),
+  nationalId: z
+    .string()
+    .refine((val) => cccdRegex.test(val), {
+      message: 'National ID must be exactly 12 digits (CCCD format)',
+    }),
+  nationalIdIssueDate: z
+    .string()
+    .refine((val) => isoDateRegex.test(val), {
+      message: 'National ID issue date must be in YYYY-MM-DD format',
+    })
+    .refine((val) => isValidDate(val), {
+      message: 'Invalid national ID issue date',
+    }),
+  nationalIdIssuePlace: z.string().min(1).max(200, {
+    message: 'National ID issue place is required',
+  }),
   phone: z.string().min(10).max(15),
   email: z
     .string()
