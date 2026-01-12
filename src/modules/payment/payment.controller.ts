@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -18,7 +19,6 @@ import {
   ApiTags,
   getSchemaPath,
 } from '@nestjs/swagger';
-import { CurrentUserId } from 'src/common/decorators/current-user-id.decorator';
 import { BaseResult } from 'src/common/dto/base.response';
 import { PaginationMeta } from 'src/common/dto/pagination.type';
 import { ListPaymentsQuery } from './dto/request/payment.query';
@@ -142,8 +142,12 @@ export class PaymentController {
   async createPayment(
     @Headers('Idempotency-Key') idempotencyKey: string,
     @Body() body: PaymentRequestDto,
-    @CurrentUserId() employeeId: string,
+    @Req() req,
   ): Promise<PaymentResponse> {
-    return this.paymentService.createPayment(idempotencyKey, body, employeeId);
+    const employee = {
+      id: req.user?.userId,
+      name: req.user?.firstName + ' ' + req.user?.lastName,
+    };
+    return this.paymentService.createPayment(idempotencyKey, body, employee);
   }
 }

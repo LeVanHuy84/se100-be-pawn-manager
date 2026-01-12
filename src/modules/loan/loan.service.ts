@@ -16,10 +16,11 @@ export class LoanService {
   async listLoans(
     dto: ListLoansQuery,
   ): Promise<BaseResult<LoanSummaryResponseDto[]>> {
-    const { storeId, status, customerId, page = 1, limit = 20 } = dto;
+    const { loanCode, storeId, status, customerId, page = 1, limit = 20 } = dto;
 
     const where: Prisma.LoanWhereInput = {};
 
+    if (loanCode) where.loanCode = loanCode;
     if (storeId) where.storeId = storeId;
     if (status) where.status = status as LoanStatus;
     if (customerId) where.customerId = customerId;

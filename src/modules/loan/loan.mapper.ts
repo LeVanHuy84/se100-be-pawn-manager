@@ -9,6 +9,7 @@ export class LoanMapper {
   static toLoanResponse(loan: any): LoanResponseDto {
     return {
       id: loan.id,
+      loanCode: loan.loanCode,
       customerId: loan.customerId,
 
       storeId: loan.storeId,
@@ -46,6 +47,7 @@ export class LoanMapper {
   static toLoanSummaryResponse(loan: any): LoanSummaryResponseDto {
     return {
       id: loan.id,
+      loanCode: loan.loanCode,
       customerId: loan.customerId,
       storeName: loan.store?.name,
       loanTypeName: loan.loanType.name,
