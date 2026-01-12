@@ -75,6 +75,20 @@ export class LoanOrchestrator {
       if (collaterals.length !== collateralIds.length) {
         throw new NotFoundException('One or more collaterals not found');
       }
+      // ================= VALIDATE COLLATERALS =================
+      for (const c of collaterals) {
+        if (c.loanId) {
+          throw new BadRequestException(
+            `Collateral ${c.id} is already attached to another loan`,
+          );
+        }
+
+        if (c.status !== CollateralStatus.PROPOSED) {
+          throw new BadRequestException(
+            `Collateral ${c.id} is not in PROPOSED status`,
+          );
+        }
+      }
 
       const totalCustodyFeeRate = collaterals.reduce((sum, c) => {
         return sum + c.collateralType.custodyFeeRateMonthly.toNumber();
@@ -232,6 +246,7 @@ export class LoanOrchestrator {
     }
 
     // ================= SNAPSHOT BEFORE =================
+    const existingIds = loan.collaterals.map((c) => c.id);
     const beforeUpdate = {
       loanAmount: loan.loanAmount.toString(),
       repaymentMethod: loan.repaymentMethod,
@@ -255,6 +270,20 @@ export class LoanOrchestrator {
       where: { id: { in: finalCollateralIds } },
       include: { collateralType: true },
     });
+
+    for (const c of collaterals) {
+      if (c.loanId && c.loanId !== loanId) {
+        throw new BadRequestException(
+          `Collateral ${c.id} belongs to another loan`,
+        );
+      }
+
+      if (c.status !== CollateralStatus.PROPOSED) {
+        throw new BadRequestException(
+          `Collateral ${c.id} is not in PROPOSED status`,
+        );
+      }
+    }
 
     const totalCustodyFeeRate = collaterals.reduce(
       (sum, c) => sum + c.collateralType.custodyFeeRateMonthly.toNumber(),
@@ -296,8 +325,6 @@ export class LoanOrchestrator {
 
       // ================= COLLATERAL DIFF =================
       if (dto.collateralIds) {
-        const existingIds = loan.collaterals.map((c) => c.id);
-
         const toAdd = finalCollateralIds.filter(
           (id) => !existingIds.includes(id),
         );
@@ -395,6 +422,7 @@ export class LoanOrchestrator {
             store: true,
           },
         },
+        customer: true,
       },
     });
 
