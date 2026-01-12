@@ -9,14 +9,11 @@ async function main() {
 
   const types = await prisma.collateralType.findMany();
   const stores = await prisma.store.findMany();
-  const storages = await prisma.storage.findMany();
 
   const findType = (name: string) =>
     types.find((t) => t.name.includes(name))?.id;
   const findStore = (name: string) =>
     stores.find((s) => s.name.includes(name))?.id;
-  const findStorage = (name: string) =>
-    storages.find((s) => s.name.includes(name))?.id;
 
   if (types.length === 0 || stores.length === 0) {
     console.error(
@@ -31,7 +28,6 @@ async function main() {
       ownerName: 'Nguyen Van A',
       collateralTypeId: findType('Ô tô')!, // Tìm ID của loại 'Ô tô'
       storeId: findStore('Hội Sở Chính'), // Nhận tại Hội Sở
-      storageId: findStorage('Kho Bãi Ô tô'), // Lưu tại kho ô tô
       status: 'STORED' as CollateralStatus, // Enum: Đang lưu kho
       loanId: null, // Yêu cầu để trống
 
@@ -67,7 +63,6 @@ async function main() {
       ownerName: 'Tran Thi B',
       collateralTypeId: findType('Điện thoại')!,
       storeId: findStore('Nguyễn Trãi'),
-      storageId: findStorage('Két Sắt'), // Lưu tại két sắt
       status: 'PROPOSED' as CollateralStatus, // Enum: Đang đề xuất
       loanId: null,
 
@@ -99,7 +94,6 @@ async function main() {
       ownerName: 'Le Thi C',
       collateralTypeId: findType('Xe máy')!,
       storeId: findStore('Nguyễn Trãi'),
-      storageId: findStorage('Kho Xe Máy'),
       status: 'STORED' as CollateralStatus,
       loanId: null,
 
