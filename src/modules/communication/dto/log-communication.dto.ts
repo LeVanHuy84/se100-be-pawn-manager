@@ -9,22 +9,9 @@ import {
 
 export const logCommunicationSchema = z.object({
   loanId: z.uuid('loanId must be a valid UUID'),
-  type: z.enum([
-    'INTEREST_REMINDER',
-    'OVERDUE_REMINDER',
-    'LIQUIDATION_WARNING',
-    'PAYMENT_CONFIRMATION',
-  ] as const),
+  type: z.enum(NotificationType),
   channel: z.enum(['SMS', 'EMAIL', 'PHONE_CALL', 'IN_PERSON'] as const),
-  status: z.enum([
-    'PENDING',
-    'SENT',
-    'DELIVERED',
-    'FAILED',
-    'ANSWERED',
-    'NO_ANSWER',
-    'PROMISE_TO_PAY',
-  ] as const),
+  status: z.enum(NotificationStatus),
   subject: z.string().max(200).optional(),
   notes: z.string().max(1000).optional(),
   callDuration: z.number().int().positive().optional(),

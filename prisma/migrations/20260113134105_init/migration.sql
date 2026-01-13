@@ -29,13 +29,13 @@ CREATE TYPE "EmployeeStatus" AS ENUM ('ACTIVE', 'INACTIVE');
 CREATE TYPE "DisbursementMethod" AS ENUM ('CASH', 'BANK_TRANSFER');
 
 -- CreateEnum
-CREATE TYPE "AuditEntityType" AS ENUM ('LOAN', 'LOAN_PAYMENT', 'REPAYMENT_SCHEDULE', 'COLLATERAL', 'CUSTOMER');
+CREATE TYPE "AuditEntityType" AS ENUM ('LOAN', 'LOAN_PAYMENT', 'REPAYMENT_SCHEDULE', 'COLLATERAL', 'CUSTOMER', 'DISBURSEMENT');
 
 -- CreateEnum
 CREATE TYPE "RevenueType" AS ENUM ('INTEREST', 'LATE_FEE', 'SERVICE_FEE', 'LIQUIDATION_EXCESS');
 
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('INTEREST_REMINDER', 'OVERDUE_REMINDER', 'LIQUIDATION_WARNING', 'PAYMENT_CONFIRMATION');
+CREATE TYPE "NotificationType" AS ENUM ('LOAN_APPROVED', 'INTEREST_REMINDER', 'OVERDUE_REMINDER', 'LIQUIDATION_WARNING', 'PAYMENT_CONFIRMATION');
 
 -- CreateEnum
 CREATE TYPE "NotificationChannel" AS ENUM ('SMS', 'EMAIL', 'PHONE_CALL', 'IN_PERSON');
@@ -84,6 +84,22 @@ CREATE TABLE "LoanSequence" (
 );
 
 -- CreateTable
+CREATE TABLE "PaymentSequence" (
+    "year" INTEGER NOT NULL,
+    "value" INTEGER NOT NULL,
+
+    CONSTRAINT "PaymentSequence_pkey" PRIMARY KEY ("year")
+);
+
+-- CreateTable
+CREATE TABLE "DisbursementSequence" (
+    "year" INTEGER NOT NULL,
+    "value" INTEGER NOT NULL,
+
+    CONSTRAINT "DisbursementSequence_pkey" PRIMARY KEY ("year")
+);
+
+-- CreateTable
 CREATE TABLE "Loan" (
     "id" UUID NOT NULL,
     "loanCode" TEXT NOT NULL,
@@ -106,6 +122,10 @@ CREATE TABLE "Loan" (
     "rejectedBy" TEXT,
     "activatedAt" TIMESTAMP(3),
     "remainingAmount" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "disbursedAt" TIMESTAMP(3),
+    "disbursedBy" TEXT,
+    "disbursementMethod" "DisbursementMethod",
+    "disbursementNote" TEXT,
     "notes" TEXT,
     "storeId" UUID NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -143,6 +163,7 @@ CREATE TABLE "LoanPayment" (
     "id" UUID NOT NULL,
     "idempotencyKey" TEXT,
     "loanId" UUID NOT NULL,
+    "storeId" UUID NOT NULL,
     "amount" DECIMAL(65,30) NOT NULL,
     "paymentType" "PaymentType" NOT NULL,
     "paymentMethod" "PaymentMethod" NOT NULL,
@@ -164,6 +185,30 @@ CREATE TABLE "PaymentAllocation" (
     "note" TEXT,
 
     CONSTRAINT "PaymentAllocation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Disbursement" (
+    "id" UUID NOT NULL,
+    "idempotencyKey" TEXT,
+    "loanId" UUID NOT NULL,
+    "storeId" UUID NOT NULL,
+    "amount" DECIMAL(65,30) NOT NULL,
+    "disbursementMethod" "DisbursementMethod" NOT NULL,
+    "disbursedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "referenceCode" TEXT,
+    "disbursedBy" TEXT,
+    "recipientName" TEXT NOT NULL,
+    "recipientIdNumber" TEXT,
+    "witnessName" TEXT,
+    "notes" TEXT,
+    "bankTransferRef" TEXT,
+    "bankAccountNumber" TEXT,
+    "bankName" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Disbursement_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -250,6 +295,7 @@ CREATE TABLE "RevenueLedger" (
     "type" "RevenueType" NOT NULL,
     "amount" DECIMAL(65,30) NOT NULL,
     "refId" TEXT NOT NULL,
+    "storeId" UUID NOT NULL,
     "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "RevenueLedger_pkey" PRIMARY KEY ("id")
@@ -296,7 +342,46 @@ CREATE UNIQUE INDEX "Loan_loanCode_key" ON "Loan"("loanCode");
 CREATE UNIQUE INDEX "LoanPayment_idempotencyKey_key" ON "LoanPayment"("idempotencyKey");
 
 -- CreateIndex
+CREATE INDEX "LoanPayment_storeId_idx" ON "LoanPayment"("storeId");
+
+-- CreateIndex
+CREATE INDEX "LoanPayment_loanId_idx" ON "LoanPayment"("loanId");
+
+-- CreateIndex
+CREATE INDEX "LoanPayment_paidAt_idx" ON "LoanPayment"("paidAt");
+
+-- CreateIndex
+CREATE INDEX "PaymentAllocation_paymentId_idx" ON "PaymentAllocation"("paymentId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Disbursement_idempotencyKey_key" ON "Disbursement"("idempotencyKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Disbursement_referenceCode_key" ON "Disbursement"("referenceCode");
+
+-- CreateIndex
+CREATE INDEX "Disbursement_loanId_idx" ON "Disbursement"("loanId");
+
+-- CreateIndex
+CREATE INDEX "Disbursement_storeId_idx" ON "Disbursement"("storeId");
+
+-- CreateIndex
+CREATE INDEX "Disbursement_disbursedAt_idx" ON "Disbursement"("disbursedAt");
+
+-- CreateIndex
+CREATE INDEX "Disbursement_disbursementMethod_idx" ON "Disbursement"("disbursementMethod");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "SystemParameter_paramGroup_paramKey_key" ON "SystemParameter"("paramGroup", "paramKey");
+
+-- CreateIndex
+CREATE INDEX "RevenueLedger_storeId_idx" ON "RevenueLedger"("storeId");
+
+-- CreateIndex
+CREATE INDEX "RevenueLedger_type_idx" ON "RevenueLedger"("type");
+
+-- CreateIndex
+CREATE INDEX "RevenueLedger_recordedAt_idx" ON "RevenueLedger"("recordedAt");
 
 -- CreateIndex
 CREATE INDEX "NotificationLog_loanId_type_idx" ON "NotificationLog"("loanId", "type");
@@ -323,7 +408,16 @@ ALTER TABLE "RepaymentScheduleDetail" ADD CONSTRAINT "RepaymentScheduleDetail_lo
 ALTER TABLE "LoanPayment" ADD CONSTRAINT "LoanPayment_loanId_fkey" FOREIGN KEY ("loanId") REFERENCES "Loan"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "LoanPayment" ADD CONSTRAINT "LoanPayment_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "PaymentAllocation" ADD CONSTRAINT "PaymentAllocation_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES "LoanPayment"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Disbursement" ADD CONSTRAINT "Disbursement_loanId_fkey" FOREIGN KEY ("loanId") REFERENCES "Loan"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Disbursement" ADD CONSTRAINT "Disbursement_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Collateral" ADD CONSTRAINT "Collateral_loanId_fkey" FOREIGN KEY ("loanId") REFERENCES "Loan"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -333,6 +427,9 @@ ALTER TABLE "Collateral" ADD CONSTRAINT "Collateral_collateralTypeId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "Collateral" ADD CONSTRAINT "Collateral_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RevenueLedger" ADD CONSTRAINT "RevenueLedger_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "NotificationLog" ADD CONSTRAINT "NotificationLog_loanId_fkey" FOREIGN KEY ("loanId") REFERENCES "Loan"("id") ON DELETE CASCADE ON UPDATE CASCADE;

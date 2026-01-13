@@ -18,6 +18,8 @@ import { RepaymentScheduleModule } from './modules/repayment-schedule/repayment-
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { CommunicationModule } from './modules/communication/communication.module';
 import { StoreModule } from './modules/store/store.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { DisbursementModule } from './modules/disbursement/disbursement.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -81,6 +83,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     AuditLogModule,
     CommunicationModule,
     StoreModule,
+    ReportsModule,
+    DisbursementModule,
   ],
   controllers: [],
   providers: [
