@@ -30,22 +30,48 @@ export class SmsQueueProcessor extends WorkerHost {
       // Send SMS
       let result: { success: boolean; messageId?: string; error?: string };
 
-      if (data.type === 'INTEREST_REMINDER') {
-        result = await this.smsService.sendPaymentReminder({
-          to: data.customerPhone!,
-          customerName: data.customerName,
-          dueDate: data.dueDate!,
-          amount: data.amount!,
-          periodNumber: data.periodNumber!,
-        });
-      } else {
-        result = await this.smsService.sendOverdueNotification({
-          to: data.customerPhone!,
-          customerName: data.customerName,
-          daysOverdue: data.daysOverdue!,
-          amount: data.amount!,
-          penalty: data.penalty!,
-        });
+      switch (data.type) {
+        case 'LOAN_APPROVED':
+          result = await this.smsService.sendLoanApprovalSms({
+            to: data.customerPhone!,
+            customerName: data.customerName,
+            loanAmount: data.loanAmount!,
+            firstPaymentDate: data.dueDate!,
+            firstPaymentAmount: data.amount!,
+          });
+          break;
+
+        case 'INTEREST_REMINDER':
+          result = await this.smsService.sendPaymentReminder({
+            to: data.customerPhone!,
+            customerName: data.customerName,
+            dueDate: data.dueDate!,
+            amount: data.amount!,
+            periodNumber: data.periodNumber!,
+          });
+          break;
+
+        case 'OVERDUE_REMINDER':
+          result = await this.smsService.sendOverdueNotification({
+            to: data.customerPhone!,
+            customerName: data.customerName,
+            daysOverdue: data.daysOverdue!,
+            amount: data.amount!,
+            penalty: data.penalty!,
+          });
+          break;
+
+        case 'PAYMENT_CONFIRMATION':
+          result = await this.smsService.sendPaymentConfirmationSms({
+            to: data.customerPhone!,
+            customerName: data.customerName,
+            paymentId: data.paymentId!,
+            amount: data.amount!,
+          });
+          break;
+
+        default:
+          throw new Error(`Unsupported notification type: ${data.type}`);
       }
 
       // Update notification log

@@ -18,6 +18,7 @@ import {
   PaymentType,
   Prisma,
   RepaymentItemStatus,
+  RevenueType,
 } from 'generated/prisma';
 import { ReminderProcessor } from '../communication/reminder.processor';
 import { CommunicationService } from '../communication/communication.service';
@@ -37,6 +38,18 @@ export class PaymentService {
     private readonly communicationService: CommunicationService,
   ) {}
 
+  private async generatePaymentReferenceCode(
+    tx: Prisma.TransactionClient,
+  ): Promise<string> {
+    const year = new Date().getFullYear();
+    const sequence = await tx.paymentSequence.upsert({
+      where: { year },
+      create: { year, value: 1 },
+      update: { value: { increment: 1 } },
+    });
+    return `PAY-${year}-${sequence.value.toString().padStart(6, '0')}`;
+  }
+
   async listPayments(
     query: ListPaymentsQuery,
   ): Promise<BaseResult<PaymentListItem[]>> {
@@ -46,6 +59,7 @@ export class PaymentService {
 
     const {
       loanId,
+      storeId,
       paymentMethod,
       paymentType,
       dateFrom,
@@ -60,6 +74,7 @@ export class PaymentService {
     const where: Prisma.LoanPaymentWhereInput = {};
 
     if (loanId) where.loanId = loanId;
+    if (storeId) where.storeId = storeId;
     if (paymentMethod) where.paymentMethod = paymentMethod as PaymentMethod;
     if (paymentType) where.paymentType = paymentType as PaymentType;
 
@@ -174,8 +189,7 @@ export class PaymentService {
     payload: PaymentRequestDto,
     employee: any,
   ): Promise<PaymentResponse> {
-    const { loanId, amount, paymentMethod, paymentType, referenceCode, notes } =
-      payload;
+    const { loanId, amount, paymentMethod, paymentType, notes } = payload;
 
     if (!idempotencyKey)
       throw new ConflictException('Idempotency-Key is required');
@@ -191,7 +205,7 @@ export class PaymentService {
 
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId },
-      select: { id: true, loanCode: true, status: true },
+      select: { id: true, loanCode: true, status: true, storeId: true },
     });
     if (!loan) throw new NotFoundException('Loan not found');
     if (loan.status === 'CLOSED')
@@ -233,11 +247,20 @@ export class PaymentService {
         // PAYOFF: Must pay ALL outstanding exactly (with small tolerance for rounding)
         allocatableItems = scheduleItems;
         const totalOutstandingAll = this.calcTotalOutstanding(scheduleItems);
-        const payoffDiff = Math.abs(Number(amount) - totalOutstandingAll);
-        if (payoffDiff > 1) {
-          throw new UnprocessableEntityException(
-            `PAYOFF requires exact outstanding amount = ${Math.round(totalOutstandingAll)}. Provided: ${Math.round(Number(amount))}, diff: ${payoffDiff}`,
-          );
+        const payoffDiff = Number(amount) - totalOutstandingAll;
+
+        if (Math.abs(payoffDiff) > 1) {
+          if (payoffDiff < 0) {
+            // Trả thiếu
+            throw new UnprocessableEntityException(
+              `PAYOFF yêu cầu thanh toán đủ số nợ còn lại = ${Math.round(totalOutstandingAll)} VND. Số tiền bạn trả: ${Math.round(Number(amount))} VND (thiếu ${Math.round(Math.abs(payoffDiff))} VND)`,
+            );
+          } else {
+            // Trả dư
+            throw new UnprocessableEntityException(
+              `PAYOFF yêu cầu thanh toán đúng số nợ còn lại = ${Math.round(totalOutstandingAll)} VND. Số tiền bạn trả: ${Math.round(Number(amount))} VND (dư ${Math.round(payoffDiff)} VND)`,
+            );
+          }
         }
         maxAllocatable = totalOutstandingAll;
       } else {
@@ -256,14 +279,17 @@ export class PaymentService {
         );
       }
 
-      // 4) Create payment header
+      // 4) Generate reference code and create payment header
+      const referenceCode = await this.generatePaymentReferenceCode(tx);
+
       let payment;
       try {
         payment = await tx.loanPayment.create({
           data: {
             loanId,
+            storeId: loan.storeId,
             amount,
-            paymentType, // ✅ dùng theo request
+            paymentType,
             paymentMethod: paymentMethod as unknown as PaymentMethod,
             referenceCode,
             idempotencyKey,
@@ -307,10 +333,10 @@ export class PaymentService {
 
         let payInterest = 0,
           payFee = 0,
-          payPenalty = 0,
+          payLateFee = 0,
           payPrincipal = 0;
 
-        // Waterfall: INTEREST -> FEE -> PENALTY -> PRINCIPAL
+        // Waterfall: INTEREST -> FEE -> LATE_FEE -> PRINCIPAL
         if (interestOut > 0 && remainingAmount > 0) {
           payInterest = Math.round(Math.min(remainingAmount, interestOut));
           remainingAmount -= payInterest;
@@ -334,12 +360,12 @@ export class PaymentService {
         }
 
         if (penaltyOut > 0 && remainingAmount > 0) {
-          payPenalty = Math.round(Math.min(remainingAmount, penaltyOut));
-          remainingAmount -= payPenalty;
+          payLateFee = Math.round(Math.min(remainingAmount, penaltyOut));
+          remainingAmount -= payLateFee;
           allocations.push({
-            componentType: PaymentComponent.PENALTY,
+            componentType: PaymentComponent.LATE_FEE,
             periodNumber: period.periodNumber,
-            amount: payPenalty,
+            amount: payLateFee,
             note: notes,
           });
         }
@@ -356,7 +382,7 @@ export class PaymentService {
         }
 
         // update item once
-        if (payInterest + payFee + payPenalty + payPrincipal > 0) {
+        if (payInterest + payFee + payLateFee + payPrincipal > 0) {
           const newPaidInterest =
             Number(period.paidInterest ?? 0) + payInterest;
           const newPaidFee = Number(period.paidFee ?? 0) + payFee;
@@ -370,14 +396,14 @@ export class PaymentService {
           };
 
           if ((period as any).paidPenalty !== undefined) {
-            updateData.paidPenalty = paidPenalty + payPenalty;
+            updateData.paidPenalty = paidPenalty + payLateFee;
           }
 
           const fullyPaid =
             Number(period.interestAmount) - newPaidInterest <= 0 &&
             Number(period.feeAmount) - newPaidFee <= 0 &&
             ((period as any).penaltyAmount !== undefined
-              ? penaltyAmount - (paidPenalty + payPenalty) <= 0
+              ? penaltyAmount - (paidPenalty + payLateFee) <= 0
               : true) &&
             Number(period.principalAmount) - newPaidPrincipal <= 0;
 
@@ -410,6 +436,15 @@ export class PaymentService {
           note: a.note,
         })),
       });
+
+      // 7.1) Record revenue in ledger
+      await this.recordRevenueFromAllocations(
+        tx,
+        payment.id,
+        loanId,
+        loan.storeId,
+        allocations,
+      );
 
       // 8) Recompute loan remaining + close if 0
       const allSchedule = await tx.repaymentScheduleDetail.findMany({
@@ -674,12 +709,72 @@ export class PaymentService {
         return `Interest for period ${a.periodNumber}`;
       case PaymentComponent.SERVICE_FEE:
         return `Service fee for period ${a.periodNumber}`;
-      case PaymentComponent.PENALTY:
-        return `Penalty for period ${a.periodNumber}`;
+      case PaymentComponent.LATE_FEE:
+        return `Late fee for period ${a.periodNumber}`;
       case PaymentComponent.PRINCIPAL:
         return `Principal for period ${a.periodNumber}`;
       default:
         return `Payment for period ${a.periodNumber}`;
+    }
+  }
+
+  /**
+   * Record revenue in ledger from payment allocations
+   * Only revenue-generating components are recorded: INTEREST, SERVICE_FEE, LATE_FEE
+   * PRINCIPAL is not revenue - it's loan repayment
+   */
+  private async recordRevenueFromAllocations(
+    tx: any,
+    paymentId: string,
+    loanId: string,
+    storeId: string,
+    allocations: AllocationDraft[],
+  ): Promise<void> {
+    const revenueEntries: Array<{
+      type: RevenueType;
+      amount: number;
+      refId: string;
+      storeId: string;
+    }> = [];
+
+    for (const allocation of allocations) {
+      let revenueType: RevenueType | null = null;
+
+      // Map payment component to revenue type
+      switch (allocation.componentType) {
+        case PaymentComponent.INTEREST:
+          revenueType = RevenueType.INTEREST;
+          break;
+        case PaymentComponent.SERVICE_FEE:
+          revenueType = RevenueType.SERVICE_FEE;
+          break;
+        case PaymentComponent.LATE_FEE:
+          revenueType = RevenueType.LATE_FEE;
+          break;
+        case PaymentComponent.PRINCIPAL:
+          // Principal is not revenue - skip
+          continue;
+      }
+
+      if (revenueType && allocation.amount > 0) {
+        revenueEntries.push({
+          type: revenueType,
+          amount: allocation.amount,
+          refId: paymentId,
+          storeId: storeId,
+        });
+      }
+    }
+
+    // Batch insert revenue entries
+    if (revenueEntries.length > 0) {
+      await tx.revenueLedger.createMany({
+        data: revenueEntries,
+      });
+
+      console.log(
+        `📊 Recorded ${revenueEntries.length} revenue entries for payment ${paymentId}, loan ${loanId}, store ${storeId}`,
+      );
     }
   }
 }

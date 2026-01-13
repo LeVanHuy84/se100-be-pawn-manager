@@ -1,6 +1,6 @@
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaClient } from '../../../generated/prisma';
 
-const prisma = new PrismaService();
+const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Seeding SystemParameter...');

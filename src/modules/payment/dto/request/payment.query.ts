@@ -11,6 +11,12 @@ export class ListPaymentsQuery extends BaseFilterQuery {
   loanId?: string;
 
   @ApiPropertyOptional({
+    description: 'Filter by store ID',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+  })
+  storeId?: string;
+
+  @ApiPropertyOptional({
     enum: PaymentMethod,
     description: 'Filter by payment method',
     example: 'CASH',

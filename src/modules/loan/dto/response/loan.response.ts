@@ -121,6 +121,12 @@ export class LoanResponseDto {
   })
   notes?: string | null;
 
+  @ApiProperty({
+    description: 'Employee ID who processed the loan',
+    example: 'emp_456',
+  })
+  createdBy: string;
+
   @ApiProperty({ description: 'Creation timestamp', example: '2024-01-10' })
   createdAt: string;
 

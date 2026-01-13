@@ -36,6 +36,8 @@ export class LoanMapper {
       activatedAt: loan.activatedAt?.toISOString() || null,
       notes: loan.notes,
 
+      createdBy: loan.createdBy,
+
       createdAt: loan.createdAt?.toISOString() || null,
       updatedAt: loan.updatedAt?.toISOString() || null,
 
