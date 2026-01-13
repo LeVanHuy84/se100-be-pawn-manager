@@ -21,6 +21,7 @@ export class CustomerBasicResponse {
 
 export class LoanSummaryResponseDto {
   id: string;
+  loanCode: string;
   customerId: string;
   storeName?: string;
 
@@ -45,6 +46,9 @@ export class LoanSummaryResponseDto {
 export class LoanResponseDto {
   @ApiProperty({ description: 'Loan ID', example: 'clx1234567890' })
   id: string;
+
+  @ApiProperty({ description: 'Loan code', example: 'LN-2026-000001' })
+  loanCode: string;
 
   @ApiProperty({ description: 'Customer ID', example: 'cus_123' })
   customerId: string;
@@ -116,6 +120,12 @@ export class LoanResponseDto {
     nullable: true,
   })
   notes?: string | null;
+
+  @ApiProperty({
+    description: 'Employee ID who processed the loan',
+    example: 'emp_456',
+  })
+  createdBy: string;
 
   @ApiProperty({ description: 'Creation timestamp', example: '2024-01-10' })
   createdAt: string;

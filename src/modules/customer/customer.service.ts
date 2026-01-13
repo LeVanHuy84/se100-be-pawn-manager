@@ -85,9 +85,22 @@ export class CustomerService {
 
   async create(
     data: CreateCustomerDTO,
-    files?: MulterFile[],
+    files?: { mattruoc?: MulterFile[]; matsau?: MulterFile[] },
   ): Promise<CustomerResponse> {
+    // Validate required images
+      if (!files || !files.mattruoc || files.mattruoc.length === 0) {
+        throw new BadRequestException(
+          'Front ID image (mattruoc) is required. Use form-data key "mattruoc"',
+        );
+      }
+
+      if (!files.matsau || files.matsau.length === 0) {
+        throw new BadRequestException(
+          'Back ID image (matsau) is required. Use form-data key "matsau"',
+        );
+      }
     try {
+
       // Check for duplicate nationalId or phone
       const existing = await this.prisma.customer.findFirst({
         where: {
@@ -111,25 +124,36 @@ export class CustomerService {
         }
       }
 
-      const imagesToSave: { url: string; publicId: string }[] = [];
+      // Prepare images JSON structure
+      const imagesData: any = {
+        images: [],
+        issuedDate: data.nationalIdIssueDate,
+        issuedPlace: data.nationalIdIssuePlace,
+      };
 
-      if (files && files.length > 0) {
-        const folder = `pawnshop/${data.customerType.toString().toLowerCase()}/${data.nationalId}`;
+      const folder = `pawnshop/${data.customerType.toString().toLowerCase()}/${data.nationalId}`;
 
-        const limit = pLimit(3);
+      // Upload front ID (mattruoc)
+      const frontResult = await this.cloudinaryService.uploadFile(
+        files.mattruoc[0],
+        folder,
+      );
+      imagesData.images.push({
+        type: 'FRONT_ID',
+        url: frontResult.secure_url,
+        publicId: frontResult.public_id,
+      });
 
-        const uploadResults = await Promise.all(
-          files.map((file) =>
-            limit(() => this.cloudinaryService.uploadFile(file, folder)),
-          ),
-        );
-
-        const images = uploadResults.map((result) => ({
-          url: result.secure_url,
-          publicId: result.public_id,
-        }));
-        imagesToSave.push(...images);
-      }
+      // Upload back ID (matsau)
+      const backResult = await this.cloudinaryService.uploadFile(
+        files.matsau[0],
+        folder,
+      );
+      imagesData.images.push({
+        type: 'BACK_ID',
+        url: backResult.secure_url,
+        publicId: backResult.public_id,
+      });
 
       const customer = await this.prisma.customer.create({
         data: {
@@ -142,7 +166,7 @@ export class CustomerService {
           customerType: data.customerType as CustomerType,
           monthlyIncome: data.monthlyIncome,
           creditScore: data.creditScore,
-          images: imagesToSave as Prisma.InputJsonValue,
+          images: imagesData as Prisma.InputJsonValue,
         },
       });
 
@@ -158,7 +182,7 @@ export class CustomerService {
   async update(
     id: string,
     data: UpdateCustomerRequest,
-    files?: MulterFile[],
+    files?: { mattruoc?: MulterFile[]; matsau?: MulterFile[] },
   ): Promise<CustomerResponse> {
     // Check if customer exists
     const existing = await this.prisma.customer.findUnique({
@@ -217,27 +241,99 @@ export class CustomerService {
       if (data.creditScore !== undefined)
         updateData.creditScore = data.creditScore;
 
-      if (files && files.length > 0) {
+      if (files) {
         const folder = `pawnshop/${existing.customerType.toString().toLowerCase()}/${existing.nationalId}`;
 
-        const limit = pLimit(3);
+        // Get current images data
+        const currentImagesData = (existing.images as any) || {
+          images: [],
+          issuedDate: null,
+          issuedPlace: null,
+        };
 
-        const uploadResults = await Promise.all(
-          files.map((file) =>
-            limit(() => this.cloudinaryService.uploadFile(file, folder)),
-          ),
-        );
+        // Update issuedDate and issuedPlace if provided
+        if (data.nationalIdIssueDate !== undefined) {
+          currentImagesData.issuedDate = data.nationalIdIssueDate;
+        }
+        if (data.nationalIdIssuePlace !== undefined) {
+          currentImagesData.issuedPlace = data.nationalIdIssuePlace;
+        }
 
-        const images = uploadResults.map((result) => ({
-          url: result.secure_url,
-          publicId: result.public_id,
-        }));
+        // Ensure images array exists
+        if (!currentImagesData.images) {
+          currentImagesData.images = [];
+        }
 
-        const currentImages = (existing.images as unknown as ImageItem[]) || [];
+        // Upload and update front ID (mattruoc)
+        if (files.mattruoc && files.mattruoc.length > 0) {
+          const result = await this.cloudinaryService.uploadFile(
+            files.mattruoc[0],
+            folder,
+          );
 
-        const updatedImages = [...currentImages, ...images];
+          // Replace existing FRONT_ID or add new
+          const frontIndex = currentImagesData.images.findIndex(
+            (img: any) => img.type === 'FRONT_ID',
+          );
+          const newFrontImage = {
+            type: 'FRONT_ID',
+            url: result.secure_url,
+            publicId: result.public_id,
+          };
 
-        updateData.images = updatedImages as unknown as Prisma.InputJsonValue;
+          if (frontIndex >= 0) {
+            currentImagesData.images[frontIndex] = newFrontImage;
+          } else {
+            currentImagesData.images.push(newFrontImage);
+          }
+        }
+
+        // Upload and update back ID (matsau)
+        if (files.matsau && files.matsau.length > 0) {
+          const result = await this.cloudinaryService.uploadFile(
+            files.matsau[0],
+            folder,
+          );
+
+          // Replace existing BACK_ID or add new
+          const backIndex = currentImagesData.images.findIndex(
+            (img: any) => img.type === 'BACK_ID',
+          );
+          const newBackImage = {
+            type: 'BACK_ID',
+            url: result.secure_url,
+            publicId: result.public_id,
+          };
+
+          if (backIndex >= 0) {
+            currentImagesData.images[backIndex] = newBackImage;
+          } else {
+            currentImagesData.images.push(newBackImage);
+          }
+        }
+
+        updateData.images = currentImagesData as Prisma.InputJsonValue;
+      } else {
+        // Update issuedDate and issuedPlace without files
+        if (
+          data.nationalIdIssueDate !== undefined ||
+          data.nationalIdIssuePlace !== undefined
+        ) {
+          const currentImagesData = (existing.images as any) || {
+            images: [],
+            issuedDate: null,
+            issuedPlace: null,
+          };
+
+          if (data.nationalIdIssueDate !== undefined) {
+            currentImagesData.issuedDate = data.nationalIdIssueDate;
+          }
+          if (data.nationalIdIssuePlace !== undefined) {
+            currentImagesData.issuedPlace = data.nationalIdIssuePlace;
+          }
+
+          updateData.images = currentImagesData as Prisma.InputJsonValue;
+        }
       }
 
       const customer = await this.prisma.customer.update({

@@ -22,6 +22,8 @@ import { CreateLiquidationRequest } from './dto/request/liquidation.request';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
+import { ApiOkResponse } from '@nestjs/swagger';
+import { CollateralAssetListResponse } from './dto/response/collateral.response';
 
 @Controller({
   version: '1',
@@ -32,6 +34,10 @@ export class CollateralController {
   constructor(private readonly collateralService: CollateralService) {}
 
   @Get()
+  @ApiOkResponse({
+    description: 'Get a list of collateral assets',
+    type: CollateralAssetListResponse,
+  })
   @Roles(Role.MANAGER, Role.STAFF)
   getList(@Query() query: CollateralQueryDTO) {
     return this.collateralService.findAll(query);

@@ -20,6 +20,9 @@ export class AuditLogResponseDto {
   @ApiProperty()
   entityType: string;
 
+  @ApiProperty()
+  entityName: string;
+
   @ApiProperty({ type: Object })
   oldValue: Record<string, any>;
 

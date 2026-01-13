@@ -477,11 +477,12 @@ Cảm ơn bạn đã thanh toán!`;
     // Defensive check: verify payment is still pending before scheduling
     // This handles race conditions where payment might be paid between query and scheduling
     if (delayMs) {
-      const currentStatus =
-        await this.prisma.repaymentScheduleDetail.findUnique({
-          where: { id: payment.loanId, periodNumber: payment.periodNumber },
+      const currentStatus = await this.prisma.repaymentScheduleDetail.findFirst(
+        {
+          where: { loanId: payment.loanId, periodNumber: payment.periodNumber },
           select: { status: true },
-        });
+        },
+      );
 
       if (currentStatus?.status === RepaymentItemStatus.PAID) {
         this.logger.log(

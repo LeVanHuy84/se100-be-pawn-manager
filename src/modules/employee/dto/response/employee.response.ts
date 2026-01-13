@@ -39,7 +39,7 @@ export class EmployeeResponse {
 
 export class EmployeeListResponse {
   @ApiProperty({ description: 'List of employees', type: [EmployeeResponse] })
-  employees: EmployeeResponse[];
+  data: EmployeeResponse[];
   @ApiProperty({
     description: 'Pagination metadata',
     type: PaginationMeta,

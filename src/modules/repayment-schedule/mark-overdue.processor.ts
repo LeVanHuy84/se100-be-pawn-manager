@@ -28,6 +28,7 @@ export class MarkOverdueProcessor {
         loan: {
           select: {
             id: true,
+            loanCode: true,
             status: true,
             latePaymentPenaltyRate: true, // %/month (snapshot)
           },
@@ -83,6 +84,7 @@ export class MarkOverdueProcessor {
               action: 'SYSTEM_MARK_OVERDUE',
               entityId: item.id,
               entityType: 'REPAYMENT_SCHEDULE',
+              entityName: `Kì ${item.periodNumber} - ${item.loan.loanCode}`,
               actorId: null, // System action
               description: `Auto-marked as OVERDUE (Due: ${item.dueDate.toISOString().slice(0, 10)})`,
               oldValue: { status: 'PENDING' },
@@ -134,6 +136,7 @@ export class MarkOverdueProcessor {
             action: 'SYSTEM_PENALTY',
             entityId: item.id,
             entityType: 'REPAYMENT_SCHEDULE',
+            entityName: `Kì ${item.periodNumber} - ${item.loan.loanCode}`,
             actorId: null, // System action
             description: `Auto-applied penalty: ${penalty.toLocaleString('vi-VN')} VND (${overdueDays} days overdue on principal ${Math.round(principalOutstanding).toLocaleString('vi-VN')} VND)`,
             oldValue: { penaltyAmount: oldPenaltyAmount },
@@ -149,7 +152,7 @@ export class MarkOverdueProcessor {
       for (const loanId of affectedLoanIds) {
         const loan = await tx.loan.findUnique({
           where: { id: loanId },
-          select: { status: true },
+          select: { status: true, loanCode: true },
         });
 
         if (loan && loan.status === 'ACTIVE') {
@@ -164,6 +167,7 @@ export class MarkOverdueProcessor {
               action: 'SYSTEM_LOAN_STATUS_CHANGE',
               entityId: loanId,
               entityType: 'LOAN',
+              entityName: loan.loanCode,
               actorId: null, // System action
               description:
                 'Auto-changed loan status to OVERDUE due to overdue repayment items',

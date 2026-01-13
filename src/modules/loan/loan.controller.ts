@@ -20,10 +20,7 @@ import {
 import { CreateLoanDto } from './dto/request/create-loan.dto';
 import { LoanOrchestrator } from './loan.orchestrator';
 import { ApproveLoanDto } from './dto/request/approve-loan.dto';
-import {
-  ListLoansQuerySchema,
-  type ListLoansQuery,
-} from './dto/request/loan.query';
+import { ListLoansQuery, ListLoansQuerySchema } from './dto/request/loan.query';
 import { LoanService } from './loan.service';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { Role } from '../employee/enum/role.enum';
@@ -37,6 +34,7 @@ import {
   UpdateLoanStatusResponseDto,
 } from './dto/response/loan.response';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
+import Api from 'twilio/lib/rest/Api';
 
 @ApiTags('Loans')
 @Controller({
@@ -111,13 +109,14 @@ export class LoanController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all loans with pagination and filtering' })
+  @ApiOperation({ summary: 'List loans with optional filters' })
   @ApiOkResponse({
     description: 'List of loans retrieved successfully',
     type: ListLoansResponseDto,
   })
   listLoans(
-    @Query(new ZodValidationPipe(ListLoansQuerySchema)) query: ListLoansQuery,
+    @Query(new ZodValidationPipe(ListLoansQuerySchema))
+    query: ListLoansQuery,
   ) {
     return this.loanService.listLoans(query);
   }
