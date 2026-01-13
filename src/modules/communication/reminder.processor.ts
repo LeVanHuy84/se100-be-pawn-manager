@@ -214,6 +214,10 @@ export class ReminderProcessor {
           where: { periodNumber: 1 },
           take: 1,
         },
+        disbursements: {
+          orderBy: { disbursedAt: 'desc' },
+          take: 1,
+        },
       },
     });
 
@@ -225,12 +229,23 @@ export class ReminderProcessor {
     }
 
     const firstPayment = loan.repaymentSchedule[0];
-    const dueDate = firstPayment.dueDate.toISOString().slice(0, 10);
+    const dueDate = this.formatDateVN(firstPayment.dueDate);
     const amount = Number(firstPayment.totalAmount);
+
+    // Get disbursement info
+    const disbursement = loan.disbursements[0];
+    const disbursementInfo = disbursement
+      ? `\n\nThông tin giải ngân:
+Mã giải ngân: ${disbursement.referenceCode}
+Số tiền: ${Number(disbursement.amount).toLocaleString('vi-VN')} VND
+Phương thức: ${disbursement.disbursementMethod === 'CASH' ? 'Tiền mặt' : 'Chuyển khoản'}
+Người nhận: ${disbursement.recipientName}`
+      : '';
 
     const message = `[Cầm đồ] Xin chào ${loan.customer.fullName}!
 Khoản vay của bạn đã được duyệt.
-Số tiền vay: ${Number(loan.loanAmount).toLocaleString('vi-VN')} VND
+Số tiền vay: ${Number(loan.loanAmount).toLocaleString('vi-VN')} VND${disbursementInfo}
+
 Kỳ đầu tiên đến hạn: ${dueDate}
 Số tiền: ${amount.toLocaleString('vi-VN')} VND
 Cảm ơn bạn đã tin tưởng!`;
@@ -241,7 +256,8 @@ Cảm ơn bạn đã tin tưởng!`;
       customerName: loan.customer.fullName,
       customerPhone: loan.customer.phone,
       customerEmail: loan.customer.email,
-      type: NotificationType.INTEREST_REMINDER,
+      type: NotificationType.LOAN_APPROVED,
+      loanAmount: Number(loan.loanAmount),
       dueDate,
       amount,
       periodNumber: 1,
@@ -342,8 +358,10 @@ Cảm ơn bạn đã thanh toán!`;
       customerName: loan.customer.fullName,
       customerPhone: loan.customer.phone,
       customerEmail: loan.customer.email,
-      type: NotificationType.INTEREST_REMINDER,
+      type: NotificationType.PAYMENT_CONFIRMATION,
+      paymentId,
       amount,
+      allocations,
       message,
     };
 
@@ -496,7 +514,7 @@ Cảm ơn bạn đã thanh toán!`;
       customerPhone: loan.customer.phone,
       customerEmail: loan.customer.email,
       type,
-      dueDate: payment.dueDate.toISOString().slice(0, 10),
+      dueDate: this.formatDateVN(payment.dueDate),
       amount: Number(payment.totalAmount),
       periodNumber: payment.periodNumber,
       message,
@@ -546,8 +564,20 @@ Cảm ơn bạn đã thanh toán!`;
   // MESSAGE BUILDERS - Format notification messages
   // ============================================================
 
+  /**
+   * Format date to Vietnamese format (DD/MM/YYYY)
+   */
+  private formatDateVN(date: Date | string): string {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  }
+
   private buildInterestReminderMessage(payment: PaymentWithCustomer): string {
-    const dueDate = payment.dueDate.toLocaleDateString('vi-VN');
+    const dueDate = this.formatDateVN(payment.dueDate);
     const amount = Number(payment.totalAmount).toLocaleString('vi-VN');
     return `Kính chào ${payment.loan.customer.fullName}, bạn có khoản thanh toán kỳ ${payment.periodNumber} đến hạn vào ${dueDate} với số tiền ${amount} VNĐ. Vui lòng thanh toán đúng hạn.`;
   }

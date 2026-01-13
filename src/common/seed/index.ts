@@ -21,7 +21,7 @@ const seedSteps: SeedStep[] = [
   },
   {
     name: 'SystemParameter',
-    file: 'src/modules/configurations/seed/seed.ts',
+    file: 'src/common/seed/configuration.ts',
     description: 'Tham số hệ thống (Interest rates, Fees, Limits)',
   },
   {
@@ -54,14 +54,28 @@ const seedSteps: SeedStep[] = [
     description: 'Khoản vay (bao gồm Repayment Schedule)',
   },
 
-  // Giai đoạn 4: Thanh toán
+  // Giai đoạn 4: Giải ngân
+  {
+    name: 'Disbursement',
+    file: 'src/common/seed/disbursement.ts',
+    description: 'Giải ngân (tạo log cho các khoản vay đã duyệt)',
+  },
+
+  // Giai đoạn 5: Thanh toán
   {
     name: 'Payment',
     file: 'src/common/seed/payment.ts',
     description: 'Thanh toán và phân bổ',
   },
 
-  // Giai đoạn 5: Audit
+  // Giai đoạn 6: Communication
+  {
+    name: 'Communication',
+    file: 'src/common/seed/communication.ts',
+    description: 'Thông báo và nhắc nhở (SMS, Email, Phone)',
+  },
+
+  // Giai đoạn 7: Audit
   {
     name: 'AuditLog',
     file: 'src/common/seed/audit-log.ts',

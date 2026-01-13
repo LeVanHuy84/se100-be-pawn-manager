@@ -12,7 +12,7 @@ async function main() {
       nationalIdIssueDate: '2015-01-10',
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0901234567',
-      email: 'nguyenvana@example.com',
+      email: 'pawner-test@yopmail.com',
       address: '123 Nguyen Hue, District 1, HCMC',
       customerType: 'REGULAR',
       monthlyIncome: 15000000,

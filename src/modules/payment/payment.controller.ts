@@ -27,6 +27,8 @@ import { PaymentResponse } from './dto/response/payment-details.response';
 import { PaymentListItem } from './dto/response/payment-list-item.repsonse';
 import { PaymentService } from './payment.service';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
+import { Roles } from 'src/common/decorators/role.decorator';
+import { Role } from 'src/modules/employee/enum/role.enum';
 
 @ApiTags('Payments')
 @ApiBearerAuth()
@@ -40,6 +42,7 @@ export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
   @Get()
+  @Roles(Role.MANAGER, Role.STAFF)
   @ApiOperation({
     summary: 'List all payments',
     description:
@@ -70,6 +73,7 @@ export class PaymentController {
   }
 
   @Post()
+  @Roles(Role.MANAGER, Role.STAFF)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Record a loan payment',
@@ -94,7 +98,6 @@ export class PaymentController {
           amount: 2800000,
           paymentMethod: 'CASH',
           paymentType: 'PERIODIC',
-          referenceCode: 'PAY-2026-001',
           notes: 'Thanh toán kỳ 1',
         },
       },
@@ -105,7 +108,6 @@ export class PaymentController {
           amount: 5000000,
           paymentMethod: 'BANK_TRANSFER',
           paymentType: 'EARLY',
-          referenceCode: 'TRF-20260110-123456',
           notes: 'Trả trước 2 kỳ',
         },
       },

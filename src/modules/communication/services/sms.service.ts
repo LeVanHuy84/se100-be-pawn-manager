@@ -15,16 +15,21 @@ export class SmsService {
   constructor(private config: ConfigService) {
     const accountSid = this.config.get('TWILIO_ACCOUNT_SID');
     const authToken = this.config.get('TWILIO_AUTH_TOKEN');
+    const smsEnabled = this.config.get('SMS_ENABLED', 'false') === 'true';
 
-    if (accountSid && authToken) {
+    if (accountSid && authToken && smsEnabled) {
       this.twilioClient = new Twilio(accountSid, authToken);
       this.isMockMode = false;
       this.logger.log('✅ Twilio SMS service initialized');
     } else {
       this.isMockMode = true;
-      this.logger.warn(
-        '⚠️ Twilio credentials not found. Running in MOCK mode.',
-      );
+      if (!smsEnabled) {
+        this.logger.warn('⚠️ SMS_ENABLED=false. Running in MOCK mode.');
+      } else {
+        this.logger.warn(
+          '⚠️ Twilio credentials not found. Running in MOCK mode.',
+        );
+      }
     }
   }
 
@@ -116,6 +121,47 @@ Kỳ thanh toán đã quá hạn ${daysOverdue} ngày.
 Gốc: ${amount.toLocaleString('vi-VN')} VND
 Phạt: ${penalty.toLocaleString('vi-VN')} VND
 Vui lòng liên hệ ngay!`;
+
+    return this.sendSms({ to, message });
+  }
+
+  async sendLoanApprovalSms(params: {
+    to: string;
+    customerName: string;
+    loanAmount: number;
+    firstPaymentDate: string;
+    firstPaymentAmount: number;
+  }): Promise<{ success: boolean }> {
+    const {
+      to,
+      customerName,
+      loanAmount,
+      firstPaymentDate,
+      firstPaymentAmount,
+    } = params;
+
+    const message = `[Cầm đồ] Xin chào ${customerName}!
+Khoản vay của bạn đã được duyệt.
+Số tiền: ${loanAmount.toLocaleString('vi-VN')} VND
+Kỳ đầu tiên: ${firstPaymentDate} - ${firstPaymentAmount.toLocaleString('vi-VN')} VND
+Cảm ơn bạn!`;
+
+    return this.sendSms({ to, message });
+  }
+
+  async sendPaymentConfirmationSms(params: {
+    to: string;
+    customerName: string;
+    paymentId: string;
+    amount: number;
+  }): Promise<{ success: boolean }> {
+    const { to, customerName, paymentId, amount } = params;
+
+    const message = `[Cầm đồ] Xin chào ${customerName}!
+Thanh toán thành công!
+Mã GD: ${paymentId}
+Số tiền: ${amount.toLocaleString('vi-VN')} VND
+Cảm ơn bạn!`;
 
     return this.sendSms({ to, message });
   }

@@ -21,6 +21,15 @@ export interface NotificationJob {
   periodNumber?: number;
   daysOverdue?: number;
   penalty?: number;
+  // For LOAN_APPROVED
+  loanAmount?: number;
+  // For PAYMENT_CONFIRMATION
+  paymentId?: string;
+  allocations?: Array<{
+    periodNumber: number;
+    component: string;
+    amount: number;
+  }>;
 }
 
 export interface SmsJobData extends NotificationJob {
