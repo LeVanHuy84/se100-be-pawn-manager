@@ -38,6 +38,18 @@ export class PaymentService {
     private readonly communicationService: CommunicationService,
   ) {}
 
+  private async generatePaymentReferenceCode(
+    tx: Prisma.TransactionClient,
+  ): Promise<string> {
+    const year = new Date().getFullYear();
+    const sequence = await tx.paymentSequence.upsert({
+      where: { year },
+      create: { year, value: 1 },
+      update: { value: { increment: 1 } },
+    });
+    return `PAY-${year}-${sequence.value.toString().padStart(6, '0')}`;
+  }
+
   async listPayments(
     query: ListPaymentsQuery,
   ): Promise<BaseResult<PaymentListItem[]>> {
@@ -175,8 +187,7 @@ export class PaymentService {
     payload: PaymentRequestDto,
     employee: any,
   ): Promise<PaymentResponse> {
-    const { loanId, amount, paymentMethod, paymentType, referenceCode, notes } =
-      payload;
+    const { loanId, amount, paymentMethod, paymentType, notes } = payload;
 
     if (!idempotencyKey)
       throw new ConflictException('Idempotency-Key is required');
@@ -266,7 +277,9 @@ export class PaymentService {
         );
       }
 
-      // 4) Create payment header
+      // 4) Generate reference code and create payment header
+      const referenceCode = await this.generatePaymentReferenceCode(tx);
+
       let payment;
       try {
         payment = await tx.loanPayment.create({

@@ -19,6 +19,8 @@ import { CommunicationService } from './communication.service';
 import { LogCommunicationDto } from './dto/log-communication.dto';
 import { NotificationLogResponse } from './dto/notification-log.response';
 import { CurrentUserId } from 'src/common/decorators/current-user-id.decorator';
+import { Roles } from 'src/common/decorators/role.decorator';
+import { Role } from 'src/modules/employee/enum/role.enum';
 
 @ApiTags('Communication / Debt Collection')
 @ApiBearerAuth()
@@ -30,6 +32,7 @@ export class CommunicationController {
   constructor(private readonly communicationService: CommunicationService) {}
 
   @Post('log')
+  @Roles(Role.MANAGER, Role.STAFF)
   @ApiOperation({
     summary: 'Log a communication attempt',
     description:
@@ -52,6 +55,7 @@ export class CommunicationController {
   }
 
   @Get('loans/:loanId/history')
+  @Roles(Role.MANAGER, Role.STAFF)
   @ApiOperation({
     summary: 'Get communication history for a loan',
     description:
@@ -74,6 +78,7 @@ export class CommunicationController {
   }
 
   @Get('promises-to-pay')
+  @Roles(Role.MANAGER, Role.STAFF)
   @ApiOperation({
     summary: 'Get upcoming promise-to-pay commitments',
     description:

@@ -33,7 +33,7 @@ export class ReportsService {
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
 
-    // Build where clause for revenue
+    // Build where clause
     const revenueWhere: any = {
       recordedAt: {
         gte: start,
@@ -41,96 +41,162 @@ export class ReportsService {
       },
     };
 
-    // Build where clause for loans (expenses)
-    const loanWhere: any = {
-      activatedAt: {
+    const disbursementWhere: any = {
+      disbursedAt: {
         gte: start,
         lte: end,
-      },
-      status: {
-        in: ['ACTIVE', 'CLOSED', 'OVERDUE'],
       },
     };
 
     if (storeId) {
-      revenueWhere.storeId = storeId;
-      loanWhere.storeId = storeId;
+      revenueWhere.loan = { storeId };
+      disbursementWhere.loan = { storeId };
     }
 
-    // Fetch revenue data
-    const revenues = await this.prisma.revenueLedger.findMany({
-      where: revenueWhere,
-      orderBy: { recordedAt: 'asc' },
-    });
+    // Parallel queries for better performance - fetch with date info
+    const [revenues, disbursements] = await Promise.all([
+      this.prisma.revenueLedger.findMany({
+        where: revenueWhere,
+        select: {
+          amount: true,
+          type: true,
+          recordedAt: true,
+        },
+      }),
+      this.prisma.disbursement.findMany({
+        where: disbursementWhere,
+        select: {
+          amount: true,
+          disbursedAt: true,
+        },
+      }),
+    ]);
 
-    // Fetch loan disbursements (expenses)
-    const loans = await this.prisma.loan.findMany({
-      where: loanWhere,
-      select: {
-        loanAmount: true,
-      },
-    });
+    // Generate daily data for chart
+    const dailyData: RevenueReportResponse[] = [];
+    const currentDate = new Date(start);
 
-    // Calculate revenue breakdown and summary
-    const breakdown = {
+    // Summary totals
+    let summaryRevenue = 0;
+    const summaryBreakdown = {
       interest: 0,
       serviceFee: 0,
       lateFee: 0,
       liquidationExcess: 0,
     };
+    let summaryExpense = 0;
 
-    let totalRevenue = 0;
+    while (currentDate <= end) {
+      const dayStart = new Date(currentDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(currentDate);
+      dayEnd.setHours(23, 59, 59, 999);
 
-    revenues.forEach((revenue) => {
-      const amount = Number(revenue.amount);
-      totalRevenue += amount;
+      // Get current day's date string for comparison
+      const currentYear = dayStart.getFullYear();
+      const currentMonth = dayStart.getMonth();
+      const currentDay = dayStart.getDate();
 
-      switch (revenue.type) {
-        case 'INTEREST':
-          breakdown.interest += amount;
-          break;
-        case 'SERVICE_FEE':
-          breakdown.serviceFee += amount;
-          break;
-        case 'LATE_FEE':
-          breakdown.lateFee += amount;
-          break;
-        case 'LIQUIDATION_EXCESS':
-          breakdown.liquidationExcess += amount;
-          break;
-      }
-    });
+      // Filter revenues for this day - compare date components
+      const dayRevenues = revenues.filter((r) => {
+        const recordDate = new Date(r.recordedAt);
+        return (
+          recordDate.getFullYear() === currentYear &&
+          recordDate.getMonth() === currentMonth &&
+          recordDate.getDate() === currentDay
+        );
+      });
 
-    // Calculate expense breakdown
-    const totalLoanDisbursement = loans.reduce(
-      (sum, loan) => sum + Number(loan.loanAmount),
-      0,
-    );
+      // Filter disbursements for this day - compare date components
+      const dayDisbursements = disbursements.filter((d) => {
+        const disbursedDate = new Date(d.disbursedAt);
+        return (
+          disbursedDate.getFullYear() === currentYear &&
+          disbursedDate.getMonth() === currentMonth &&
+          disbursedDate.getDate() === currentDay
+        );
+      });
 
-    const expenseBreakdown = {
-      loanDisbursement: totalLoanDisbursement,
-    };
+      // Calculate daily breakdown
+      const dayBreakdown = {
+        interest: 0,
+        serviceFee: 0,
+        lateFee: 0,
+        liquidationExcess: 0,
+      };
 
-    const totalExpense = totalLoanDisbursement;
+      let dayTotalRevenue = 0;
 
-    const reportData: RevenueReportResponse = {
-      period: `${startDate} to ${endDate}`,
-      totalRevenue,
-      breakdown,
-      totalExpense,
-      expenseBreakdown,
-    };
+      dayRevenues.forEach((revenue) => {
+        const amount = Number(revenue.amount);
+        dayTotalRevenue += amount;
+
+        switch (revenue.type) {
+          case 'INTEREST':
+            dayBreakdown.interest += amount;
+            break;
+          case 'SERVICE_FEE':
+            dayBreakdown.serviceFee += amount;
+            break;
+          case 'LATE_FEE':
+            dayBreakdown.lateFee += amount;
+            break;
+          case 'LIQUIDATION_EXCESS':
+            dayBreakdown.liquidationExcess += amount;
+            break;
+        }
+      });
+
+      // Calculate daily expense
+      const dayExpense = dayDisbursements.reduce(
+        (sum, d) => sum + Number(d.amount),
+        0,
+      );
+
+      // Add to daily data
+      // Format date as YYYY-MM-DD using local timezone to avoid date shift
+      const year = dayStart.getFullYear();
+      const month = String(dayStart.getMonth() + 1).padStart(2, '0');
+      const day = String(dayStart.getDate()).padStart(2, '0');
+      const dateString = `${day}-${month}-${year}`;
+
+      dailyData.push({
+        date: dateString,
+        totalRevenue: Math.round(dayTotalRevenue),
+        breakdown: {
+          interest: Math.round(dayBreakdown.interest),
+          serviceFee: Math.round(dayBreakdown.serviceFee),
+          lateFee: Math.round(dayBreakdown.lateFee),
+          liquidationExcess: Math.round(dayBreakdown.liquidationExcess),
+        },
+        totalExpense: Math.round(dayExpense),
+        expenseBreakdown: {
+          loanDisbursement: Math.round(dayExpense),
+        },
+      });
+
+      // Accumulate summary
+      summaryRevenue += dayTotalRevenue;
+      summaryBreakdown.interest += dayBreakdown.interest;
+      summaryBreakdown.serviceFee += dayBreakdown.serviceFee;
+      summaryBreakdown.lateFee += dayBreakdown.lateFee;
+      summaryBreakdown.liquidationExcess += dayBreakdown.liquidationExcess;
+      summaryExpense += dayExpense;
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
 
     return {
-      data: [reportData],
+      data: dailyData,
       summary: {
-        totalRevenue,
-        totalInterest: breakdown.interest,
-        totalServiceFee: breakdown.serviceFee,
-        totalLateFee: breakdown.lateFee,
-        totalLiquidationExcess: breakdown.liquidationExcess,
-        totalExpense,
-        totalLoanDisbursement,
+        totalRevenue: Math.round(summaryRevenue),
+        totalInterest: Math.round(summaryBreakdown.interest),
+        totalServiceFee: Math.round(summaryBreakdown.serviceFee),
+        totalLateFee: Math.round(summaryBreakdown.lateFee),
+        totalLiquidationExcess: Math.round(summaryBreakdown.liquidationExcess),
+        totalExpense: Math.round(summaryExpense),
+        totalLoanDisbursement: Math.round(summaryExpense),
       },
     };
   }
@@ -146,42 +212,78 @@ export class ReportsService {
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // New loans created today
-    const newLoans = await this.prisma.loan.findMany({
-      where: {
-        createdAt: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
-      include: {
-        customer: true,
-        collaterals: {
-          include: {
-            collateralType: true,
+    // Parallel queries for new and closed loans
+    const [newLoans, closedLoans] = await Promise.all([
+      this.prisma.loan.findMany({
+        where: {
+          createdAt: {
+            gte: startOfDay,
+            lte: endOfDay,
           },
         },
-      },
-    });
-
-    // Loans closed today
-    const closedLoans = await this.prisma.loan.findMany({
-      where: {
-        status: 'CLOSED',
-        updatedAt: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
-      include: {
-        customer: true,
-        collaterals: {
-          include: {
-            collateralType: true,
+        select: {
+          id: true,
+          loanCode: true,
+          loanAmount: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          customer: {
+            select: {
+              fullName: true,
+              nationalId: true,
+              address: true,
+              phone: true,
+            },
+          },
+          collaterals: {
+            select: {
+              collateralInfo: true,
+              collateralType: {
+                select: {
+                  name: true,
+                },
+              },
+            },
           },
         },
-      },
-    });
+      }),
+      this.prisma.loan.findMany({
+        where: {
+          status: 'CLOSED',
+          updatedAt: {
+            gte: startOfDay,
+            lte: endOfDay,
+          },
+        },
+        select: {
+          id: true,
+          loanCode: true,
+          loanAmount: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          customer: {
+            select: {
+              fullName: true,
+              nationalId: true,
+              address: true,
+              phone: true,
+            },
+          },
+          collaterals: {
+            select: {
+              collateralInfo: true,
+              collateralType: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
 
     const mapLoanToEntry = (loan: any): DailyLogEntry => ({
       contractId: loan.id,
@@ -227,72 +329,91 @@ export class ReportsService {
     const startDate = new Date(year, startMonth, 1);
     const endDate = new Date(year, startMonth + 3, 0, 23, 59, 59, 999);
 
-    // Loans issued in quarter
-    const loansIssued = await this.prisma.loan.count({
-      where: {
-        createdAt: { gte: startDate, lte: endDate },
-      },
-    });
+    // Parallel queries for better performance
+    const [
+      loansInQuarter,
+      loansClosed,
+      loansActive,
+      loansOverdue,
+      collateralsReceived,
+      collateralsReleased,
+      liquidations,
+      revenues,
+    ] = await Promise.all([
+      // Loans issued in quarter
+      this.prisma.loan.findMany({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+        },
+        select: {
+          loanAmount: true,
+          appliedInterestRate: true,
+          collaterals: {
+            select: {
+              appraisedValue: true,
+            },
+          },
+        },
+      }),
+      // Loans closed in quarter
+      this.prisma.loan.count({
+        where: {
+          status: 'CLOSED',
+          updatedAt: { gte: startDate, lte: endDate },
+        },
+      }),
+      // Active loans at end of quarter
+      this.prisma.loan.count({
+        where: {
+          status: 'ACTIVE',
+          createdAt: { lte: endDate },
+        },
+      }),
+      // Overdue loans at end of quarter
+      this.prisma.loan.count({
+        where: {
+          status: 'OVERDUE',
+          createdAt: { lte: endDate },
+        },
+      }),
+      // Collaterals
+      this.prisma.collateral.count({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+        },
+      }),
+      this.prisma.collateral.count({
+        where: {
+          status: 'RELEASED',
+          updatedAt: { gte: startDate, lte: endDate },
+        },
+      }),
+      this.prisma.collateral.count({
+        where: {
+          status: 'SOLD',
+          updatedAt: { gte: startDate, lte: endDate },
+        },
+      }),
+      // Revenue breakdown
+      this.prisma.revenueLedger.findMany({
+        where: {
+          recordedAt: { gte: startDate, lte: endDate },
+        },
+        select: {
+          amount: true,
+          type: true,
+        },
+      }),
+    ]);
 
-    const loanAmountSum = await this.prisma.loan.aggregate({
-      where: {
-        createdAt: { gte: startDate, lte: endDate },
-      },
-      _sum: { loanAmount: true },
-    });
-
-    // Loans closed in quarter
-    const loansClosed = await this.prisma.loan.count({
-      where: {
-        status: 'CLOSED',
-        updatedAt: { gte: startDate, lte: endDate },
-      },
-    });
-
-    // Active loans at end of quarter
-    const loansActive = await this.prisma.loan.count({
-      where: {
-        status: 'ACTIVE',
-        createdAt: { lte: endDate },
-      },
-    });
-
-    // Overdue loans at end of quarter
-    const loansOverdue = await this.prisma.loan.count({
-      where: {
-        status: 'OVERDUE',
-        createdAt: { lte: endDate },
-      },
-    });
-
-    // Collaterals
-    const collateralsReceived = await this.prisma.collateral.count({
-      where: {
-        createdAt: { gte: startDate, lte: endDate },
-      },
-    });
-
-    const collateralsReleased = await this.prisma.collateral.count({
-      where: {
-        status: 'RELEASED',
-        updatedAt: { gte: startDate, lte: endDate },
-      },
-    });
-
-    const liquidations = await this.prisma.collateral.count({
-      where: {
-        status: 'SOLD',
-        updatedAt: { gte: startDate, lte: endDate },
-      },
-    });
+    // Calculate statistics
+    const loansIssued = loansInQuarter.length;
+    const totalLoanAmount = loansInQuarter.reduce(
+      (sum, loan) => sum + Number(loan.loanAmount),
+      0,
+    );
 
     // Revenue breakdown
-    const revenues = await this.prisma.revenueLedger.findMany({
-      where: {
-        recordedAt: { gte: startDate, lte: endDate },
-      },
-    });
-
     const revenueBreakdown = {
       interest: 0,
       serviceFee: 0,
@@ -321,18 +442,9 @@ export class ReportsService {
     });
 
     // Compliance metrics
-    const loans = await this.prisma.loan.findMany({
-      where: {
-        createdAt: { gte: startDate, lte: endDate },
-      },
-      include: {
-        collaterals: true,
-      },
-    });
-
     const averageLTV =
-      loans.length > 0
-        ? loans.reduce((sum, loan) => {
+      loansIssued > 0
+        ? loansInQuarter.reduce((sum, loan) => {
             const totalAppraisedValue = loan.collaterals.reduce(
               (colSum, col) => colSum + Number(col.appraisedValue),
               0,
@@ -343,15 +455,15 @@ export class ReportsService {
                 ? Number(loan.loanAmount) / totalAppraisedValue
                 : 0)
             );
-          }, 0) / loans.length
+          }, 0) / loansIssued
         : 0;
 
     const averageInterestRate =
-      loans.length > 0
-        ? loans.reduce(
+      loansIssued > 0
+        ? loansInQuarter.reduce(
             (sum, loan) => sum + Number(loan.appliedInterestRate),
             0,
-          ) / loans.length
+          ) / loansIssued
         : 0;
 
     return {
@@ -360,15 +472,20 @@ export class ReportsService {
       period: `Q${quarter} ${year}`,
       statistics: {
         totalLoansIssued: loansIssued,
-        totalLoanAmount: Number(loanAmountSum._sum.loanAmount || 0),
+        totalLoanAmount: Math.round(totalLoanAmount),
         totalLoansClosed: loansClosed,
         totalLoansActive: loansActive,
         totalLoansOverdue: loansOverdue,
         totalCollateralsReceived: collateralsReceived,
         totalCollateralsReleased: collateralsReleased,
         totalLiquidations: liquidations,
-        totalRevenue,
-        revenueBreakdown,
+        totalRevenue: Math.round(totalRevenue),
+        revenueBreakdown: {
+          interest: Math.round(revenueBreakdown.interest),
+          serviceFee: Math.round(revenueBreakdown.serviceFee),
+          lateFee: Math.round(revenueBreakdown.lateFee),
+          liquidationProfit: Math.round(revenueBreakdown.liquidationProfit),
+        },
       },
       compliance: {
         averageLTV: Math.round(averageLTV * 100) / 100,

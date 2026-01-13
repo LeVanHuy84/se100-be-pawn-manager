@@ -9,7 +9,6 @@ export const paymentRequestSchema = z.object({
   amount: z.number().positive('Amount must be > 0'),
   paymentMethod: z.enum(PaymentMethod),
   paymentType: z.enum(PaymentType),
-  referenceCode: z.string().max(100).optional(),
   notes: z.string().max(500).optional(),
 });
 
@@ -42,15 +41,6 @@ export class PaymentRequestDto extends createZodDto(paymentRequestSchema) {
     example: 'PERIODIC',
   })
   paymentType: PaymentType;
-
-  @ApiProperty({
-    description:
-      'Reference code for tracking (e.g., bank transfer reference, receipt number)',
-    example: 'PAY-2026-001',
-    required: false,
-    maxLength: 100,
-  })
-  referenceCode?: string;
 
   @ApiProperty({
     description: 'Additional notes or comments',

@@ -27,6 +27,7 @@ import { LoanMapper } from './loan.mapper';
 
 import { CommunicationService } from '../communication/communication.service';
 import { ReminderProcessor } from '../communication/reminder.processor';
+import { DisbursementService } from '../disbursement/disbursement.service';
 
 import { AuditActionEnum } from 'src/common/enums/audit-action.enum';
 import { LoanCodeGenerate } from './loan-code.generate';
@@ -39,6 +40,7 @@ export class LoanOrchestrator {
     private readonly communicationService: CommunicationService,
     private readonly reminderProcessor: ReminderProcessor,
     private readonly loanCodeGenerate: LoanCodeGenerate,
+    private readonly disbursementService: DisbursementService,
   ) {}
 
   async createLoan(
@@ -523,6 +525,23 @@ export class LoanOrchestrator {
         },
       });
     });
+
+    //  CREATE DISBURSEMENT LOG using DisbursementService
+    try {
+      // Generate idempotency key from loanId to ensure exactly one disbursement per loan approval
+      const idempotencyKey = `disbursement-approval-${loan.id}`;
+      await this.disbursementService.createDisbursement(idempotencyKey, {
+        loanId: loan.id,
+        amount: Number(loan.loanAmount),
+        disbursementMethod: 'CASH',
+        disbursedBy: employee.id,
+        recipientName: loan.customer.fullName,
+        recipientIdNumber: loan.customer.nationalId,
+        notes: `Disbursement for approved loan ${loan.loanCode}`,
+      });
+    } catch (error) {
+      console.error('Failed to create disbursement log:', error);
+    }
 
     // Schedule welcome notification (SMS/Email) immediately after approval
     try {

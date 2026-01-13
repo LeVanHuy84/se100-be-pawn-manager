@@ -1,0 +1,50 @@
+import { BaseFilterQuery } from 'src/common/dto/filter.type';
+import { DisbursementMethod } from 'generated/prisma';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
+export class ListDisbursementsQuery extends BaseFilterQuery {
+  @ApiPropertyOptional({
+    description: 'Filter by loan ID',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  loanId?: string;
+
+  @ApiPropertyOptional({
+    enum: DisbursementMethod,
+    description: 'Filter by disbursement method',
+    example: 'CASH',
+  })
+  disbursementMethod?: DisbursementMethod;
+
+  @ApiPropertyOptional({
+    description: 'Filter from date (YYYY-MM-DD)',
+    example: '2026-01-01',
+  })
+  dateFrom?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter to date (YYYY-MM-DD)',
+    example: '2026-01-31',
+  })
+  dateTo?: string;
+
+  @ApiPropertyOptional({
+    description: 'Minimum disbursement amount',
+    example: 1000000,
+    type: Number,
+  })
+  minAmount?: number;
+
+  @ApiPropertyOptional({
+    description: 'Maximum disbursement amount',
+    example: 50000000,
+    type: Number,
+  })
+  maxAmount?: number;
+
+  @ApiPropertyOptional({
+    description: 'Filter by recipient name',
+    example: 'Nguyễn Văn A',
+  })
+  recipientName?: string;
+}

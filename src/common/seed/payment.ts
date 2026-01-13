@@ -4,9 +4,24 @@ import {
   PaymentMethod,
   PaymentComponent,
   RepaymentItemStatus,
+  RevenueType,
 } from '../../../generated/prisma';
 
 const prisma = new PrismaClient();
+
+/**
+ * Auto-generate payment reference code
+ * Format: PAY-YYYY-NNNNNN
+ */
+async function generatePaymentReferenceCode(): Promise<string> {
+  const year = new Date().getFullYear();
+  const sequence = await prisma.paymentSequence.upsert({
+    where: { year },
+    create: { year, value: 1 },
+    update: { value: { increment: 1 } },
+  });
+  return `PAY-${year}-${sequence.value.toString().padStart(6, '0')}`;
+}
 
 async function main() {
   console.log('🌱 Start seeding Loan Payments...');
@@ -42,6 +57,7 @@ async function main() {
     const period1 = loan1.repaymentSchedule[0]; // Kỳ 1
 
     // Tạo payment
+    const referenceCode1 = await generatePaymentReferenceCode();
     const payment1 = await prisma.loanPayment.create({
       data: {
         loanId: loan1.id,
@@ -49,7 +65,7 @@ async function main() {
         paymentType: PaymentType.PERIODIC,
         paymentMethod: PaymentMethod.CASH,
         paidAt: new Date('2026-02-01'),
-        referenceCode: 'PAY-2026-0001',
+        referenceCode: referenceCode1,
         recorderEmployeeId: 'user_36CjmrStyh4ftbXRS5FL4rmNJrU',
       },
     });
@@ -99,6 +115,24 @@ async function main() {
       },
     });
 
+    // Tạo RevenueLedger cho lãi và phí
+    await prisma.revenueLedger.createMany({
+      data: [
+        {
+          type: RevenueType.INTEREST,
+          amount: period1.interestAmount,
+          refId: payment1.id,
+          recordedAt: new Date('2026-02-01'),
+        },
+        {
+          type: RevenueType.SERVICE_FEE,
+          amount: period1.feeAmount,
+          refId: payment1.id,
+          recordedAt: new Date('2026-02-01'),
+        },
+      ],
+    });
+
     console.log(
       `✅ Created Payment: ${payment1.referenceCode} for ${loan1.loanCode}`,
     );
@@ -108,6 +142,7 @@ async function main() {
   if (loan1) {
     const earlyPaymentAmount = 5000000; // 5 triệu trả trước
 
+    const referenceCode2 = await generatePaymentReferenceCode();
     const payment2 = await prisma.loanPayment.create({
       data: {
         loanId: loan1.id,
@@ -115,7 +150,7 @@ async function main() {
         paymentType: PaymentType.EARLY,
         paymentMethod: PaymentMethod.BANK_TRANSFER,
         paidAt: new Date('2026-02-15'),
-        referenceCode: 'PAY-2026-0002',
+        referenceCode: referenceCode2,
         recorderEmployeeId: 'user_36CjmrStyh4ftbXRS5FL4rmNJrU',
       },
     });
@@ -148,6 +183,7 @@ async function main() {
   if (loan4 && loan4.repaymentSchedule.length > 0) {
     const period1 = loan4.repaymentSchedule[0];
 
+    const referenceCode3 = await generatePaymentReferenceCode();
     const payment3 = await prisma.loanPayment.create({
       data: {
         loanId: loan4.id,
@@ -155,7 +191,7 @@ async function main() {
         paymentType: PaymentType.PERIODIC,
         paymentMethod: PaymentMethod.CASH,
         paidAt: new Date('2025-11-01'),
-        referenceCode: 'PAY-2025-0101',
+        referenceCode: referenceCode3,
         recorderEmployeeId: 'user_36CjmrStyh4ftbXRS5FL4rmNJrU',
       },
     });
@@ -191,6 +227,24 @@ async function main() {
       },
     });
 
+    // Tạo RevenueLedger cho lãi và phí
+    await prisma.revenueLedger.createMany({
+      data: [
+        {
+          type: RevenueType.INTEREST,
+          amount: period1.interestAmount,
+          refId: payment3.id,
+          recordedAt: new Date('2025-11-01'),
+        },
+        {
+          type: RevenueType.SERVICE_FEE,
+          amount: period1.feeAmount,
+          refId: payment3.id,
+          recordedAt: new Date('2025-11-01'),
+        },
+      ],
+    });
+
     console.log(
       `✅ Created Payment: ${payment3.referenceCode} for ${loan4.loanCode}`,
     );
@@ -201,6 +255,7 @@ async function main() {
     const period2 = loan4.repaymentSchedule[1];
     const partialAmount = period2.totalAmount.toNumber() * 0.5; // Trả 50%
 
+    const referenceCode4 = await generatePaymentReferenceCode();
     const payment4 = await prisma.loanPayment.create({
       data: {
         loanId: loan4.id,
@@ -208,7 +263,7 @@ async function main() {
         paymentType: PaymentType.PERIODIC,
         paymentMethod: PaymentMethod.CASH,
         paidAt: new Date('2025-12-05'),
-        referenceCode: 'PAY-2025-0102',
+        referenceCode: referenceCode4,
         recorderEmployeeId: 'user_36CjmrStyh4ftbXRS5FL4rmNJrU',
       },
     });
@@ -264,6 +319,28 @@ async function main() {
       },
     });
 
+    // Tạo RevenueLedger cho lãi và phí đã thanh toán
+    const revenueEntries: Prisma.RevenueLedgerCreateManyInput[] = [];
+    if (paidInterest > 0) {
+      revenueEntries.push({
+        type: RevenueType.INTEREST,
+        amount: paidInterest,
+        refId: payment4.id,
+        recordedAt: new Date('2025-12-05'),
+      });
+    }
+    if (paidFee > 0) {
+      revenueEntries.push({
+        type: RevenueType.SERVICE_FEE,
+        amount: paidFee,
+        refId: payment4.id,
+        recordedAt: new Date('2025-12-05'),
+      });
+    }
+    if (revenueEntries.length > 0) {
+      await prisma.revenueLedger.createMany({ data: revenueEntries });
+    }
+
     console.log(
       `✅ Created Partial Payment: ${payment4.referenceCode} for ${loan4.loanCode} (50% of period 2)`,
     );
@@ -274,6 +351,7 @@ async function main() {
     const period2 = loan4.repaymentSchedule[1];
 
     if (period2.penaltyAmount.toNumber() > 0) {
+      const referenceCode5 = await generatePaymentReferenceCode();
       const payment5 = await prisma.loanPayment.create({
         data: {
           loanId: loan4.id,
@@ -281,7 +359,7 @@ async function main() {
           paymentType: PaymentType.ADJUSTMENT,
           paymentMethod: PaymentMethod.CASH,
           paidAt: new Date('2026-01-10'),
-          referenceCode: 'PAY-2026-0003',
+          referenceCode: referenceCode5,
           recorderEmployeeId: 'user_36CjmrStyh4ftbXRS5FL4rmNJrU',
         },
       });
@@ -300,6 +378,16 @@ async function main() {
         where: { id: period2.id },
         data: {
           paidPenalty: period2.penaltyAmount,
+        },
+      });
+
+      // Tạo RevenueLedger cho phí phạt
+      await prisma.revenueLedger.create({
+        data: {
+          type: RevenueType.LATE_FEE,
+          amount: period2.penaltyAmount,
+          refId: payment5.id,
+          recordedAt: new Date('2026-01-10'),
         },
       });
 
@@ -326,6 +414,7 @@ async function main() {
         0,
       );
 
+      const referenceCode6 = await generatePaymentReferenceCode();
       const payment6 = await prisma.loanPayment.create({
         data: {
           loanId: loan2.id,
@@ -333,7 +422,7 @@ async function main() {
           paymentType: PaymentType.PAYOFF,
           paymentMethod: PaymentMethod.BANK_TRANSFER,
           paidAt: new Date('2026-01-20'),
-          referenceCode: 'PAY-2026-0004',
+          referenceCode: referenceCode6,
           recorderEmployeeId: 'user_36CjmrStyh4ftbXRS5FL4rmNJrU',
         },
       });
@@ -401,6 +490,28 @@ async function main() {
           remainingAmount: 0,
         },
       });
+
+      // Tạo RevenueLedger cho lãi và phí tất toán
+      const payoffRevenueEntries: Prisma.RevenueLedgerCreateManyInput[] = [];
+      if (totalInterest > 0) {
+        payoffRevenueEntries.push({
+          type: RevenueType.INTEREST,
+          amount: totalInterest,
+          refId: payment6.id,
+          recordedAt: new Date('2026-01-20'),
+        });
+      }
+      if (totalFee > 0) {
+        payoffRevenueEntries.push({
+          type: RevenueType.SERVICE_FEE,
+          amount: totalFee,
+          refId: payment6.id,
+          recordedAt: new Date('2026-01-20'),
+        });
+      }
+      if (payoffRevenueEntries.length > 0) {
+        await prisma.revenueLedger.createMany({ data: payoffRevenueEntries });
+      }
 
       console.log(
         `✅ Created Payoff Payment: ${payment6.referenceCode} for ${loan2.loanCode} - Loan CLOSED`,

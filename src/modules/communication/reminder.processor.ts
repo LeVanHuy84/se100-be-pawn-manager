@@ -214,6 +214,10 @@ export class ReminderProcessor {
           where: { periodNumber: 1 },
           take: 1,
         },
+        disbursements: {
+          orderBy: { disbursedAt: 'desc' },
+          take: 1,
+        },
       },
     });
 
@@ -228,9 +232,20 @@ export class ReminderProcessor {
     const dueDate = this.formatDateVN(firstPayment.dueDate);
     const amount = Number(firstPayment.totalAmount);
 
+    // Get disbursement info
+    const disbursement = loan.disbursements[0];
+    const disbursementInfo = disbursement
+      ? `\n\nThông tin giải ngân:
+Mã giải ngân: ${disbursement.referenceCode}
+Số tiền: ${Number(disbursement.amount).toLocaleString('vi-VN')} VND
+Phương thức: ${disbursement.disbursementMethod === 'CASH' ? 'Tiền mặt' : 'Chuyển khoản'}
+Người nhận: ${disbursement.recipientName}`
+      : '';
+
     const message = `[Cầm đồ] Xin chào ${loan.customer.fullName}!
 Khoản vay của bạn đã được duyệt.
-Số tiền vay: ${Number(loan.loanAmount).toLocaleString('vi-VN')} VND
+Số tiền vay: ${Number(loan.loanAmount).toLocaleString('vi-VN')} VND${disbursementInfo}
+
 Kỳ đầu tiên đến hạn: ${dueDate}
 Số tiền: ${amount.toLocaleString('vi-VN')} VND
 Cảm ơn bạn đã tin tưởng!`;

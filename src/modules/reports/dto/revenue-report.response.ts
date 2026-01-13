@@ -20,12 +20,16 @@ class ExpenseBreakdown {
 }
 
 export class RevenueReportResponse {
-  @ApiProperty({ description: 'Period identifier', example: '2024-01' })
-  period: string;
+  @ApiProperty({
+    description:
+      'Date for this data point (YYYY-MM-DD format for daily reports)',
+    example: '2026-01-15',
+  })
+  date: string;
 
   @ApiProperty({
     description: 'Total revenue for the period',
-    example: 6700000,
+    example: 250000.5,
   })
   totalRevenue: number;
 
@@ -37,7 +41,7 @@ export class RevenueReportResponse {
 
   @ApiProperty({
     description: 'Total expenses for the period',
-    example: 50000000,
+    example: 10000000.0,
   })
   totalExpense: number;
 
@@ -85,11 +89,42 @@ class RevenueSummary {
 
 export class RevenueReportListResponse {
   @ApiProperty({
-    description: 'Revenue data by period',
+    description:
+      'Daily revenue data - one entry per day in the queried date range. Use this array to plot charts.',
     type: [RevenueReportResponse],
+    example: [
+      {
+        date: '2026-01-01',
+        totalRevenue: 150000.0,
+        breakdown: {
+          interest: 100000.0,
+          serviceFee: 30000.0,
+          lateFee: 20000.0,
+          liquidationExcess: 0.0,
+        },
+        totalExpense: 10000000.0,
+        expenseBreakdown: { loanDisbursement: 10000000.0 },
+      },
+      {
+        date: '2026-01-02',
+        totalRevenue: 200000.0,
+        breakdown: {
+          interest: 150000.0,
+          serviceFee: 40000.0,
+          lateFee: 10000.0,
+          liquidationExcess: 0.0,
+        },
+        totalExpense: 5000000.0,
+        expenseBreakdown: { loanDisbursement: 5000000.0 },
+      },
+    ],
   })
   data: RevenueReportResponse[];
 
-  @ApiProperty({ description: 'Summary of all revenue', type: RevenueSummary })
+  @ApiProperty({
+    description:
+      'Summary totals across all days in the date range. Use this for displaying overall statistics.',
+    type: RevenueSummary,
+  })
   summary: RevenueSummary;
 }

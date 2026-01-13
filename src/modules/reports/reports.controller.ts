@@ -15,6 +15,8 @@ import { RevenueReportListResponse } from './dto/revenue-report.response';
 import { DailyLogResponse } from './dto/daily-log.response';
 import { QuarterlyReportResponse } from './dto/quarterly-report.dto';
 import { RevenueReportQuery } from './dto/revenue-report.query';
+import { Roles } from 'src/common/decorators/role.decorator';
+import { Role } from 'src/modules/employee/enum/role.enum';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
@@ -25,17 +27,23 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get('revenue')
+  @Roles(Role.MANAGER)
   @ApiOperation({
-    summary: 'Get revenue report',
+    summary: 'Get revenue report with daily breakdown',
     description:
-      'Retrieve revenue breakdown with optional date range (30 days) and revenue type filtering',
+      'Retrieve revenue report with daily data points for charting. Returns an array of daily revenue/expense data plus summary totals. Query date range defaults to 30 days. Only MANAGER can access revenue reports.',
   })
-  @ApiOkResponse({ type: RevenueReportListResponse })
+  @ApiOkResponse({
+    type: RevenueReportListResponse,
+    description:
+      'Returns daily revenue data array for charts and summary totals. Each data point represents one day with revenue breakdown and expenses.',
+  })
   async getRevenueReport(@Query() query: RevenueReportQuery) {
     return this.reportsService.getRevenueReport(query);
   }
 
   @Get('daily-log')
+  @Roles(Role.MANAGER, Role.STAFF)
   @ApiOperation({
     summary: 'Get daily log for police book',
     description:
@@ -47,10 +55,11 @@ export class ReportsController {
   }
 
   @Get('quarterly')
+  @Roles(Role.MANAGER)
   @ApiOperation({
     summary: 'Get quarterly report (Mẫu ĐK13)',
     description:
-      'Generate comprehensive quarterly report for police compliance (Mẫu ĐK13) including loan statistics, revenue breakdown, and compliance metrics',
+      'Generate comprehensive quarterly report for police compliance (Mẫu ĐK13) including loan statistics, revenue breakdown, and compliance metrics. Only MANAGER can access quarterly reports.',
   })
   @ApiOkResponse({ type: QuarterlyReportResponse })
   async getQuarterlyReport(@Query() query: QuarterlyReportQuery) {

@@ -49,14 +49,18 @@ export class MarkOverdueProcessor {
     await this.prisma.$transaction(async (tx) => {
       for (const item of candidates) {
         // ===== 1. Tính outstanding =====
-        const principalOutstanding =
-          Number(item.principalAmount) - Number(item.paidPrincipal ?? 0);
-        const interestOutstanding =
-          Number(item.interestAmount) - Number(item.paidInterest ?? 0);
-        const feeOutstanding =
-          Number(item.feeAmount) - Number(item.paidFee ?? 0);
-        const penaltyOutstanding =
-          Number(item.penaltyAmount ?? 0) - Number(item.paidPenalty ?? 0);
+        const principalOutstanding = Math.round(
+          Number(item.principalAmount) - Number(item.paidPrincipal ?? 0),
+        );
+        const interestOutstanding = Math.round(
+          Number(item.interestAmount) - Number(item.paidInterest ?? 0),
+        );
+        const feeOutstanding = Math.round(
+          Number(item.feeAmount) - Number(item.paidFee ?? 0),
+        );
+        const penaltyOutstanding = Math.round(
+          Number(item.penaltyAmount ?? 0) - Number(item.paidPenalty ?? 0),
+        );
 
         const stillOutstanding =
           principalOutstanding > 0 ||
