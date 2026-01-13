@@ -19,6 +19,7 @@ import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { CommunicationModule } from './modules/communication/communication.module';
 import { StoreModule } from './modules/store/store.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { LocationModule } from './modules/location/location.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AuditLogModule,
     CommunicationModule,
     StoreModule,
+    LocationModule,
   ],
   controllers: [],
   providers: [

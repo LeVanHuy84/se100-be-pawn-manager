@@ -75,11 +75,6 @@ async function runSeeds() {
   console.log('🌱 ========================================\n');
   console.log('🔄 Resetting database...');
 
-  execSync('npx prisma migrate reset --force', {
-    stdio: 'inherit',
-    cwd: path.resolve(__dirname, '../../../'),
-  });
-
   const startTime = Date.now();
   let successCount = 0;
   let failedCount = 0;
