@@ -5,6 +5,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export const disbursementRequestSchema = z.object({
   loanId: z.uuid('loanId must be a valid UUID'),
+  storeId: z.uuid('storeId must be a valid UUID'),
   amount: z.number().positive('Amount must be greater than 0'),
   disbursementMethod: z.enum(DisbursementMethod),
   disbursedBy: z.string().optional(),
@@ -26,6 +27,13 @@ export class DisbursementRequestDto extends createZodDto(
     format: 'uuid',
   })
   loanId: string;
+
+  @ApiProperty({
+    description: 'Store ID where disbursement is made',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+    format: 'uuid',
+  })
+  storeId: string;
 
   @ApiProperty({
     description: 'Disbursement amount in VND',

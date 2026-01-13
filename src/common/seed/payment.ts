@@ -61,6 +61,7 @@ async function main() {
     const payment1 = await prisma.loanPayment.create({
       data: {
         loanId: loan1.id,
+        storeId: loan1.storeId,
         amount: period1.totalAmount,
         paymentType: PaymentType.PERIODIC,
         paymentMethod: PaymentMethod.CASH,
@@ -122,12 +123,14 @@ async function main() {
           type: RevenueType.INTEREST,
           amount: period1.interestAmount,
           refId: payment1.id,
+          storeId: loan1.storeId,
           recordedAt: new Date('2026-02-01'),
         },
         {
           type: RevenueType.SERVICE_FEE,
           amount: period1.feeAmount,
           refId: payment1.id,
+          storeId: loan1.storeId,
           recordedAt: new Date('2026-02-01'),
         },
       ],
@@ -146,6 +149,7 @@ async function main() {
     const payment2 = await prisma.loanPayment.create({
       data: {
         loanId: loan1.id,
+        storeId: loan1.storeId,
         amount: earlyPaymentAmount,
         paymentType: PaymentType.EARLY,
         paymentMethod: PaymentMethod.BANK_TRANSFER,
@@ -187,6 +191,7 @@ async function main() {
     const payment3 = await prisma.loanPayment.create({
       data: {
         loanId: loan4.id,
+        storeId: loan4.storeId,
         amount: period1.totalAmount,
         paymentType: PaymentType.PERIODIC,
         paymentMethod: PaymentMethod.CASH,
@@ -234,12 +239,14 @@ async function main() {
           type: RevenueType.INTEREST,
           amount: period1.interestAmount,
           refId: payment3.id,
+          storeId: loan4.storeId,
           recordedAt: new Date('2025-11-01'),
         },
         {
           type: RevenueType.SERVICE_FEE,
           amount: period1.feeAmount,
           refId: payment3.id,
+          storeId: loan4.storeId,
           recordedAt: new Date('2025-11-01'),
         },
       ],
@@ -259,6 +266,7 @@ async function main() {
     const payment4 = await prisma.loanPayment.create({
       data: {
         loanId: loan4.id,
+        storeId: loan4.storeId,
         amount: partialAmount,
         paymentType: PaymentType.PERIODIC,
         paymentMethod: PaymentMethod.CASH,
@@ -326,6 +334,7 @@ async function main() {
         type: RevenueType.INTEREST,
         amount: paidInterest,
         refId: payment4.id,
+        storeId: loan4.storeId,
         recordedAt: new Date('2025-12-05'),
       });
     }
@@ -334,6 +343,7 @@ async function main() {
         type: RevenueType.SERVICE_FEE,
         amount: paidFee,
         refId: payment4.id,
+        storeId: loan4.storeId,
         recordedAt: new Date('2025-12-05'),
       });
     }
@@ -355,6 +365,7 @@ async function main() {
       const payment5 = await prisma.loanPayment.create({
         data: {
           loanId: loan4.id,
+          storeId: loan4.storeId,
           amount: period2.penaltyAmount,
           paymentType: PaymentType.ADJUSTMENT,
           paymentMethod: PaymentMethod.CASH,
@@ -367,7 +378,7 @@ async function main() {
       await prisma.paymentAllocation.create({
         data: {
           paymentId: payment5.id,
-          componentType: PaymentComponent.PENALTY,
+          componentType: PaymentComponent.LATE_FEE,
           amount: period2.penaltyAmount,
           note: 'Late payment penalty',
         },
@@ -387,6 +398,7 @@ async function main() {
           type: RevenueType.LATE_FEE,
           amount: period2.penaltyAmount,
           refId: payment5.id,
+          storeId: loan4.storeId,
           recordedAt: new Date('2026-01-10'),
         },
       });
@@ -418,6 +430,7 @@ async function main() {
       const payment6 = await prisma.loanPayment.create({
         data: {
           loanId: loan2.id,
+          storeId: loan2.storeId,
           amount: totalPayoffAmount,
           paymentType: PaymentType.PAYOFF,
           paymentMethod: PaymentMethod.BANK_TRANSFER,
@@ -498,6 +511,7 @@ async function main() {
           type: RevenueType.INTEREST,
           amount: totalInterest,
           refId: payment6.id,
+          storeId: loan2.storeId,
           recordedAt: new Date('2026-01-20'),
         });
       }
@@ -506,6 +520,7 @@ async function main() {
           type: RevenueType.SERVICE_FEE,
           amount: totalFee,
           refId: payment6.id,
+          storeId: loan2.storeId,
           recordedAt: new Date('2026-01-20'),
         });
       }

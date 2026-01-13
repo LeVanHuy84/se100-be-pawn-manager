@@ -54,7 +54,6 @@ enum PaymentComponent {
   PRINCIPAL
   INTEREST
   LATE_FEE
-  PENALTY
   SERVICE_FEE
 }
 
@@ -270,6 +269,7 @@ model LoanPayment {
   id                 String        @id @default(uuid()) @db.Uuid
   idempotencyKey     String?       @unique
   loanId             String        @db.Uuid
+  storeId            String        @db.Uuid
   amount             Decimal
   paymentType        PaymentType
   paymentMethod      PaymentMethod
@@ -280,7 +280,12 @@ model LoanPayment {
   updatedAt          DateTime      @default(now())
 
   loan        Loan                @relation(fields: [loanId], references: [id])
+  store       Store               @relation(fields: [storeId], references: [id])
   allocations PaymentAllocation[]
+
+  @@index([storeId])
+  @@index([loanId])
+  @@index([paidAt])
 }
 
 // Allocation per payment
@@ -292,6 +297,8 @@ model PaymentAllocation {
   note          String?
 
   payment LoanPayment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
 }
 
 // ==================================================
@@ -301,6 +308,7 @@ model Disbursement {
   id                   String             @id @default(uuid()) @db.Uuid
   idempotencyKey       String?            @unique // Prevent duplicate disbursements
   loanId               String             @db.Uuid
+  storeId              String             @db.Uuid
   amount               Decimal            // Số tiền giải ngân
   disbursementMethod   DisbursementMethod // CASH hoặc BANK_TRANSFER
   disbursedAt          DateTime           @default(now())
@@ -317,9 +325,11 @@ model Disbursement {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loan  Loan  @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id])
 
   @@index([loanId])
+  @@index([storeId])
   @@index([disbursedAt])
   @@index([disbursementMethod])
 }
@@ -342,8 +352,11 @@ model Store {
   storeInfo Json
   isActive  Boolean @default(true)
 
-  collaterals Collateral[]
-  loans       Loan[]
+  collaterals   Collateral[]
+  loans         Loan[]
+  payments      LoanPayment[]
+  disbursements Disbursement[]
+  revenues      RevenueLedger[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -450,7 +463,14 @@ model RevenueLedger {
   type       RevenueType // "INTEREST", "FEE", "LIQUIDATION_EXCESS"
   amount     Decimal
   refId      String // LoanID hoặc PaymentID
+  storeId    String      @db.Uuid
   recordedAt DateTime    @default(now())
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId])
+  @@index([type])
+  @@index([recordedAt])
 }
 
 // ==================================================

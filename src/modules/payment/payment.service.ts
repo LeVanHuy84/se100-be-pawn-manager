@@ -59,6 +59,7 @@ export class PaymentService {
 
     const {
       loanId,
+      storeId,
       paymentMethod,
       paymentType,
       dateFrom,
@@ -73,6 +74,7 @@ export class PaymentService {
     const where: Prisma.LoanPaymentWhereInput = {};
 
     if (loanId) where.loanId = loanId;
+    if (storeId) where.storeId = storeId;
     if (paymentMethod) where.paymentMethod = paymentMethod as PaymentMethod;
     if (paymentType) where.paymentType = paymentType as PaymentType;
 
@@ -203,7 +205,7 @@ export class PaymentService {
 
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId },
-      select: { id: true, loanCode: true, status: true },
+      select: { id: true, loanCode: true, status: true, storeId: true },
     });
     if (!loan) throw new NotFoundException('Loan not found');
     if (loan.status === 'CLOSED')
@@ -285,6 +287,7 @@ export class PaymentService {
         payment = await tx.loanPayment.create({
           data: {
             loanId,
+            storeId: loan.storeId,
             amount,
             paymentType,
             paymentMethod: paymentMethod as unknown as PaymentMethod,
@@ -330,10 +333,10 @@ export class PaymentService {
 
         let payInterest = 0,
           payFee = 0,
-          payPenalty = 0,
+          payLateFee = 0,
           payPrincipal = 0;
 
-        // Waterfall: INTEREST -> FEE -> PENALTY -> PRINCIPAL
+        // Waterfall: INTEREST -> FEE -> LATE_FEE -> PRINCIPAL
         if (interestOut > 0 && remainingAmount > 0) {
           payInterest = Math.round(Math.min(remainingAmount, interestOut));
           remainingAmount -= payInterest;
@@ -357,12 +360,12 @@ export class PaymentService {
         }
 
         if (penaltyOut > 0 && remainingAmount > 0) {
-          payPenalty = Math.round(Math.min(remainingAmount, penaltyOut));
-          remainingAmount -= payPenalty;
+          payLateFee = Math.round(Math.min(remainingAmount, penaltyOut));
+          remainingAmount -= payLateFee;
           allocations.push({
-            componentType: PaymentComponent.PENALTY,
+            componentType: PaymentComponent.LATE_FEE,
             periodNumber: period.periodNumber,
-            amount: payPenalty,
+            amount: payLateFee,
             note: notes,
           });
         }
@@ -379,7 +382,7 @@ export class PaymentService {
         }
 
         // update item once
-        if (payInterest + payFee + payPenalty + payPrincipal > 0) {
+        if (payInterest + payFee + payLateFee + payPrincipal > 0) {
           const newPaidInterest =
             Number(period.paidInterest ?? 0) + payInterest;
           const newPaidFee = Number(period.paidFee ?? 0) + payFee;
@@ -393,14 +396,14 @@ export class PaymentService {
           };
 
           if ((period as any).paidPenalty !== undefined) {
-            updateData.paidPenalty = paidPenalty + payPenalty;
+            updateData.paidPenalty = paidPenalty + payLateFee;
           }
 
           const fullyPaid =
             Number(period.interestAmount) - newPaidInterest <= 0 &&
             Number(period.feeAmount) - newPaidFee <= 0 &&
             ((period as any).penaltyAmount !== undefined
-              ? penaltyAmount - (paidPenalty + payPenalty) <= 0
+              ? penaltyAmount - (paidPenalty + payLateFee) <= 0
               : true) &&
             Number(period.principalAmount) - newPaidPrincipal <= 0;
 
@@ -439,6 +442,7 @@ export class PaymentService {
         tx,
         payment.id,
         loanId,
+        loan.storeId,
         allocations,
       );
 
@@ -705,8 +709,8 @@ export class PaymentService {
         return `Interest for period ${a.periodNumber}`;
       case PaymentComponent.SERVICE_FEE:
         return `Service fee for period ${a.periodNumber}`;
-      case PaymentComponent.PENALTY:
-        return `Penalty for period ${a.periodNumber}`;
+      case PaymentComponent.LATE_FEE:
+        return `Late fee for period ${a.periodNumber}`;
       case PaymentComponent.PRINCIPAL:
         return `Principal for period ${a.periodNumber}`;
       default:
@@ -716,19 +720,21 @@ export class PaymentService {
 
   /**
    * Record revenue in ledger from payment allocations
-   * Only revenue-generating components are recorded: INTEREST, SERVICE_FEE, PENALTY, LATE_FEE
+   * Only revenue-generating components are recorded: INTEREST, SERVICE_FEE, LATE_FEE
    * PRINCIPAL is not revenue - it's loan repayment
    */
   private async recordRevenueFromAllocations(
     tx: any,
     paymentId: string,
     loanId: string,
+    storeId: string,
     allocations: AllocationDraft[],
   ): Promise<void> {
     const revenueEntries: Array<{
       type: RevenueType;
       amount: number;
       refId: string;
+      storeId: string;
     }> = [];
 
     for (const allocation of allocations) {
@@ -742,7 +748,6 @@ export class PaymentService {
         case PaymentComponent.SERVICE_FEE:
           revenueType = RevenueType.SERVICE_FEE;
           break;
-        case PaymentComponent.PENALTY:
         case PaymentComponent.LATE_FEE:
           revenueType = RevenueType.LATE_FEE;
           break;
@@ -755,7 +760,8 @@ export class PaymentService {
         revenueEntries.push({
           type: revenueType,
           amount: allocation.amount,
-          refId: paymentId, // Reference to payment for traceability
+          refId: paymentId,
+          storeId: storeId,
         });
       }
     }
@@ -767,7 +773,7 @@ export class PaymentService {
       });
 
       console.log(
-        `📊 Recorded ${revenueEntries.length} revenue entries for payment ${paymentId}, loan ${loanId}`,
+        `📊 Recorded ${revenueEntries.length} revenue entries for payment ${paymentId}, loan ${loanId}, store ${storeId}`,
       );
     }
   }

@@ -10,6 +10,12 @@ export class ListDisbursementsQuery extends BaseFilterQuery {
   loanId?: string;
 
   @ApiPropertyOptional({
+    description: 'Filter by store ID',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+  })
+  storeId?: string;
+
+  @ApiPropertyOptional({
     enum: DisbursementMethod,
     description: 'Filter by disbursement method',
     example: 'CASH',

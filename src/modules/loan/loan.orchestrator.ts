@@ -528,10 +528,11 @@ export class LoanOrchestrator {
 
     //  CREATE DISBURSEMENT LOG using DisbursementService
     try {
-      // Generate idempotency key from loanId to ensure exactly one disbursement per loan approval
-      const idempotencyKey = `disbursement-approval-${loan.id}`;
+      // Generate unique idempotency key for this disbursement using timestamp and loanId
+      const idempotencyKey = `disbursement-${loan.id}-${Date.now()}`;
       await this.disbursementService.createDisbursement(idempotencyKey, {
         loanId: loan.id,
+        storeId: loan.storeId,
         amount: Number(loan.loanAmount),
         disbursementMethod: 'CASH',
         disbursedBy: employee.id,

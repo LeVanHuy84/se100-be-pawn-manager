@@ -49,8 +49,8 @@ export class ReportsService {
     };
 
     if (storeId) {
-      revenueWhere.loan = { storeId };
-      disbursementWhere.loan = { storeId };
+      revenueWhere.storeId = storeId;
+      disbursementWhere.storeId = storeId;
     }
 
     // Parallel queries for better performance - fetch with date info

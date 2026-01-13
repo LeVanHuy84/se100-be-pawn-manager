@@ -52,6 +52,7 @@ async function main() {
     const disbursementData: any = {
       idempotencyKey: idempotencyKey, // Unique idempotency key for each disbursement
       loanId: loan.id,
+      storeId: loan.storeId,
       amount: loan.loanAmount,
       disbursementMethod,
       referenceCode,

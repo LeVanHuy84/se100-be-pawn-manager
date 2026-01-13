@@ -104,6 +104,7 @@ export class DisbursementService {
           bankTransferRef: dto.bankTransferRef,
           bankAccountNumber: dto.bankAccountNumber,
           bankName: dto.bankName,
+          storeId: dto.storeId,
           disbursedAt: new Date(),
         },
         include: {
@@ -183,6 +184,7 @@ export class DisbursementService {
 
     const {
       loanId,
+      storeId,
       disbursementMethod,
       dateFrom,
       dateTo,
@@ -197,6 +199,7 @@ export class DisbursementService {
     const where: Prisma.DisbursementWhereInput = {};
 
     if (loanId) where.loanId = loanId;
+    if (storeId) where.storeId = storeId;
     if (disbursementMethod)
       where.disbursementMethod = disbursementMethod as DisbursementMethod;
 
