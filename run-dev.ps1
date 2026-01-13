@@ -25,6 +25,7 @@ Write-Host "Usage: Server runs once. When it stops (or you stop it with Ctrl+C),
 
 while ($true) {
     try {
+        
         npm run start
     } catch {
         Write-Host "Server crashed or stopped with error." -ForegroundColor Red

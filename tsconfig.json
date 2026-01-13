@@ -14,12 +14,18 @@
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
+    "paths": {
+      "@generated/*": ["generated/*"]
+    },
     "incremental": true,
     "skipLibCheck": true,
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
-  }
+    "noFallthroughCasesInSwitch": false,
+    "allowJs": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "test", "generated"]
 }
