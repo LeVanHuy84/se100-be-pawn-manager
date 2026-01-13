@@ -1,0 +1,98 @@
+{
+  "stores": [
+    {
+      "name": "Pawn Shop Central",
+      "address": "123 Le Loi, District 1, HCMC",
+      "storeInfo": { "phone": "02838221234", "email": "central@pawnshop.com" },
+      "isActive": true
+    },
+    {
+      "name": "Pawn Shop West",
+      "address": "456 Nguyen Van Linh, District 7, HCMC",
+      "storeInfo": { "phone": "02837775678", "email": "west@pawnshop.com" },
+      "isActive": true
+    }
+  ],
+  "loanTypes": [
+    {
+      "name": "Standard Loan",
+      "description": "Standard pawn loan with 30 days duration",
+      "durationMonths": 1,
+      "interestRateMonthly": 0.05
+    },
+    {
+      "name": "Gold Loan",
+      "description": "Special rate for gold items",
+      "durationMonths": 3,
+      "interestRateMonthly": 0.03
+    },
+    {
+      "name": "Tech Loan",
+      "description": "Short term loan for high value electronics",
+      "durationMonths": 1,
+      "interestRateMonthly": 0.045
+    }
+  ],
+  "commonCollateralTypes": [
+    { "name": "Electronics", "custodyFeeRateMonthly": 0.01 },
+    { "name": "Jewelry", "custodyFeeRateMonthly": 0.005 },
+    { "name": "Vehicles", "custodyFeeRateMonthly": 0.02 },
+    { "name": "Real Estate", "custodyFeeRateMonthly": 0.001 },
+    { "name": "Watches", "custodyFeeRateMonthly": 0.015 }
+  ],
+  "systemParameters": [
+    {
+      "paramGroup": "FINANCE",
+      "paramKey": "MAX_LOAN_AMOUNT",
+      "paramValue": "500000000",
+      "description": "Maximum loan amount allowed per transaction"
+    },
+    {
+      "paramGroup": "FINANCE",
+      "paramKey": "DEFAULT_LATE_FEE_RATE",
+      "paramValue": "0.1",
+      "description": "Default late fee rate percentage"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "BUSINESS_HOURS",
+      "paramValue": "08:00-20:00",
+      "description": "Operating hours"
+    }
+  ],
+  "customers": [
+    {
+      "fullName": "Nguyen Van A",
+      "dob": "1990-01-01T00:00:00.000Z",
+      "nationalId": "079090000001",
+      "phone": "0901111111",
+      "email": "nguyenvana@example.com",
+      "address": "123 Side St, D1",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Tran Thi B",
+      "dob": "1985-05-15T00:00:00.000Z",
+      "nationalId": "079085000002",
+      "phone": "0902222222",
+      "email": "tranthib@example.com",
+      "address": "456 High St, D3",
+      "customerType": "VIP",
+      "monthlyIncome": 50000000,
+      "creditScore": 750,
+      "images": {}
+    },
+    {
+      "fullName": "Le Van C",
+      "dob": "2000-10-20T00:00:00.000Z",
+      "nationalId": "079200000003",
+      "phone": "0903333333",
+      "email": "levanc@example.com",
+      "address": "789 Low St, D4",
+      "customerType": "REGULAR",
+      "images": {}
+    }
+  ],
+  "employees": []
+}

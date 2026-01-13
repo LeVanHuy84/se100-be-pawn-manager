@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pawn_manager_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pawn_manager
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    container_name: pawn_manager_redis
+    ports:
+      - "6379:6379"
+
+#  api:
+#    build: .
+#    container_name: pawn_manager_api
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      redis:
+#        condition: service_started
+#    environment:
+#      # Database connection string using the service name 'postgres'
+#      DATABASE_URL: postgresql://postgres:password@postgres:5432/pawn_manager?schema=public
+#      
+#      # Redis configuration
+#      REDIS_HOST: redis
+#      REDIS_PORT: 6379
+#      
+#      # App configs
+#      NODE_ENV: development
+#      PORT: 3000
+#      
+#      # You can add other env vars from .env here if needed
+#      # CLOUDINARY_*, GEMINI_*, SMTP_*, TWILIO_* need to be provided in .env file or here
+#    env_file:
+#      - .env
+#    ports:
+#      - "3000:3000"
+#    volumes:
+#      - .:/usr/src/app
+#      - /usr/src/app/node_modules
+#    command: >
+#      sh -c "npx prisma db push --accept-data-loss &&
+#             npx tsx prisma/seed.ts &&
+#             npm run start:dev"
+
+volumes:
+  postgres_data:
