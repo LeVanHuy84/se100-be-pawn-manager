@@ -1,7 +1,6 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, ApiSchema } from '@nestjs/swagger';
 import { EmployeeStatus } from '../../enum/employee-status.enum';
 import { Role } from '../../enum/role.enum';
-import { PaginationMeta } from 'src/common/dto/pagination.type';
 
 export class EmployeeResponse {
   @ApiProperty({ description: 'Employee ID' })
@@ -35,14 +34,4 @@ export class EmployeeResponse {
     example: '2023-01-10T10:00:00Z',
   })
   createdAt: string;
-}
-
-export class EmployeeListResponse {
-  @ApiProperty({ description: 'List of employees', type: [EmployeeResponse] })
-  data: EmployeeResponse[];
-  @ApiProperty({
-    description: 'Pagination metadata',
-    type: PaginationMeta,
-  })
-  meta: PaginationMeta;
 }

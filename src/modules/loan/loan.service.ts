@@ -92,7 +92,7 @@ export class LoanService {
   }
 
   // get loan by id
-  async getLoanById(id: string): Promise<LoanResponseDto> {
+  async getLoanById(id: string): Promise<BaseResult<LoanResponseDto>> {
     const loan = await this.prisma.loan.findUnique({
       where: { id },
       include: {
@@ -102,6 +102,8 @@ export class LoanService {
         store: true,
       },
     });
-    return LoanMapper.toLoanResponse(loan);
+    return {
+      data: LoanMapper.toLoanResponse(loan),
+    };
   }
 }
