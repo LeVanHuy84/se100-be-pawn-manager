@@ -32,7 +32,13 @@ import { Role } from 'src/modules/employee/enum/role.enum';
 
 @ApiTags('Payments')
 @ApiBearerAuth()
-@ApiExtraModels(BaseResult, PaymentListItem, PaginationMeta, ListPaymentsQuery)
+@ApiExtraModels(
+  BaseResult,
+  PaymentListItem,
+  PaginationMeta,
+  ListPaymentsQuery,
+  PaymentResponse,
+)
 @Controller({
   path: 'payments',
   version: '1',
@@ -126,7 +132,13 @@ export class PaymentController {
   @ApiResponse({
     status: 201,
     description: 'Payment processed successfully',
-    type: PaymentResponse,
+    schema: {
+      type: 'object',
+      properties: {
+        data: { $ref: getSchemaPath(PaymentResponse) },
+      },
+      required: ['data'],
+    },
   })
   @ApiResponse({
     status: 404,
@@ -145,7 +157,7 @@ export class PaymentController {
     @Headers('Idempotency-Key') idempotencyKey: string,
     @Body() body: PaymentRequestDto,
     @Req() req,
-  ): Promise<PaymentResponse> {
+  ): Promise<BaseResult<PaymentResponse>> {
     const employee = {
       id: req.user?.userId,
       name: req.user?.firstName + ' ' + req.user?.lastName,

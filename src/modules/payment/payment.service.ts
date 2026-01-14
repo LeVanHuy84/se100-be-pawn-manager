@@ -188,7 +188,7 @@ export class PaymentService {
     idempotencyKey: string,
     payload: PaymentRequestDto,
     employee: any,
-  ): Promise<PaymentResponse> {
+  ): Promise<BaseResult<PaymentResponse>> {
     const { loanId, amount, paymentMethod, paymentType, notes } = payload;
 
     if (!idempotencyKey)
@@ -567,21 +567,23 @@ export class PaymentService {
     }
 
     return {
-      transactionId: result.payment.id,
-      loanId,
-      amount,
-      paymentMethod: result.payment.paymentMethod,
-      paymentType: result.payment.paymentType as any,
-      paidAt: result.payment.paidAt.toISOString(),
-      allocation: result.allocations.map((a) => ({
-        periodNumber: a.periodNumber,
-        component: a.componentType,
-        amount: Math.round(a.amount),
-        description: this.buildAllocationDescription(a),
-      })),
-      loanBalance: result.balance,
-      nextPayment: result.nextPayment,
-      message: 'Payment processed successfully',
+      data: {
+        transactionId: result.payment.id,
+        loanId,
+        amount,
+        paymentMethod: result.payment.paymentMethod,
+        paymentType: result.payment.paymentType as any,
+        paidAt: result.payment.paidAt.toISOString(),
+        allocation: result.allocations.map((a) => ({
+          periodNumber: a.periodNumber,
+          component: a.componentType,
+          amount: Math.round(a.amount),
+          description: this.buildAllocationDescription(a),
+        })),
+        loanBalance: result.balance,
+        nextPayment: result.nextPayment,
+        message: 'Payment processed successfully',
+      },
     };
   }
 

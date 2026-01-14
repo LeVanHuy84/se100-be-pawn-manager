@@ -49,7 +49,16 @@ export class RepaymentScheduleController {
   @ApiResponse({
     status: 200,
     description: 'Repayment schedule retrieved successfully',
-    type: [RepaymentScheduleItemResponse],
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: getSchemaPath(RepaymentScheduleItemResponse) },
+        },
+      },
+      required: ['data'],
+    },
   })
   @ApiResponse({
     status: 404,
@@ -57,7 +66,7 @@ export class RepaymentScheduleController {
   })
   async getLoanRepaymentSchedule(
     @Param('loanId', new ParseUUIDPipe()) loanId: string,
-  ): Promise<RepaymentScheduleItemResponse[]> {
+  ): Promise<BaseResult<RepaymentScheduleItemResponse[]>> {
     return this.repaymentScheduleService.getLoanRepaymentSchedule(loanId);
   }
 
@@ -106,7 +115,13 @@ export class RepaymentScheduleController {
   @ApiResponse({
     status: 200,
     description: 'Repayment schedule item retrieved successfully',
-    type: RepaymentScheduleItemResponse,
+    schema: {
+      type: 'object',
+      properties: {
+        data: { $ref: getSchemaPath(RepaymentScheduleItemResponse) },
+      },
+      required: ['data'],
+    },
   })
   @ApiResponse({
     status: 404,
@@ -114,7 +129,7 @@ export class RepaymentScheduleController {
   })
   async getRepaymentScheduleItem(
     @Param('id', new ParseUUIDPipe()) id: string,
-  ): Promise<RepaymentScheduleItemResponse> {
+  ): Promise<BaseResult<RepaymentScheduleItemResponse>> {
     return this.repaymentScheduleService.getRepaymentScheduleItem(id);
   }
 }

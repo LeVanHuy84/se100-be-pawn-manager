@@ -119,7 +119,7 @@ export class RevenueReportListResponse {
       },
     ],
   })
-  data: RevenueReportResponse[];
+  detail: RevenueReportResponse[];
 
   @ApiProperty({
     description:
