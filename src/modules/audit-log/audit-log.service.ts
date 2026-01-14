@@ -1,17 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AuditLogQueryDto } from './dto/request/audit-log.query';
-import {
-  AuditLogResponseDto,
-  ListAuditLogResponseDto,
-} from './dto/response/audit-log.dto';
+import { AuditLogResponseDto } from './dto/response/audit-log.dto';
 import { AuditLogMapper } from './audit-log.mapper';
+import { BaseResult } from 'src/common/dto/base.response';
 
 @Injectable()
 export class AuditLogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getAuditLogs(dto: AuditLogQueryDto): Promise<ListAuditLogResponseDto> {
+  async getAuditLogs(
+    dto: AuditLogQueryDto,
+  ): Promise<BaseResult<AuditLogResponseDto[]>> {
     const { actorId, action, startDate, endDate, page, limit } = dto;
 
     const whereClause: any = {};
@@ -41,7 +41,7 @@ export class AuditLogService {
     ]);
 
     return {
-      auditLogs: AuditLogMapper.toDtoList(logs),
+      data: AuditLogMapper.toDtoList(logs),
       meta: {
         totalItems: total,
         totalPages: Math.ceil(total / limit),

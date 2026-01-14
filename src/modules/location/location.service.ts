@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ProvinceResponse, WardResponse } from './dto/location.response';
 import { LocationLevel } from 'generated/prisma';
+import { BaseResult } from 'src/common/dto/base.response';
 
 @Injectable()
 export class LocationService {
@@ -12,7 +13,7 @@ export class LocationService {
    * - Không search: trả tất cả province
    * - Có search: chỉ search trong province
    */
-  async getLocations(search?: string): Promise<ProvinceResponse[]> {
+  async getLocations(search?: string): Promise<BaseResult<ProvinceResponse[]>> {
     const provinces = await this.prisma.location.findMany({
       where: {
         level: LocationLevel.PROVINCE,
@@ -26,11 +27,13 @@ export class LocationService {
       orderBy: { name: 'asc' },
     });
 
-    return provinces.map((p) => ({
-      id: p.id,
-      code: p.code,
-      name: p.name,
-    }));
+    return {
+      data: provinces.map((p) => ({
+        id: p.id,
+        code: p.code,
+        name: p.name,
+      })),
+    };
   }
 
   /**
@@ -39,7 +42,7 @@ export class LocationService {
   async getWardsByProvinceCode(
     provinceCode: string,
     search?: string,
-  ): Promise<WardResponse[]> {
+  ): Promise<BaseResult<WardResponse[]>> {
     // 1️⃣ Tìm province theo code
     const province = await this.prisma.location.findUnique({
       where: {
@@ -66,11 +69,13 @@ export class LocationService {
       orderBy: { name: 'asc' },
     });
 
-    return wards.map((w) => ({
-      id: w.id,
-      code: w.code,
-      name: w.name,
-      parentId: w.parentId!,
-    }));
+    return {
+      data: wards.map((w) => ({
+        id: w.id,
+        code: w.code,
+        name: w.name,
+        parentId: w.parentId!,
+      })),
+    };
   }
 }

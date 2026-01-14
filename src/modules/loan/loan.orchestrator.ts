@@ -17,12 +17,7 @@ import { LoanSimulationsService } from '../loan-simulations/loan-simulations.ser
 import { LoanSimulationRequestDto } from '../loan-simulations/dto/request/loan-simulation.request';
 import { UpdateLoanDto } from './dto/request/update-loan.dto';
 import { LoanStatusMachine } from './enum/loan.status-machine';
-import {
-  CreateLoanResponseDto,
-  LoanResponseDto,
-  UpdateLoanResponseDto,
-  UpdateLoanStatusResponseDto,
-} from './dto/response/loan.response';
+import { LoanResponseDto } from './dto/response/loan.response';
 import { LoanMapper } from './loan.mapper';
 
 import { CommunicationService } from '../communication/communication.service';
@@ -31,6 +26,7 @@ import { DisbursementService } from '../disbursement/disbursement.service';
 
 import { AuditActionEnum } from 'src/common/enums/audit-action.enum';
 import { LoanCodeGenerate } from './loan-code.generate';
+import { BaseResult } from 'src/common/dto/base.response';
 
 @Injectable()
 export class LoanOrchestrator {
@@ -46,7 +42,7 @@ export class LoanOrchestrator {
   async createLoan(
     dto: CreateLoanDto,
     employee: any,
-  ): Promise<CreateLoanResponseDto> {
+  ): Promise<BaseResult<LoanResponseDto>> {
     try {
       const {
         customerId,
@@ -216,9 +212,7 @@ export class LoanOrchestrator {
       });
 
       return {
-        loan: LoanMapper.toLoanResponse(fullLoan),
-        message:
-          'Loan application created successfully. Status: PENDING. Awaiting approval.',
+        data: LoanMapper.toLoanResponse(fullLoan),
       };
     } catch (error) {
       throw new BadRequestException(
@@ -234,7 +228,7 @@ export class LoanOrchestrator {
     loanId: string,
     dto: UpdateLoanDto,
     employee: any,
-  ): Promise<UpdateLoanResponseDto> {
+  ): Promise<BaseResult<LoanResponseDto>> {
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId },
       include: { collaterals: true },
@@ -429,8 +423,7 @@ export class LoanOrchestrator {
     });
 
     return {
-      message: 'Loan updated successfully (PENDING stage)',
-      loan: LoanMapper.toLoanResponse(fullLoan),
+      data: LoanMapper.toLoanResponse(fullLoan),
     };
   }
 
@@ -441,7 +434,7 @@ export class LoanOrchestrator {
     loanId: string,
     dto: ApproveLoanDto,
     employee: any,
-  ): Promise<UpdateLoanStatusResponseDto> {
+  ): Promise<BaseResult<LoanResponseDto>> {
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId },
       include: { collaterals: true },
@@ -470,7 +463,9 @@ export class LoanOrchestrator {
         throw new BadRequestException('Invalid status update request');
     }
 
-    return result;
+    return {
+      data: result.loan,
+    };
   }
 
   private async approveLoan(loan: any, dto: ApproveLoanDto, employee: any) {
