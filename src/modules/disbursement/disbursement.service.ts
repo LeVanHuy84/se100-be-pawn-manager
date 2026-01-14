@@ -44,7 +44,7 @@ export class DisbursementService {
   async createDisbursement(
     idempotencyKey: string,
     dto: DisbursementRequestDto,
-  ): Promise<DisbursementDetailsResponse> {
+  ): Promise<BaseResult<DisbursementDetailsResponse>> {
     // Check idempotency key
     if (!idempotencyKey) {
       throw new ConflictException('Idempotency-Key is required');
@@ -152,24 +152,26 @@ export class DisbursementService {
     });
 
     return {
-      id: result.id,
-      loanId: result.loanId,
-      loanCode: result.loan.loanCode,
-      amount: Number(result.amount),
-      disbursementMethod: result.disbursementMethod,
-      disbursedAt: result.disbursedAt.toISOString(),
-      referenceCode: result.referenceCode,
-      disbursedBy: result.disbursedBy,
-      recipientName: result.recipientName,
-      recipientIdNumber: result.recipientIdNumber,
-      witnessName: result.witnessName,
-      notes: result.notes,
-      bankTransferRef: result.bankTransferRef,
-      bankAccountNumber: result.bankAccountNumber,
-      bankName: result.bankName,
-      createdAt: result.createdAt.toISOString(),
-      updatedAt: result.updatedAt.toISOString(),
-      customer: result.loan.customer,
+      data: {
+        id: result.id,
+        loanId: result.loanId,
+        loanCode: result.loan.loanCode,
+        amount: Number(result.amount),
+        disbursementMethod: result.disbursementMethod,
+        disbursedAt: result.disbursedAt.toISOString(),
+        referenceCode: result.referenceCode,
+        disbursedBy: result.disbursedBy,
+        recipientName: result.recipientName,
+        recipientIdNumber: result.recipientIdNumber,
+        witnessName: result.witnessName,
+        notes: result.notes,
+        bankTransferRef: result.bankTransferRef,
+        bankAccountNumber: result.bankAccountNumber,
+        bankName: result.bankName,
+        createdAt: result.createdAt.toISOString(),
+        updatedAt: result.updatedAt.toISOString(),
+        customer: result.loan.customer,
+      },
     };
   }
 

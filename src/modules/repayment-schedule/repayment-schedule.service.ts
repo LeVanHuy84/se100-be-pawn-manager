@@ -56,7 +56,7 @@ export class RepaymentScheduleService {
 
   async getLoanRepaymentSchedule(
     loanId: string,
-  ): Promise<RepaymentScheduleItemResponse[]> {
+  ): Promise<BaseResult<RepaymentScheduleItemResponse[]>> {
     // 1. check loan
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId },
@@ -71,12 +71,14 @@ export class RepaymentScheduleService {
       orderBy: [{ periodNumber: 'asc' }],
     });
 
-    return items.map((item) => this.mapItem(item));
+    return {
+      data: items.map((item) => this.mapItem(item)),
+    };
   }
 
   async getRepaymentScheduleItem(
     id: string,
-  ): Promise<RepaymentScheduleItemResponse> {
+  ): Promise<BaseResult<RepaymentScheduleItemResponse>> {
     const item = await this.prisma.repaymentScheduleDetail.findUnique({
       where: { id },
     });
@@ -85,7 +87,9 @@ export class RepaymentScheduleService {
       throw new NotFoundException('Repayment schedule item not found');
     }
 
-    return this.mapItem(item);
+    return {
+      data: this.mapItem(item),
+    };
   }
 
   /**
