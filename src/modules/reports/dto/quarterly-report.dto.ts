@@ -1,6 +1,6 @@
-import { z } from 'zod';
-import { createZodDto } from 'nestjs-zod';
 import { ApiProperty } from '@nestjs/swagger';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
 export const quarterlyReportQuerySchema = z.object({
   year: z.coerce
@@ -17,6 +17,7 @@ export class QuarterlyReportQuery extends createZodDto(
 ) {
   @ApiProperty({ description: 'Year', example: 2024 })
   year: number;
+
   @ApiProperty({ description: 'Quarter (1-4)', example: 1 })
   quarter: number;
 }

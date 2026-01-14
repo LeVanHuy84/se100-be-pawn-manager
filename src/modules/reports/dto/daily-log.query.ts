@@ -1,6 +1,6 @@
-import { z } from 'zod';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { createZodDto } from 'nestjs-zod';
-import { ApiProperty } from '@nestjs/swagger';
+import { z } from 'zod';
 
 export const dailyLogQuerySchema = z.object({
   date: z
@@ -19,10 +19,10 @@ export class DailyLogQuery extends createZodDto(dailyLogQuerySchema) {
     example: '2024-01-15',
   })
   date: string;
-  @ApiProperty({
+
+  @ApiPropertyOptional({
     description: 'Filter by store UUID (for multi-location)',
     example: '550e8400-e29b-41d4-a716-446655440000',
-    required: false,
   })
   storeId?: string;
 }
