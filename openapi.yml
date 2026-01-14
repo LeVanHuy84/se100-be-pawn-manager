@@ -1,0 +1,1348 @@
+openapi: 3.0.0
+info:
+  title: Pawn Manager API
+  description: API for managing pawn shop operations, including loans, customers, payments, collateral, and stores.
+  version: '1.0'
+servers:
+  - url: /v1
+    description: V1 API Endpoint
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # --- COMMON ---
+    PaginationMeta:
+      type: object
+      properties:
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+        currentPage:
+          type: integer
+        itemsPerPage:
+          type: integer
+
+    ImageItem:
+      type: object
+      properties:
+        url:
+          type: string
+        id:
+          type: string
+
+    # --- CUSTOMER ---
+    CustomerType:
+      type: string
+      enum: [REGULAR, VIP]
+
+    CreateCustomerDTO:
+      type: object
+      required:
+        - fullName
+        - dob
+        - nationalId
+        - nationalIdIssueDate
+        - nationalIdIssuePlace
+        - phone
+        - customerType
+        - monthlyIncome
+      properties:
+        fullName:
+          type: string
+          maxLength: 200
+        dob:
+          type: string
+          format: date
+          description: YYYY-MM-DD
+        nationalId:
+          type: string
+          description: 12 digits
+        nationalIdIssueDate:
+          type: string
+          format: date
+        nationalIdIssuePlace:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        address:
+          type: string
+        customerType:
+          $ref: '#/components/schemas/CustomerType'
+        monthlyIncome:
+          type: number
+          minimum: 3000000
+        creditScore:
+          type: integer
+          minimum: 0
+          maximum: 1000
+
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        address:
+          type: string
+        monthlyIncome:
+          type: number
+
+    CustomerBasicResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        dob:
+          type: string
+          format: date
+        nationalId:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        customerType:
+          $ref: '#/components/schemas/CustomerType'
+        monthlyIncome:
+          type: number
+        creditScore:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageItem'
+
+    CustomerListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerBasicResponse'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # --- LOAN ---
+    RepaymentMethod:
+      type: string
+      enum: [EQUAL_INSTALLMENT, INTEREST_ONLY]
+
+    LoanStatus:
+      type: string
+      enum: [PENDING, REJECTED, ACTIVE, CLOSED, OVERDUE]
+
+    CreateLoanDto:
+      type: object
+      required:
+        - customerId
+        - loanAmount
+        - repaymentMethod
+        - loanTypeId
+        - collateralIds
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        loanAmount:
+          type: number
+        repaymentMethod:
+          $ref: '#/components/schemas/RepaymentMethod'
+        loanTypeId:
+          type: integer
+        notes:
+          type: string
+        collateralIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+
+    ApproveLoanDto:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [ACTIVE, REJECTED]
+        note:
+          type: string
+
+    UpdateLoanDto:
+      type: object
+      properties:
+        loanAmount:
+          type: number
+        repaymentMethod:
+          $ref: '#/components/schemas/RepaymentMethod'
+        loanTypeId:
+          type: integer
+        notes:
+          type: string
+
+    LoanResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        loanCode:
+          type: string
+        customerId:
+          type: string
+        storeId:
+          type: string
+        loanAmount:
+          type: number
+        repaymentMethod:
+          $ref: '#/components/schemas/RepaymentMethod'
+        loanTypeId:
+          type: integer
+        loanTypeName:
+          type: string
+        durationMonths:
+          type: number
+        appliedInterestRate:
+          type: number
+        latePaymentPenaltyRate:
+          type: number
+        totalInterest:
+          type: number
+        totalFees:
+          type: number
+        totalRepayment:
+          type: number
+        monthlyPayment:
+          type: number
+        status:
+          $ref: '#/components/schemas/LoanStatus'
+        startDate:
+          type: string
+          format: date-time
+          nullable: true
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        customer:
+          $ref: '#/components/schemas/CustomerBasicResponse'
+        collateral:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollateralAssetResponse'
+
+    LoanSummaryResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        loanCode:
+          type: string
+        customerId:
+          type: string
+        storeName:
+          type: string
+        loanAmount:
+          type: number
+        totalRepayment:
+          type: number
+        monthlyPayment:
+          type: number
+        durationMonths:
+          type: number
+        loanTypeName:
+          type: string
+        repaymentMethod:
+          $ref: '#/components/schemas/RepaymentMethod'
+        status:
+          $ref: '#/components/schemas/LoanStatus'
+        startDate:
+          type: string
+        activatedAt:
+          type: string
+        createdAt:
+          type: string
+
+    ListLoansResponseDto:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoanSummaryResponseDto'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # --- PAYMENT ---
+    PaymentMethod:
+      type: string
+      enum: [CASH, BANK_TRANSFER]
+
+    PaymentType:
+      type: string
+      enum: [PERIODIC, EARLY, PAYOFF, ADJUSTMENT]
+
+    PaymentRequestDto:
+      type: object
+      required:
+        - loanId
+        - amount
+        - paymentMethod
+        - paymentType
+      properties:
+        loanId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        paymentType:
+          $ref: '#/components/schemas/PaymentType'
+        notes:
+          type: string
+
+    PaymentResponse:
+      type: object
+      description: Simplified response
+      properties:
+        id:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+
+    PaymentListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        loanId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        paymentType:
+          $ref: '#/components/schemas/PaymentType'
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        paidAt:
+          type: string
+          format: date-time
+        referenceCode:
+          type: string
+
+    ListPaymentsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentListItem'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # --- COLLATERAL ---
+    CollateralStatus:
+      type: string
+      enum: [PROPOSED, PLEDGED, STORED, RELEASED, REJECTED, LIQUIDATING, SOLD]
+
+    CreateCollateralDTO:
+      type: object
+      required:
+        - collateralTypeId
+        - ownerName
+      properties:
+        collateralTypeId:
+          type: integer
+        ownerName:
+          type: string
+        collateralInfo:
+          type: object
+          additionalProperties: true
+        status:
+          $ref: '#/components/schemas/CollateralStatus'
+        loanId:
+          type: string
+          format: uuid
+        storageLocation:
+          type: string
+        receivedDate:
+          type: string
+          format: date
+
+    PatchCollateralDTO:
+      type: object
+      properties:
+        ownerName:
+          type: string
+        collateralInfo:
+          type: object
+        status:
+          $ref: '#/components/schemas/CollateralStatus'
+        storageLocation:
+          type: string
+
+    UpdateLocationRequest:
+      type: object
+      required:
+        - storageLocation
+      properties:
+        storageLocation:
+          type: string
+
+    CollateralAssetResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        collateralTypeId:
+          type: integer
+        ownerName:
+          type: string
+        collateralInfo:
+          type: object
+        status:
+          $ref: '#/components/schemas/CollateralStatus'
+        loanId:
+          type: string
+        storageLocation:
+          type: string
+        receivedDate:
+          type: string
+        appraisedValue:
+          type: number
+        ltvRatio:
+          type: number
+
+    CollateralAssetListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollateralAssetResponse'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    CreateLiquidationRequest:
+      type: object
+      properties:
+        # Simplified based on Collateral logic often requiring an ID and amount
+        collateralId:
+          type: string
+        soldPrice:
+          type: number
+        soldDate:
+          type: string
+
+    # --- STORE ---
+    CreateStoreDTO:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        storeInfo:
+          type: object
+        isActive:
+          type: boolean
+          default: true
+
+    UpdateStoreDTO:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        isActive:
+          type: boolean
+
+    StoreResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+        isActive:
+          type: boolean
+
+    StoreListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StoreResponse'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # --- REPORTS ---
+    RevenueReportQuery:
+      type: object
+      required:
+        - startDate
+        - endDate
+      properties:
+        startDate:
+          type: string
+          format: date
+          description: YYYY-MM-DD
+        endDate:
+          type: string
+          format: date
+          description: YYYY-MM-DD
+        storeId:
+          type: string
+          format: uuid
+
+    RevenueBreakdown:
+      type: object
+      properties:
+        interest:
+          type: number
+        serviceFee:
+          type: number
+        lateFee:
+          type: number
+        liquidationExcess:
+          type: number
+
+    ExpenseBreakdown:
+      type: object
+      properties:
+        loanDisbursement:
+          type: number
+
+    RevenueReportResponse:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        totalRevenue:
+          type: number
+        breakdown:
+          $ref: '#/components/schemas/RevenueBreakdown'
+        totalExpense:
+          type: number
+        expenseBreakdown:
+          $ref: '#/components/schemas/ExpenseBreakdown'
+
+    RevenueSummary:
+      type: object
+      properties:
+        totalRevenue:
+          type: number
+        totalInterest:
+          type: number
+        totalServiceFee:
+          type: number
+        totalLateFee:
+          type: number
+        totalLiquidationExcess:
+          type: number
+        totalExpense:
+          type: number
+        totalLoanDisbursement:
+          type: number
+
+    RevenueReportListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RevenueReportResponse'
+        summary:
+          $ref: '#/components/schemas/RevenueSummary'
+
+    DailyLogResponse:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        newLoans:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyLogEntry'
+        closedLoans:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyLogEntry'
+        summary:
+          $ref: '#/components/schemas/DailyLogSummary'
+
+    DailyLogEntry:
+      type: object
+      properties:
+        contractId:
+          type: string
+        customerName:
+          type: string
+        nationalId:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        collateralDescription:
+          type: string
+        loanAmount:
+          type: number
+        loanDate:
+          type: string
+          format: date
+        closedDate:
+          type: string
+          format: date
+        status:
+          type: string
+
+    DailyLogSummary:
+      type: object
+      properties:
+        totalNewLoans:
+          type: number
+        totalClosedLoans:
+          type: number
+        totalNewLoanAmount:
+          type: number
+
+    QuarterlyReportResponse:
+      type: object
+      properties:
+        quarter:
+          type: integer
+        year:
+          type: integer
+        period:
+          type: string
+        statistics:
+          $ref: '#/components/schemas/QuarterlyStatistics'
+        compliance:
+          $ref: '#/components/schemas/QuarterlyCompliance'
+
+    QuarterlyStatistics:
+      type: object
+      properties:
+        totalLoansIssued:
+          type: number
+        totalLoanAmount:
+          type: number
+        totalLoansClosed:
+          type: number
+        totalLoansActive:
+          type: number
+        totalLoansOverdue:
+          type: number
+        totalCollateralsReceived:
+          type: number
+        totalCollateralsReleased:
+          type: number
+        totalLiquidations:
+          type: number
+        totalRevenue:
+          type: number
+        revenueBreakdown:
+          type: object
+          properties:
+            interest:
+              type: number
+            serviceFee:
+              type: number
+            lateFee:
+              type: number
+            liquidationProfit:
+              type: number
+
+    QuarterlyCompliance:
+      type: object
+      properties:
+        averageLTV:
+          type: number
+        averageInterestRate:
+          type: number
+        kycCompletionRate:
+          type: number
+
+    # --- LOCATION ---
+    ProvinceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+
+    WardResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        parentId:
+          type: string
+
+security:
+  - bearerAuth: []
+
+paths:
+  # --- CUSTOMERS ---
+  /customers:
+    get:
+      summary: List customers
+      tags: [Customers]
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerListResponse'
+    post:
+      summary: Create customer
+      tags: [Customers]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/CreateCustomerDTO'
+                - type: object
+                  properties:
+                    mattruoc:
+                      type: string
+                      format: binary
+                    matsau:
+                      type: string
+                      format: binary
+      responses:
+        '201':
+          description: Created
+
+  /customers/{id}:
+    get:
+      summary: Get customer
+      tags: [Customers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerBasicResponse'
+    patch:
+      summary: Update customer
+      tags: [Customers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/UpdateCustomerRequest'
+                - type: object
+                  properties:
+                    mattruoc:
+                      type: string
+                      format: binary
+                    matsau:
+                      type: string
+                      format: binary
+      responses:
+        '200':
+          description: Updated
+
+  # --- LOANS ---
+  /loans:
+    get:
+      summary: List loans
+      tags: [Loans]
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: storeId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/LoanStatus'
+        - name: customerId
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListLoansResponseDto'
+    post:
+      summary: Create loan
+      tags: [Loans]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLoanDto'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  loan: { $ref: '#/components/schemas/LoanResponseDto' }
+
+  /loans/{id}:
+    get:
+      summary: Get loan
+      tags: [Loans]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanResponseDto'
+    patch:
+      summary: Update loan details
+      tags: [Loans]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLoanDto'
+      responses:
+        '200':
+          description: Updated
+
+  /loans/{id}/status:
+    patch:
+      summary: Approve/Reject loan
+      tags: [Loans]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveLoanDto'
+      responses:
+        '200':
+          description: Status updated
+
+  # --- PAYMENTS ---
+  /payments:
+    get:
+      summary: List payments
+      tags: [Payments]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: loanId
+          in: query
+          schema:
+            type: string
+        - name: storeId
+          in: query
+          schema:
+            type: string
+        - name: paymentMethod
+          in: query
+          schema:
+            $ref: '#/components/schemas/PaymentMethod'
+        - name: paymentType
+          in: query
+          schema:
+            $ref: '#/components/schemas/PaymentType'
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: minAmount
+          in: query
+          schema:
+            type: number
+        - name: maxAmount
+          in: query
+          schema:
+            type: number
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListPaymentsResponse'
+    post:
+      summary: Create Payment
+      tags: [Payments]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequestDto'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '409':
+          description: Duplicate Idempotency Key
+
+  # --- COLLATERAL ---
+  /collateral-assets:
+    get:
+      summary: List collateral assets
+      tags: [Collateral]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollateralAssetListResponse'
+    post:
+      summary: Create collateral
+      tags: [Collateral]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/CreateCollateralDTO'
+                - type: object
+                  properties:
+                    files:
+                      type: array
+                      items:
+                        type: string
+                        format: binary
+      responses:
+        '201':
+          description: Created
+
+  /collateral-assets/{id}:
+    get:
+      summary: Get collateral
+      tags: [Collateral]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    patch:
+      summary: Update collateral
+      tags: [Collateral]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/PatchCollateralDTO'
+                - type: object
+                  properties:
+                    files:
+                      type: array
+                      items:
+                        type: string
+                        format: binary
+      responses:
+        '200':
+          description: Updated
+
+  /collaterals/{id}/location:
+    put:
+      summary: Update collateral location
+      tags: [Collateral]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLocationRequest'
+      responses:
+        '200':
+          description: Updated
+
+  /liquidations:
+    post:
+      summary: Liquidate collateral
+      tags: [Collateral]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLiquidationRequest'
+      responses:
+        '201':
+          description: Created
+
+  # --- STORES ---
+  /stores:
+    get:
+      summary: List stores
+      tags: [Stores]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreListResponse'
+    post:
+      summary: Create store
+      tags: [Stores]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStoreDTO'
+      responses:
+        '201':
+          description: Created
+
+  /stores/{id}:
+    get:
+      summary: Get store
+      tags: [Stores]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResponse'
+    patch:
+      summary: Update store
+      tags: [Stores]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStoreDTO'
+      responses:
+        '200':
+          description: Updated
+
+  # --- REPORTS ---
+  /reports/revenue:
+    get:
+      summary: Get revenue report
+      tags: [Reports]
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: storeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevenueReportListResponse'
+
+  /reports/daily-log:
+    get:
+      summary: Get daily log
+      tags: [Reports]
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: storeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyLogResponse'
+
+  /reports/quarterly:
+    get:
+      summary: Get quarterly compliance report
+      tags: [Reports]
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2024
+        - name: quarter
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuarterlyReportResponse'
+
+  # --- LOCATION ---
+  /provinces:
+    get:
+      summary: Get provinces
+      tags: [Location]
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProvinceResponse'
+
+  /provinces/{code}/wards:
+    get:
+      summary: Get wards by province code
+      tags: [Location]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WardResponse'

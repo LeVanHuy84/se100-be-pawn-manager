@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import Joi from 'joi';
 import { APP_GUARD } from '@nestjs/core';
@@ -51,29 +51,41 @@ import { LocationModule } from './modules/location/location.module';
         REDIS_URL: Joi.string().required(),
       }),
     }),
-    BullModule.forRoot({
-      connection: {
-        url: process.env.REDIS_URL,
-        tls: {
-          rejectUnauthorized: false,
-        },
-        maxRetriesPerRequest: null,
-        enableReadyCheck: false,
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => {
+        const redisUrl = configService.get<string>('REDIS_URL');
+        const isTls = redisUrl?.startsWith('rediss://');
+        return {
+          connection: {
+            url: redisUrl,
+            ...(isTls
+              ? {
+                  tls: {
+                    rejectUnauthorized: false,
+                  },
+                }
+              : {}),
+            maxRetriesPerRequest: null,
+            enableReadyCheck: false,
+          },
+          defaultJobOptions: {
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+            removeOnComplete: {
+              age: 3600, // 1 hour
+              count: 1000, // Keep last 1000
+            },
+            removeOnFail: {
+              age: 86400, // Keep failed jobs for 24 hours
+            },
+          },
+        };
       },
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-        removeOnComplete: {
-          age: 3600, // 1 hour
-          count: 1000, // Keep last 1000
-        },
-        removeOnFail: {
-          age: 86400, // Keep failed jobs for 24 hours
-        },
-      },
+      inject: [ConfigService],
     }),
     ScheduleModule.forRoot(),
     LoanModule,

@@ -3,7 +3,7 @@ import {
   LoanStatus,
   PaymentMethod,
   PaymentType,
-} from '../@generated/prisma';
+} from '../generated/prisma';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -289,6 +289,7 @@ async function createLoanWithDetails(
     const payment = await prisma.loanPayment.create({
       data: {
         loanId: loan.id,
+        storeId: store.id,
         amount: totalRepayment,
         paymentType: 'PAYOFF',
         paymentMethod: 'CASH',
