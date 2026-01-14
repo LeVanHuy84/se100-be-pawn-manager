@@ -13,6 +13,8 @@ type CustomerWithLoans = Customer & {
 
 export class CustomerMapper {
   static toResponse(customer: Customer): CustomerResponse {
+    const imagesData = customer.images as any;
+
     return {
       id: customer.id,
       fullName: customer.fullName,
@@ -25,7 +27,26 @@ export class CustomerMapper {
       monthlyIncome: Number(customer.monthlyIncome),
       creditScore: customer.creditScore || undefined,
       createdAt: customer.createdAt.toISOString(),
-      images: (customer.images as unknown as ImageItem[]) || undefined,
+      images: imagesData || undefined,
+
+      // Extract family info from images JSON
+      fatherName: imagesData?.family?.father?.name,
+      fatherPhone: imagesData?.family?.father?.phone,
+      fatherOccupation: imagesData?.family?.father?.occupation,
+      motherName: imagesData?.family?.mother?.name,
+      motherPhone: imagesData?.family?.mother?.phone,
+      motherOccupation: imagesData?.family?.mother?.occupation,
+      spouseName: imagesData?.family?.spouse?.name,
+      spousePhone: imagesData?.family?.spouse?.phone,
+      spouseOccupation: imagesData?.family?.spouse?.occupation,
+
+      // Extract employment info
+      occupation: imagesData?.employment?.occupation,
+      workplace: imagesData?.employment?.workplace,
+
+      // Extract emergency contact
+      emergencyContactName: imagesData?.emergencyContact?.name,
+      emergencyContactPhone: imagesData?.emergencyContact?.phone,
     };
   }
 

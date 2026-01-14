@@ -21,6 +21,7 @@ import { StoreModule } from './modules/store/store.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { DisbursementModule } from './modules/disbursement/disbursement.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { LocationModule } from './modules/location/location.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     StoreModule,
     ReportsModule,
     DisbursementModule,
+    LocationModule,
   ],
   controllers: [],
   providers: [

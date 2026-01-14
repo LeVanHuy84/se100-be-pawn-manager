@@ -124,11 +124,44 @@ export class CustomerService {
         }
       }
 
-      // Prepare images JSON structure
+      // Prepare images JSON structure with all information
       const imagesData: any = {
         images: [],
         issuedDate: data.nationalIdIssueDate,
         issuedPlace: data.nationalIdIssuePlace,
+        
+        // Thông tin gia đình
+        family: {
+          father: {
+            name: data.fatherName,
+            phone: data.fatherPhone,
+            occupation: data.fatherOccupation,
+          },
+          mother: {
+            name: data.motherName,
+            phone: data.motherPhone,
+            occupation: data.motherOccupation,
+          },
+          ...(data.spouseName && {
+            spouse: {
+              name: data.spouseName,
+              phone: data.spousePhone,
+              occupation: data.spouseOccupation,
+            },
+          }),
+        },
+        
+        // Nghề nghiệp & Thu nhập
+        employment: {
+          occupation: data.occupation,
+          workplace: data.workplace,
+        },
+        
+        // Người liên hệ khẩn cấp
+        emergencyContact: {
+          name: data.emergencyContactName,
+          phone: data.emergencyContactPhone,
+        },
       };
 
       const folder = `pawnshop/${data.customerType.toString().toLowerCase()}/${data.nationalId}`;
@@ -241,7 +274,17 @@ export class CustomerService {
       if (data.creditScore !== undefined)
         updateData.creditScore = data.creditScore;
 
-      if (files) {
+      // Update images JSON structure
+      const shouldUpdateImages =
+        files ||
+        data.nationalIdIssueDate !== undefined ||
+        data.nationalIdIssuePlace !== undefined ||
+        data.fatherName !== undefined ||
+        data.motherName !== undefined ||
+        data.occupation !== undefined ||
+        data.emergencyContactName !== undefined;
+
+      if (shouldUpdateImages) {
         const folder = `pawnshop/${existing.customerType.toString().toLowerCase()}/${existing.nationalId}`;
 
         // Get current images data
@@ -249,6 +292,9 @@ export class CustomerService {
           images: [],
           issuedDate: null,
           issuedPlace: null,
+          family: {},
+          employment: {},
+          emergencyContact: {},
         };
 
         // Update issuedDate and issuedPlace if provided
@@ -259,13 +305,57 @@ export class CustomerService {
           currentImagesData.issuedPlace = data.nationalIdIssuePlace;
         }
 
+        // Update family info
+        if (data.fatherName !== undefined || data.fatherPhone !== undefined || data.fatherOccupation !== undefined) {
+          currentImagesData.family = currentImagesData.family || {};
+          currentImagesData.family.father = {
+            name: data.fatherName ?? currentImagesData.family.father?.name,
+            phone: data.fatherPhone ?? currentImagesData.family.father?.phone,
+            occupation: data.fatherOccupation ?? currentImagesData.family.father?.occupation,
+          };
+        }
+
+        if (data.motherName !== undefined || data.motherPhone !== undefined || data.motherOccupation !== undefined) {
+          currentImagesData.family = currentImagesData.family || {};
+          currentImagesData.family.mother = {
+            name: data.motherName ?? currentImagesData.family.mother?.name,
+            phone: data.motherPhone ?? currentImagesData.family.mother?.phone,
+            occupation: data.motherOccupation ?? currentImagesData.family.mother?.occupation,
+          };
+        }
+
+        if (data.spouseName !== undefined || data.spousePhone !== undefined || data.spouseOccupation !== undefined) {
+          currentImagesData.family = currentImagesData.family || {};
+          currentImagesData.family.spouse = {
+            name: data.spouseName ?? currentImagesData.family.spouse?.name,
+            phone: data.spousePhone ?? currentImagesData.family.spouse?.phone,
+            occupation: data.spouseOccupation ?? currentImagesData.family.spouse?.occupation,
+          };
+        }
+
+        // Update employment info
+        if (data.occupation !== undefined || data.workplace !== undefined) {
+          currentImagesData.employment = {
+            occupation: data.occupation ?? currentImagesData.employment?.occupation,
+            workplace: data.workplace ?? currentImagesData.employment?.workplace,
+          };
+        }
+
+        // Update emergency contact
+        if (data.emergencyContactName !== undefined || data.emergencyContactPhone !== undefined) {
+          currentImagesData.emergencyContact = {
+            name: data.emergencyContactName ?? currentImagesData.emergencyContact?.name,
+            phone: data.emergencyContactPhone ?? currentImagesData.emergencyContact?.phone,
+          };
+        }
+
         // Ensure images array exists
         if (!currentImagesData.images) {
           currentImagesData.images = [];
         }
 
-        // Upload and update front ID (mattruoc)
-        if (files.mattruoc && files.mattruoc.length > 0) {
+        // Upload and update front ID (mattruoc) if provided
+        if (files?.mattruoc && files.mattruoc.length > 0) {
           const result = await this.cloudinaryService.uploadFile(
             files.mattruoc[0],
             folder,
@@ -288,8 +378,8 @@ export class CustomerService {
           }
         }
 
-        // Upload and update back ID (matsau)
-        if (files.matsau && files.matsau.length > 0) {
+        // Upload and update back ID (matsau) if provided
+        if (files?.matsau && files.matsau.length > 0) {
           const result = await this.cloudinaryService.uploadFile(
             files.matsau[0],
             folder,
@@ -313,27 +403,6 @@ export class CustomerService {
         }
 
         updateData.images = currentImagesData as Prisma.InputJsonValue;
-      } else {
-        // Update issuedDate and issuedPlace without files
-        if (
-          data.nationalIdIssueDate !== undefined ||
-          data.nationalIdIssuePlace !== undefined
-        ) {
-          const currentImagesData = (existing.images as any) || {
-            images: [],
-            issuedDate: null,
-            issuedPlace: null,
-          };
-
-          if (data.nationalIdIssueDate !== undefined) {
-            currentImagesData.issuedDate = data.nationalIdIssueDate;
-          }
-          if (data.nationalIdIssuePlace !== undefined) {
-            currentImagesData.issuedPlace = data.nationalIdIssuePlace;
-          }
-
-          updateData.images = currentImagesData as Prisma.InputJsonValue;
-        }
       }
 
       const customer = await this.prisma.customer.update({
