@@ -44,12 +44,14 @@ export class EmployeeService {
   async findAll(
     query: EmployeeQueryDTO,
   ): Promise<BaseResult<EmployeeResponse[]>> {
-    const { page = 1, limit = 20, status, storeId } = query;
+    const { page = 1, limit = 20, status, storeId, q } = query;
 
     const clerkUsers = await clerkClient.users.getUserList();
-
     let users = clerkUsers.data;
 
+    // ========================
+    // FILTER
+    // ========================
     if (status) {
       users = users.filter((u) => u.publicMetadata?.status === status);
     }
@@ -58,6 +60,32 @@ export class EmployeeService {
       users = users.filter((u) => u.publicMetadata?.storeId === storeId);
     }
 
+    // ========================
+    // SEARCH
+    // ========================
+    const keyword = q?.trim().toLowerCase();
+
+    if (keyword) {
+      users = users.filter((u) => {
+        const fullName =
+          `${u.firstName ?? ''} ${u.lastName ?? ''}`.toLowerCase();
+        const email = u.emailAddresses?.[0]?.emailAddress?.toLowerCase() ?? '';
+        const phone =
+          (
+            u.publicMetadata?.phoneNumber as string | undefined
+          )?.toLowerCase() ?? '';
+
+        return (
+          fullName.includes(keyword) ||
+          email.includes(keyword) ||
+          phone.includes(keyword)
+        );
+      });
+    }
+
+    // ========================
+    // PAGINATION
+    // ========================
     const totalItems = users.length;
     const start = (page - 1) * limit;
     const paginatedUsers = users.slice(start, start + limit);
