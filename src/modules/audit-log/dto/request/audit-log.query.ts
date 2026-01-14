@@ -10,13 +10,8 @@ export const AuditLogQuerySchema = z.object({
     .optional()
     .describe('Filter by start date (ISO format)'),
   endDate: z.string().optional().describe('Filter by end date (ISO format)'),
-  page: z.number().min(1).default(1).describe('Page number for pagination'),
-  limit: z
-    .number()
-    .min(1)
-    .max(100)
-    .default(20)
-    .describe('Number of items per page'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export class AuditLogQueryDto extends createZodDto(AuditLogQuerySchema) {}

@@ -10,7 +10,10 @@ import {
 import { EmployeeService } from './employee.service';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { Role } from './enum/role.enum';
-import { EmployeeQueryDTO } from './dto/request/employee.query';
+import {
+  EmployeeQueryDTO,
+  EmployeeQuerySchema,
+} from './dto/request/employee.query';
 import { CreateEmployeeDTO } from './dto/request/create-employee.request';
 import { UpdateEmployeeRequest } from './dto/request/update-employee.request';
 import {
@@ -24,6 +27,7 @@ import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.dec
 import { BaseResult } from 'src/common/dto/base.response';
 import { EmployeeResponse } from './dto/response/employee.response';
 import { PaginationMeta } from 'src/common/dto/pagination.type';
+import { ZodValidationPipe } from 'nestjs-zod';
 
 @ApiTags('Employees')
 @ApiExtraModels(BaseResult, EmployeeResponse, PaginationMeta)
@@ -76,7 +80,7 @@ export class EmployeeController {
     },
   })
   getList(
-    @Query() query: EmployeeQueryDTO,
+    @Query(new ZodValidationPipe(EmployeeQuerySchema)) query: EmployeeQueryDTO,
   ): Promise<BaseResult<EmployeeResponse[]>> {
     return this.employeeService.findAll(query);
   }

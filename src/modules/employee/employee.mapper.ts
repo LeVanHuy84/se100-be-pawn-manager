@@ -6,7 +6,7 @@ export class EmployeeMapper {
     return {
       id: employee.id,
       fullName: employee.firstName + ' ' + employee.lastName,
-      email: employee.email,
+      email: employee.emailAddresses?.[0]?.emailAddress,
       status: employee.publicMetadata?.status as EmployeeStatus,
       phoneNumber: employee.publicMetadata?.phoneNumber,
       role: employee.privateMetadata?.role,
