@@ -110,6 +110,16 @@ export class StoreService {
         throw new ConflictException('Store with this name already exists');
       }
 
+      const location = await this.prisma.location.findFirst({
+        where: { id: data.wardId },
+      });
+
+      if (location?.parentId == null) {
+        throw new BadRequestException(
+          'Invalid wardId: must be a ward-level location',
+        );
+      }
+
       const store = await this.prisma.store.create({
         data: {
           name: data.name,
@@ -169,6 +179,16 @@ export class StoreService {
       }
     }
 
+    const location = await this.prisma.location.findFirst({
+      where: { id: data.wardId },
+    });
+
+    if (location?.parentId == null) {
+      throw new BadRequestException(
+        'Invalid wardId: must be a ward-level location',
+      );
+    }
+
     try {
       const updateData: Prisma.StoreUpdateInput = {};
 
@@ -178,7 +198,8 @@ export class StoreService {
       if (data.storeInfo !== undefined) {
         updateData.storeInfo = data.storeInfo as Prisma.InputJsonValue;
       }
-      if (data.wardId !== undefined) updateData.ward = { connect: { id: data.wardId } };
+      if (data.wardId !== undefined)
+        updateData.ward = { connect: { id: data.wardId } };
 
       const store = await this.prisma.store.update({
         where: { id },
