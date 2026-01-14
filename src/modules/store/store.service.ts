@@ -64,7 +64,7 @@ export class StoreService {
     };
   }
 
-  async findOne(id: string): Promise<StoreResponse> {
+  async findOne(id: string): Promise<BaseResult<StoreResponse>> {
     const store = await this.prisma.store.findUnique({
       where: { id },
       include: {
@@ -91,10 +91,12 @@ export class StoreService {
       throw new NotFoundException(`Store with ID ${id} not found`);
     }
 
-    return StoreMapper.toDetailResponse(store);
+    return {
+      data: StoreMapper.toDetailResponse(store),
+    };
   }
 
-  async create(data: CreateStoreDTO): Promise<StoreResponse> {
+  async create(data: CreateStoreDTO): Promise<BaseResult<StoreResponse>> {
     try {
       // Check for duplicate store name
       const existing = await this.prisma.store.findFirst({
@@ -137,7 +139,7 @@ export class StoreService {
         },
       });
 
-      return StoreMapper.toResponse(store);
+      return { data: StoreMapper.toDetailResponse(store) };
     } catch (error) {
       if (error instanceof ConflictException) {
         throw error;
@@ -146,7 +148,7 @@ export class StoreService {
     }
   }
 
-  async update(id: string, data: UpdateStoreDTO): Promise<StoreResponse> {
+  async update(id: string, data: UpdateStoreDTO): Promise<BaseResult<StoreResponse>> {
     // Check if store exists
     const existing = await this.prisma.store.findUnique({
       where: { id },
@@ -213,7 +215,7 @@ export class StoreService {
         },
       });
 
-      return StoreMapper.toResponse(store);
+      return { data: StoreMapper.toDetailResponse(store) };
     } catch (error) {
       throw new BadRequestException('Failed to update store');
     }

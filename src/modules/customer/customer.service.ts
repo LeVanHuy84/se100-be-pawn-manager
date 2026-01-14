@@ -75,7 +75,7 @@ export class CustomerService {
     };
   }
 
-  async findOne(id: string): Promise<CustomerResponse> {
+  async findOne(id: string): Promise<BaseResult<CustomerResponse>> {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
@@ -92,13 +92,15 @@ export class CustomerService {
       throw new NotFoundException(`Customer with ID ${id} not found`);
     }
 
-    return CustomerMapper.toDetailResponse(customer);
+    return {
+      data: CustomerMapper.toDetailResponse(customer),
+    };
   }
 
   async create(
     data: CreateCustomerDTO,
     files?: { mattruoc?: MulterFile[]; matsau?: MulterFile[] },
-  ): Promise<CustomerResponse> {
+  ): Promise<BaseResult<CustomerResponse>> {
     // Validate required images
     if (!files || !files.mattruoc || files.mattruoc.length === 0) {
       throw new BadRequestException(
@@ -232,7 +234,9 @@ export class CustomerService {
         },
       });
 
-      return CustomerMapper.toDetailResponse(customer);
+      return {
+        data: CustomerMapper.toDetailResponse(customer),
+      };
     } catch (error) {
       if (error instanceof ConflictException) {
         throw error;
@@ -245,7 +249,7 @@ export class CustomerService {
     id: string,
     data: UpdateCustomerRequest,
     files?: { mattruoc?: MulterFile[]; matsau?: MulterFile[] },
-  ): Promise<CustomerResponse> {
+  ): Promise<BaseResult<CustomerResponse>> {
     // Check if customer exists
     const existing = await this.prisma.customer.findUnique({
       where: { id },
@@ -486,7 +490,9 @@ export class CustomerService {
         },
       });
 
-      return CustomerMapper.toDetailResponse(customer);
+      return {
+        data: CustomerMapper.toDetailResponse(customer),
+      };
     } catch (error) {
       throw new BadRequestException('Failed to update customer');
     }

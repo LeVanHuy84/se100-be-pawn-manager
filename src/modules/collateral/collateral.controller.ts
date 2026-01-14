@@ -22,14 +22,16 @@ import { CreateLiquidationRequest } from './dto/request/liquidation.request';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
-import { ApiOkResponse } from '@nestjs/swagger';
-import { CollateralAssetListResponse } from './dto/response/collateral.response';
+import { ApiOkResponse, ApiResponse, ApiExtraModels, getSchemaPath } from '@nestjs/swagger';
+import { CollateralAssetListResponse, CollateralAssetResponse, LiquidationCollateralResponse } from './dto/response/collateral.response';
+import { boolean } from 'joi';
 
 @Controller({
   version: '1',
   path: 'collateral-assets',
 })
 @ApiErrorResponses()
+@ApiExtraModels(CollateralAssetResponse, CollateralAssetListResponse, LiquidationCollateralResponse)
 export class CollateralController {
   constructor(private readonly collateralService: CollateralService) {}
 
@@ -44,12 +46,40 @@ export class CollateralController {
   }
 
   @Get('/:id')
+  @ApiResponse({
+        status: 200,
+        schema: {
+          allOf: [
+            {
+              type: 'object',
+              properties: {
+                data: { $ref: getSchemaPath(CollateralAssetResponse) },
+              },
+              required: ['data'],
+            },
+          ],
+        },
+      })
   @Roles(Role.MANAGER, Role.STAFF)
   getCollateral(@Param('id') id: string) {
     return this.collateralService.findOne(id);
   }
 
   @Post()
+  @ApiResponse({
+        status: 200,
+        schema: {
+          allOf: [
+            {
+              type: 'object',
+              properties: {
+                data: { $ref: getSchemaPath(CollateralAssetResponse) },
+              },
+              required: ['data'],
+            },
+          ],
+        },
+      })
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
   createCollateral(
@@ -60,6 +90,20 @@ export class CollateralController {
   }
 
   @Patch('/:id')
+  @ApiResponse({
+        status: 200,
+        schema: {
+          allOf: [
+            {
+              type: 'object',
+              properties: {
+                data: { $ref: getSchemaPath(CollateralAssetResponse) },
+              },
+              required: ['data'],
+            },
+          ],
+        },
+      })
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
   updateCollateral(
@@ -76,10 +120,25 @@ export class CollateralController {
   path: 'collaterals',
 })
 @ApiErrorResponses()
+@ApiExtraModels(boolean)
 export class CollateralLocationController {
   constructor(private readonly collateralService: CollateralService) {}
 
   @Put('/:id/location')
+  @ApiResponse({
+        status: 200,
+        schema: {
+          allOf: [
+            {
+              type: 'object',
+              properties: {
+                data: { $ref: getSchemaPath(boolean) },
+              },
+              required: ['data'],
+            },
+          ],
+        },
+      })
   @Roles(Role.MANAGER, Role.STAFF)
   updateLocation(@Param('id') id: string, @Body() body: UpdateLocationRequest) {
     return this.collateralService.updateLocation(id, body);
@@ -91,10 +150,25 @@ export class CollateralLocationController {
   path: 'liquidations',
 })
 @ApiErrorResponses()
+@ApiExtraModels(LiquidationCollateralResponse)
 export class LiquidationController {
   constructor(private readonly collateralService: CollateralService) {}
 
   @Post()
+  @ApiResponse({
+        status: 200,
+        schema: {
+          allOf: [
+            {
+              type: 'object',
+              properties: {
+                data: { $ref: getSchemaPath(LiquidationCollateralResponse) },
+              },
+              required: ['data'],
+            },
+          ],
+        },
+      })
   @Roles(Role.MANAGER, Role.STAFF)
   createLiquidation(@Body() body: CreateLiquidationRequest) {
     return this.collateralService.createLiquidation(body);
