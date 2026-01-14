@@ -12,6 +12,7 @@ import {
   QuarterlyReportResponse,
 } from './dto/quarterly-report.dto';
 import { RevenueReportQuery } from './dto/revenue-report.query';
+import { BaseResult } from 'src/common/dto/base.response';
 
 @Injectable()
 export class ReportsService {
@@ -24,7 +25,7 @@ export class ReportsService {
    */
   async getRevenueReport(
     query: RevenueReportQuery,
-  ): Promise<RevenueReportListResponse> {
+  ): Promise<BaseResult<RevenueReportListResponse>> {
     const { startDate, endDate, storeId } = query;
 
     // Set date range
@@ -188,15 +189,19 @@ export class ReportsService {
     }
 
     return {
-      data: dailyData,
-      summary: {
-        totalRevenue: Math.round(summaryRevenue),
-        totalInterest: Math.round(summaryBreakdown.interest),
-        totalServiceFee: Math.round(summaryBreakdown.serviceFee),
-        totalLateFee: Math.round(summaryBreakdown.lateFee),
-        totalLiquidationExcess: Math.round(summaryBreakdown.liquidationExcess),
-        totalExpense: Math.round(summaryExpense),
-        totalLoanDisbursement: Math.round(summaryExpense),
+      data: {
+        detail: dailyData,
+        summary: {
+          totalRevenue: Math.round(summaryRevenue),
+          totalInterest: Math.round(summaryBreakdown.interest),
+          totalServiceFee: Math.round(summaryBreakdown.serviceFee),
+          totalLateFee: Math.round(summaryBreakdown.lateFee),
+          totalLiquidationExcess: Math.round(
+            summaryBreakdown.liquidationExcess,
+          ),
+          totalExpense: Math.round(summaryExpense),
+          totalLoanDisbursement: Math.round(summaryExpense),
+        },
       },
     };
   }
@@ -204,7 +209,9 @@ export class ReportsService {
   /**
    * Get daily log for police book (Sổ quản lý)
    */
-  async getDailyLog(query: DailyLogQuery): Promise<DailyLogResponse> {
+  async getDailyLog(
+    query: DailyLogQuery,
+  ): Promise<BaseResult<DailyLogResponse>> {
     const { date } = query;
     const targetDate = new Date(date);
     const startOfDay = new Date(targetDate);
@@ -302,16 +309,18 @@ export class ReportsService {
     });
 
     return {
-      date,
-      newLoans: newLoans.map(mapLoanToEntry),
-      closedLoans: closedLoans.map(mapLoanToEntry),
-      summary: {
-        totalNewLoans: newLoans.length,
-        totalClosedLoans: closedLoans.length,
-        totalNewLoanAmount: newLoans.reduce(
-          (sum, loan) => sum + Number(loan.loanAmount),
-          0,
-        ),
+      data: {
+        date,
+        newLoans: newLoans.map(mapLoanToEntry),
+        closedLoans: closedLoans.map(mapLoanToEntry),
+        summary: {
+          totalNewLoans: newLoans.length,
+          totalClosedLoans: closedLoans.length,
+          totalNewLoanAmount: newLoans.reduce(
+            (sum, loan) => sum + Number(loan.loanAmount),
+            0,
+          ),
+        },
       },
     };
   }
@@ -321,7 +330,7 @@ export class ReportsService {
    */
   async getQuarterlyReport(
     query: QuarterlyReportQuery,
-  ): Promise<QuarterlyReportResponse> {
+  ): Promise<BaseResult<QuarterlyReportResponse>> {
     const { year, quarter } = query;
 
     // Calculate quarter date range
@@ -467,30 +476,32 @@ export class ReportsService {
         : 0;
 
     return {
-      quarter,
-      year,
-      period: `Q${quarter} ${year}`,
-      statistics: {
-        totalLoansIssued: loansIssued,
-        totalLoanAmount: Math.round(totalLoanAmount),
-        totalLoansClosed: loansClosed,
-        totalLoansActive: loansActive,
-        totalLoansOverdue: loansOverdue,
-        totalCollateralsReceived: collateralsReceived,
-        totalCollateralsReleased: collateralsReleased,
-        totalLiquidations: liquidations,
-        totalRevenue: Math.round(totalRevenue),
-        revenueBreakdown: {
-          interest: Math.round(revenueBreakdown.interest),
-          serviceFee: Math.round(revenueBreakdown.serviceFee),
-          lateFee: Math.round(revenueBreakdown.lateFee),
-          liquidationProfit: Math.round(revenueBreakdown.liquidationProfit),
+      data: {
+        quarter,
+        year,
+        period: `Q${quarter} ${year}`,
+        statistics: {
+          totalLoansIssued: loansIssued,
+          totalLoanAmount: Math.round(totalLoanAmount),
+          totalLoansClosed: loansClosed,
+          totalLoansActive: loansActive,
+          totalLoansOverdue: loansOverdue,
+          totalCollateralsReceived: collateralsReceived,
+          totalCollateralsReleased: collateralsReleased,
+          totalLiquidations: liquidations,
+          totalRevenue: Math.round(totalRevenue),
+          revenueBreakdown: {
+            interest: Math.round(revenueBreakdown.interest),
+            serviceFee: Math.round(revenueBreakdown.serviceFee),
+            lateFee: Math.round(revenueBreakdown.lateFee),
+            liquidationProfit: Math.round(revenueBreakdown.liquidationProfit),
+          },
         },
-      },
-      compliance: {
-        averageLTV: Math.round(averageLTV * 100) / 100,
-        averageInterestRate: Math.round(averageInterestRate * 100) / 100,
-        kycCompletionRate: 100, // TODO: Calculate based on actual KYC data
+        compliance: {
+          averageLTV: Math.round(averageLTV * 100) / 100,
+          averageInterestRate: Math.round(averageInterestRate * 100) / 100,
+          kycCompletionRate: 100, // TODO: Calculate based on actual KYC data
+        },
       },
     };
   }

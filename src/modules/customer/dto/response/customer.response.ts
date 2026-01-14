@@ -33,7 +33,30 @@ export class CustomerResponse {
   createdAt: string; // ISO datetime
   activeLoans?: ActiveLoan[];
   loanHistory?: LoanHistory;
-  images?: ImageItem[];
+  images?: any; // Full JSON with CCCD images, family info, etc.
+
+  // Thông tin gia đình - Bố
+  fatherName?: string;
+  fatherPhone?: string;
+  fatherOccupation?: string;
+
+  // Thông tin gia đình - Mẹ
+  motherName?: string;
+  motherPhone?: string;
+  motherOccupation?: string;
+
+  // Thông tin gia đình - Vợ/Chồng
+  spouseName?: string;
+  spousePhone?: string;
+  spouseOccupation?: string;
+
+  // Nghề nghiệp & Thu nhập
+  occupation?: string;
+  workplace?: string;
+
+  // Người liên hệ khẩn cấp
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
 }
 
 export class CustomerListResponse {
