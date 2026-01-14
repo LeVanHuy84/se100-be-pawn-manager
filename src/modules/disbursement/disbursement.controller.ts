@@ -99,7 +99,13 @@ export class DisbursementController {
   @ApiResponse({
     status: 201,
     description: 'Disbursement created successfully',
-    type: DisbursementDetailsResponse,
+    schema: {
+      type: 'object',
+      properties: {
+        data: { $ref: getSchemaPath(DisbursementDetailsResponse) },
+      },
+      required: ['data'],
+    },
   })
   @ApiResponse({
     status: 404,
@@ -116,7 +122,7 @@ export class DisbursementController {
   async createDisbursement(
     @Headers('Idempotency-Key') idempotencyKey: string,
     @Body() dto: DisbursementRequestDto,
-  ): Promise<DisbursementDetailsResponse> {
+  ): Promise<BaseResult<DisbursementDetailsResponse>> {
     return this.disbursementService.createDisbursement(idempotencyKey, dto);
   }
 }

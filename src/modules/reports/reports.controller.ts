@@ -9,6 +9,8 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiOkResponse,
+  ApiExtraModels,
+  getSchemaPath,
 } from '@nestjs/swagger';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 import { RevenueReportListResponse } from './dto/revenue-report.response';
@@ -17,10 +19,17 @@ import { QuarterlyReportResponse } from './dto/quarterly-report.dto';
 import { RevenueReportQuery } from './dto/revenue-report.query';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { Role } from 'src/modules/employee/enum/role.enum';
+import { BaseResult } from 'src/common/dto/base.response';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
 @ApiErrorResponses()
+@ApiExtraModels(
+  BaseResult,
+  RevenueReportListResponse,
+  DailyLogResponse,
+  QuarterlyReportResponse,
+)
 @UseGuards(ClerkAuthGuard)
 @Controller('v1/reports')
 export class ReportsController {
@@ -34,11 +43,19 @@ export class ReportsController {
       'Retrieve revenue report with daily data points for charting. Returns an array of daily revenue/expense data plus summary totals. Query date range defaults to 30 days. Only MANAGER can access revenue reports.',
   })
   @ApiOkResponse({
-    type: RevenueReportListResponse,
+    schema: {
+      type: 'object',
+      properties: {
+        data: { $ref: getSchemaPath(RevenueReportListResponse) },
+      },
+      required: ['data'],
+    },
     description:
       'Returns daily revenue data array for charts and summary totals. Each data point represents one day with revenue breakdown and expenses.',
   })
-  async getRevenueReport(@Query() query: RevenueReportQuery) {
+  async getRevenueReport(
+    @Query() query: RevenueReportQuery,
+  ): Promise<BaseResult<RevenueReportListResponse>> {
     return this.reportsService.getRevenueReport(query);
   }
 
@@ -49,8 +66,18 @@ export class ReportsController {
     description:
       'Retrieve daily loan activities (new loans and closed loans) for manual police book (Sổ quản lý) documentation',
   })
-  @ApiOkResponse({ type: DailyLogResponse })
-  async getDailyLog(@Query() query: DailyLogQuery) {
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      properties: {
+        data: { $ref: getSchemaPath(DailyLogResponse) },
+      },
+      required: ['data'],
+    },
+  })
+  async getDailyLog(
+    @Query() query: DailyLogQuery,
+  ): Promise<BaseResult<DailyLogResponse>> {
     return this.reportsService.getDailyLog(query);
   }
 
@@ -61,8 +88,18 @@ export class ReportsController {
     description:
       'Generate comprehensive quarterly report for police compliance (Mẫu ĐK13) including loan statistics, revenue breakdown, and compliance metrics. Only MANAGER can access quarterly reports.',
   })
-  @ApiOkResponse({ type: QuarterlyReportResponse })
-  async getQuarterlyReport(@Query() query: QuarterlyReportQuery) {
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      properties: {
+        data: { $ref: getSchemaPath(QuarterlyReportResponse) },
+      },
+      required: ['data'],
+    },
+  })
+  async getQuarterlyReport(
+    @Query() query: QuarterlyReportQuery,
+  ): Promise<BaseResult<QuarterlyReportResponse>> {
     return this.reportsService.getQuarterlyReport(query);
   }
 }
