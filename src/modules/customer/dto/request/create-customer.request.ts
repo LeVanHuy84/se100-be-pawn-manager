@@ -61,6 +61,29 @@ export const CreateCustomerSchema = z.object({
   customerType: z.enum(Object.values(CustomerType) as [string, ...string[]]),
   monthlyIncome: z.coerce.number().int().min(3000000),
   creditScore: z.coerce.number().int().min(0).max(1000).optional(),
+
+  // Thông tin gia đình - Bố
+  fatherName: z.string().min(1).max(200),
+  fatherPhone: z.string().min(10).max(15),
+  fatherOccupation: z.string().min(1).max(200),
+
+  // Thông tin gia đình - Mẹ
+  motherName: z.string().min(1).max(200),
+  motherPhone: z.string().min(10).max(15),
+  motherOccupation: z.string().min(1).max(200),
+
+  // Thông tin gia đình - Vợ/Chồng (optional)
+  spouseName: z.string().max(200).optional(),
+  spousePhone: z.string().min(10).max(15).optional(),
+  spouseOccupation: z.string().max(200).optional(),
+
+  // Nghề nghiệp & Thu nhập
+  occupation: z.string().min(1).max(200),
+  workplace: z.string().min(1).max(200),
+
+  // Người liên hệ khẩn cấp
+  emergencyContactName: z.string().min(1).max(200),
+  emergencyContactPhone: z.string().min(10).max(15),
 });
 
 export class CreateCustomerDTO extends createZodDto(CreateCustomerSchema) {}
