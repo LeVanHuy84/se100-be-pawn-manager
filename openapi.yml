@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: Pawn Manager API
-  description: API for managing pawn shop operations, including loans, customers, payments, collateral, and stores.
+  description: API for managing pawn shop operations, including loans, customers, payments, collateral, disbursements, and stores.
   version: '1.0'
 servers:
   - url: /v1
@@ -100,7 +100,35 @@ components:
         monthlyIncome:
           type: number
 
-    CustomerBasicResponse:
+    ActiveLoan:
+      type: object
+      properties:
+        id:
+          type: string
+        loanCode:
+          type: string
+        loanAmount:
+          type: number
+        remainingAmount:
+          type: number
+        status:
+          type: string
+        startDate:
+          type: string
+
+    LoanHistory:
+      type: object
+      properties:
+        totalLoans:
+          type: integer
+        totalBorrowed:
+          type: number
+        totalRepaid:
+          type: number
+        defaultCount:
+          type: integer
+
+    CustomerResponse:
       type: object
       properties:
         id:
@@ -129,9 +157,39 @@ components:
           type: string
           format: date-time
         images:
+          type: object # JSON
+        activeLoans:
           type: array
           items:
-            $ref: '#/components/schemas/ImageItem'
+            $ref: '#/components/schemas/ActiveLoan'
+        loanHistory:
+          $ref: '#/components/schemas/LoanHistory'
+        fatherName:
+          type: string
+        fatherPhone:
+          type: string
+        fatherOccupation:
+          type: string
+        motherName:
+          type: string
+        motherPhone:
+          type: string
+        motherOccupation:
+          type: string
+        spouseName:
+          type: string
+        spousePhone:
+          type: string
+        spouseOccupation:
+          type: string
+        occupation:
+          type: string
+        workplace:
+          type: string
+        emergencyContactName:
+          type: string
+        emergencyContactPhone:
+          type: string
 
     CustomerListResponse:
       type: object
@@ -139,7 +197,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/CustomerBasicResponse'
+            $ref: '#/components/schemas/CustomerResponse'
         meta:
           $ref: '#/components/schemas/PaginationMeta'
 
@@ -258,7 +316,7 @@ components:
           type: string
           format: date-time
         customer:
-          $ref: '#/components/schemas/CustomerBasicResponse'
+          $ref: '#/components/schemas/CustomerResponse'
         collateral:
           type: array
           items:
@@ -379,6 +437,114 @@ components:
             $ref: '#/components/schemas/PaymentListItem'
         meta:
           $ref: '#/components/schemas/PaginationMeta'
+
+    # --- DISBURSEMENT ---
+    DisbursementMethod:
+      type: string
+      enum: [CASH, BANK_TRANSFER]
+
+    DisbursementRequestDto:
+      type: object
+      required:
+        - loanId
+        - storeId
+        - amount
+        - disbursementMethod
+        - recipientName
+      properties:
+        loanId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        disbursementMethod:
+          $ref: '#/components/schemas/DisbursementMethod'
+        recipientName:
+          type: string
+        recipientIdNumber:
+          type: string
+        witnessName:
+          type: string
+        bankTransferRef:
+          type: string
+        bankAccountNumber:
+          type: string
+        bankName:
+          type: string
+        notes:
+          type: string
+
+    DisbursementListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        loanId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        disbursementMethod:
+          $ref: '#/components/schemas/DisbursementMethod'
+        disbursedAt:
+          type: string
+        referenceCode:
+          type: string
+        recipientName:
+          type: string
+        loanCode:
+          type: string
+
+    DisbursementDetailsResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        loanId:
+          type: string
+        loanCode:
+          type: string
+        amount:
+          type: number
+        disbursementMethod:
+          $ref: '#/components/schemas/DisbursementMethod'
+        disbursedAt:
+          type: string
+        referenceCode:
+          type: string
+        recipientName:
+          type: string
+        recipientIdNumber:
+          type: string
+        bankTransferRef:
+          type: string
+        bankAccountNumber:
+          type: string
+        bankName:
+          type: string
+        notes:
+          type: string
+
+    ListDisbursementsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DisbursementListItem'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    DisbursementResponseWrapper:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/DisbursementDetailsResponse'
 
     # --- COLLATERAL ---
     CollateralStatus:
@@ -803,7 +969,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerBasicResponse'
+                $ref: '#/components/schemas/CustomerResponse'
     patch:
       summary: Update customer
       tags: [Customers]
@@ -1034,6 +1200,63 @@ paths:
                 $ref: '#/components/schemas/PaymentResponse'
         '409':
           description: Duplicate Idempotency Key
+
+  # --- DISBURSEMENT ---
+  /disbursements:
+    get:
+      summary: List disbursements
+      tags: [Disbursements]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: loanId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: storeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListDisbursementsResponse'
+    post:
+      summary: Create disbursement
+      tags: [Disbursements]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisbursementRequestDto'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisbursementResponseWrapper'
 
   # --- COLLATERAL ---
   /collateral-assets:
