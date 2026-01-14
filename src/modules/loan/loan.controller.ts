@@ -11,11 +11,11 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiCreatedResponse,
-  ApiOkResponse,
-  ApiQuery,
   ApiParam,
   ApiBody,
+  ApiResponse,
+  getSchemaPath,
+  ApiExtraModels,
 } from '@nestjs/swagger';
 import { CreateLoanDto } from './dto/request/create-loan.dto';
 import { LoanOrchestrator } from './loan.orchestrator';
@@ -27,20 +27,24 @@ import { Role } from '../employee/enum/role.enum';
 import { UpdateLoanDto } from './dto/request/update-loan.dto';
 import { ZodValidationPipe } from 'nestjs-zod';
 import {
-  CreateLoanResponseDto,
-  ListLoansResponseDto,
   LoanResponseDto,
-  UpdateLoanResponseDto,
-  UpdateLoanStatusResponseDto,
+  LoanSummaryResponseDto,
 } from './dto/response/loan.response';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
-import Api from 'twilio/lib/rest/Api';
+import { BaseResult } from 'src/common/dto/base.response';
+import { PaginationMeta } from 'src/common/dto/pagination.type';
 
 @ApiTags('Loans')
 @Controller({
   version: '1',
   path: 'loans',
 })
+@ApiExtraModels(
+  BaseResult,
+  LoanResponseDto,
+  LoanSummaryResponseDto,
+  PaginationMeta,
+)
 @ApiErrorResponses()
 export class LoanController {
   constructor(
@@ -50,15 +54,25 @@ export class LoanController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new loan application' })
-  @ApiCreatedResponse({
-    description: 'Loan application created successfully',
-    type: CreateLoanResponseDto,
+  @ApiResponse({
+    status: 201,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(LoanResponseDto) },
+          },
+          required: ['data'],
+        },
+      ],
+    },
   })
   @ApiBody({ type: CreateLoanDto })
   async createLoan(
     @Body() dto: CreateLoanDto,
     @Req() req,
-  ): Promise<CreateLoanResponseDto> {
+  ): Promise<BaseResult<LoanResponseDto>> {
     const employee = {
       id: req.user?.userId,
       name: req.user?.firstName + ' ' + req.user?.lastName,
@@ -71,16 +85,26 @@ export class LoanController {
   @Roles(Role.MANAGER)
   @ApiOperation({ summary: 'Update loan status (approve or reject)' })
   @ApiParam({ name: 'id', description: 'Loan ID', example: 'clx1234567890' })
-  @ApiOkResponse({
-    description: 'Loan status updated successfully',
-    type: UpdateLoanStatusResponseDto,
+  @ApiResponse({
+    status: 201,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(LoanResponseDto) },
+          },
+          required: ['data'],
+        },
+      ],
+    },
   })
   @ApiBody({ type: ApproveLoanDto })
   async updateStatus(
     @Param('id') id: string,
     @Body() dto: ApproveLoanDto,
     @Req() req,
-  ): Promise<UpdateLoanStatusResponseDto> {
+  ): Promise<BaseResult<LoanResponseDto>> {
     const employee = {
       id: req.user?.userId,
       name: req.user?.firstName + ' ' + req.user?.lastName,
@@ -91,16 +115,26 @@ export class LoanController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update loan details (only for PENDING loans)' })
   @ApiParam({ name: 'id', description: 'Loan ID', example: 'clx1234567890' })
-  @ApiOkResponse({
-    description: 'Loan updated successfully',
-    type: UpdateLoanResponseDto,
+  @ApiResponse({
+    status: 201,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(LoanResponseDto) },
+          },
+          required: ['data'],
+        },
+      ],
+    },
   })
   @ApiBody({ type: UpdateLoanDto })
   async updateLoan(
     @Param('id') id: string,
     @Body() dto: UpdateLoanDto,
     @Req() req,
-  ): Promise<UpdateLoanResponseDto> {
+  ): Promise<BaseResult<LoanResponseDto>> {
     const employee = {
       id: req.user?.userId,
       name: req.user?.firstName + ' ' + req.user?.lastName,
@@ -110,25 +144,49 @@ export class LoanController {
 
   @Get()
   @ApiOperation({ summary: 'List loans with optional filters' })
-  @ApiOkResponse({
-    description: 'List of loans retrieved successfully',
-    type: ListLoansResponseDto,
+  @ApiResponse({
+    status: 200,
+    description: 'Loan list retrieved successfully',
+    schema: {
+      allOf: [
+        { $ref: getSchemaPath(BaseResult) },
+        {
+          properties: {
+            data: {
+              type: 'array',
+              items: { $ref: getSchemaPath(LoanSummaryResponseDto) },
+            },
+            meta: { $ref: getSchemaPath(PaginationMeta) },
+          },
+        },
+      ],
+    },
   })
   listLoans(
     @Query(new ZodValidationPipe(ListLoansQuerySchema))
     query: ListLoansQuery,
-  ) {
+  ): Promise<BaseResult<LoanSummaryResponseDto[]>> {
     return this.loanService.listLoans(query);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get loan details by ID' })
   @ApiParam({ name: 'id', description: 'Loan ID', example: 'clx1234567890' })
-  @ApiOkResponse({
-    description: 'Loan details retrieved successfully',
-    type: LoanResponseDto,
+  @ApiResponse({
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(LoanResponseDto) },
+          },
+          required: ['data'],
+        },
+      ],
+    },
   })
-  getLoanById(@Param('id') id: string): Promise<LoanResponseDto> {
+  getLoanById(@Param('id') id: string): Promise<BaseResult<LoanResponseDto>> {
     return this.loanService.getLoanById(id);
   }
 }

@@ -17,10 +17,12 @@ import { PrismaService } from 'src/prisma/prisma.service';
 @Injectable()
 export class EmployeeService {
   constructor(private readonly prisma: PrismaService) {}
-  async findOne(id: string): Promise<EmployeeResponse> {
+  async findOne(id: string): Promise<BaseResult<EmployeeResponse>> {
     try {
       const employee = await clerkClient.users.getUser(id);
-      return EmployeeMapper.toResponse(employee);
+      return {
+        data: EmployeeMapper.toResponse(employee),
+      };
     } catch (error: any) {
       // Clerk user not found
       if (error?.status === 404) {
@@ -71,7 +73,9 @@ export class EmployeeService {
     };
   }
 
-  async createEmployee(body: CreateEmployeeDTO): Promise<EmployeeResponse> {
+  async createEmployee(
+    body: CreateEmployeeDTO,
+  ): Promise<BaseResult<EmployeeResponse>> {
     try {
       const store = await this.prisma.store.findUnique({
         where: { id: body.storeId },
@@ -99,10 +103,14 @@ export class EmployeeService {
         },
       });
 
-      return EmployeeMapper.toResponse(newEmployee);
+      return {
+        data: EmployeeMapper.toResponse(newEmployee),
+      };
     } catch (error: any) {
       throw new BadRequestException(
-        error.errors?.[0]?.longMessage || error.message || 'Failed to create employee',
+        error.errors?.[0]?.longMessage ||
+          error.message ||
+          'Failed to create employee',
       );
     }
   }
@@ -110,7 +118,7 @@ export class EmployeeService {
   async updateEmployee(
     id: string,
     body: UpdateEmployeeRequest,
-  ): Promise<EmployeeResponse> {
+  ): Promise<BaseResult<EmployeeResponse>> {
     try {
       const currentUser = await clerkClient.users.getUser(id);
 
@@ -181,7 +189,9 @@ export class EmployeeService {
         clerkPayload,
       );
 
-      return EmployeeMapper.toResponse(updatedEmployee);
+      return {
+        data: EmployeeMapper.toResponse(updatedEmployee),
+      };
     } catch (error: any) {
       throw new BadRequestException(
         error?.errors?.[0]?.longMessage || 'Failed to update employee',

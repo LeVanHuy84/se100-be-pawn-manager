@@ -35,16 +35,3 @@ export class AuditLogResponseDto {
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt: Date;
 }
-
-export class ListAuditLogResponseDto {
-  @ApiProperty({
-    description: 'List of audit logs',
-    type: [AuditLogResponseDto],
-  })
-  auditLogs: AuditLogResponseDto[];
-  @ApiProperty({
-    description: 'Pagination metadata',
-    type: PaginationMeta,
-  })
-  meta: PaginationMeta;
-}
