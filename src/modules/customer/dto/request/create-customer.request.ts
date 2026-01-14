@@ -84,6 +84,9 @@ export const CreateCustomerSchema = z.object({
   // Người liên hệ khẩn cấp
   emergencyContactName: z.string().min(1).max(200),
   emergencyContactPhone: z.string().min(10).max(15),
+
+  // Địa chỉ hành chính (chỉ cần wardId, province sẽ lấy từ ward.parent)
+  wardId: z.string().uuid(),
 });
 
 export class CreateCustomerDTO extends createZodDto(CreateCustomerSchema) {}

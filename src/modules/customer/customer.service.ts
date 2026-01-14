@@ -53,6 +53,13 @@ export class CustomerService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: {
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
+        },
       }),
       this.prisma.customer.count({ where }),
     ]);
@@ -73,6 +80,11 @@ export class CustomerService {
       where: { id },
       include: {
         loans: true,
+        ward: {
+          include: {
+            parent: true,
+          },
+        },
       },
     });
 
@@ -200,6 +212,14 @@ export class CustomerService {
           monthlyIncome: data.monthlyIncome,
           creditScore: data.creditScore,
           images: imagesData as Prisma.InputJsonValue,
+          wardId: data.wardId,
+        },
+        include: {
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
         },
       });
 
@@ -273,6 +293,8 @@ export class CustomerService {
         updateData.monthlyIncome = data.monthlyIncome;
       if (data.creditScore !== undefined)
         updateData.creditScore = data.creditScore;
+      if (data.wardId !== undefined)
+        updateData.ward = { connect: { id: data.wardId } };
 
       // Update images JSON structure
       const shouldUpdateImages =
@@ -408,7 +430,14 @@ export class CustomerService {
       const customer = await this.prisma.customer.update({
         where: { id },
         data: updateData,
-        include: { loans: true },
+        include: {
+          loans: true,
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
+        },
       });
 
       return CustomerMapper.toDetailResponse(customer);

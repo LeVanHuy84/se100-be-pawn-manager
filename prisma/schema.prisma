@@ -155,12 +155,17 @@ model Customer {
   monthlyIncome Decimal?
   creditScore   Int?
   images        Json
+  wardId        String        
+
+  ward          Location      @relation("CustomerWard", fields: [wardId], references: [id])
 
   loans            Loan[]
   notificationLogs NotificationLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
+
+  @@index([wardId])
 }
 
 // ==================================================
@@ -356,6 +361,9 @@ model Store {
   address   String?
   storeInfo Json
   isActive  Boolean @default(true)
+  wardId        String        
+
+  ward          Location      @relation("StoreWard", fields: [wardId], references: [id])
 
   collaterals   Collateral[]
   loans         Loan[]
@@ -365,6 +373,8 @@ model Store {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([wardId])
 }
 
 // model Storage {
@@ -524,4 +534,8 @@ model Location {
   children  Location[] @relation("LocationHierarchy")
 
   @@index([parentId])
+
+  Customer Customer[] @relation("CustomerWard")
+
+  Store    Store[]    @relation("StoreWard")
 }

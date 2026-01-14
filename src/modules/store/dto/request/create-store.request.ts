@@ -15,6 +15,7 @@ export const CreateStoreSchema = z.object({
     return val;
   }, z.record(z.string(), z.any()).optional()),
   isActive: z.boolean().optional().default(true),
+  wardId: z.string().uuid(),
 });
 
 export class CreateStoreDTO extends createZodDto(CreateStoreSchema) {}

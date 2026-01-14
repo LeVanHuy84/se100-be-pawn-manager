@@ -42,6 +42,13 @@ export class StoreService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: {
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
+        },
       }),
       this.prisma.store.count({ where }),
     ]);
@@ -70,6 +77,11 @@ export class StoreService {
         loans: {
           select: {
             status: true,
+          },
+        },
+        ward: {
+          include: {
+            parent: true,
           },
         },
       },
@@ -104,6 +116,14 @@ export class StoreService {
           address: data.address,
           storeInfo: (data.storeInfo || {}) as Prisma.InputJsonValue,
           isActive: data.isActive ?? true,
+          wardId: data.wardId,
+        },
+        include: {
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
         },
       });
 
@@ -158,10 +178,18 @@ export class StoreService {
       if (data.storeInfo !== undefined) {
         updateData.storeInfo = data.storeInfo as Prisma.InputJsonValue;
       }
+      if (data.wardId !== undefined) updateData.ward = { connect: { id: data.wardId } };
 
       const store = await this.prisma.store.update({
         where: { id },
         data: updateData,
+        include: {
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
+        },
       });
 
       return StoreMapper.toResponse(store);
