@@ -10,8 +10,9 @@ import {
 } from '@nestjs/swagger';
 import { BaseResult } from 'src/common/dto/base.response';
 import { PaginationMeta } from 'src/common/dto/pagination.type';
-import { OverdueItemsQuery } from './dto/request/overdue-items.query';
+import { OverdueLoansQuery } from './dto/request/overdue-items.query';
 import { RepaymentScheduleItemResponse } from './dto/response/reschedule-payment-item.response';
+import { OverdueLoanResponse } from './dto/response/overdue-loan.response';
 
 import { RepaymentScheduleService } from './repayment-schedule.service';
 
@@ -23,7 +24,8 @@ import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.dec
   BaseResult,
   RepaymentScheduleItemResponse,
   PaginationMeta,
-  OverdueItemsQuery,
+  OverdueLoansQuery,
+  OverdueLoanResponse,
 )
 @Controller({
   version: '1',
@@ -70,15 +72,15 @@ export class RepaymentScheduleController {
     return this.repaymentScheduleService.getLoanRepaymentSchedule(loanId);
   }
 
-  @Get('repayment-schedules/overdue')
+  @Get('loans/overdue')
   @ApiOperation({
-    summary: 'Get overdue repayment items',
+    summary: 'Get overdue loans with their overdue repayment items',
     description:
-      'Retrieve paginated list of overdue repayment schedule items for debt collection. Supports filtering by minimum overdue days. Used by staff for calling customers.',
+      'Retrieve paginated list of loans that have overdue repayment items. Each loan includes all its overdue periods. Supports filtering by date range (max 30 days), store, and search. Used for debt collection and customer follow-up.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Overdue items retrieved successfully',
+    description: 'Overdue loans retrieved successfully',
     schema: {
       allOf: [
         { $ref: getSchemaPath(BaseResult) },
@@ -86,7 +88,7 @@ export class RepaymentScheduleController {
           properties: {
             data: {
               type: 'array',
-              items: { $ref: getSchemaPath(RepaymentScheduleItemResponse) },
+              items: { $ref: getSchemaPath(OverdueLoanResponse) },
             },
             meta: { $ref: getSchemaPath(PaginationMeta) },
           },
@@ -94,10 +96,10 @@ export class RepaymentScheduleController {
       ],
     },
   })
-  async getOverdueItems(
-    @Query() query: OverdueItemsQuery,
-  ): Promise<BaseResult<RepaymentScheduleItemResponse[]>> {
-    return this.repaymentScheduleService.getOverdueItems(query);
+  async getOverdueLoans(
+    @Query() query: OverdueLoansQuery,
+  ): Promise<BaseResult<OverdueLoanResponse[]>> {
+    return this.repaymentScheduleService.getOverdueLoans(query);
   }
 
   @Get('repayment-schedules/:id')

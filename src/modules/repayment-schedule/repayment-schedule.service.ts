@@ -1,9 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { RepaymentScheduleDetail } from 'generated/prisma';
+import { RepaymentItemStatus, RepaymentScheduleDetail } from 'generated/prisma';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RepaymentScheduleItemResponse } from './dto/response/reschedule-payment-item.response';
 import { LoanSimulationScheduleItem } from '../loan-simulations/dto/response/loan-simulation.response';
 import { BaseResult } from 'src/common/dto/base.response';
+import { OverdueLoanResponse } from './dto/response/overdue-loan.response';
+import { OverdueLoansQuery } from './dto/request/overdue-items.query';
 
 @Injectable()
 export class RepaymentScheduleService {
@@ -96,6 +98,150 @@ export class RepaymentScheduleService {
    * Get overdue repayment items for debt collection (Call List)
    * Used by staff to identify customers who need to be contacted
    */
+  async getOverdueLoans(
+    query: OverdueLoansQuery,
+  ): Promise<BaseResult<OverdueLoanResponse[]>> {
+    const {
+      startDate,
+      endDate,
+      storeId,
+      page = 1,
+      limit = 20,
+      search,
+      sortBy,
+      sortOrder = 'asc',
+    } = query;
+
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    // Parse string dates to Date objects for database query
+    const startDateObj = startDate ? new Date(startDate) : undefined;
+    const endDateObj = endDate ? new Date(endDate) : undefined;
+
+    // Build where clause for loans with overdue items
+    const loanWhere: any = {
+      status: { in: ['ACTIVE', 'OVERDUE'] },
+      repaymentSchedule: {
+        some: {
+          status: RepaymentItemStatus.OVERDUE,
+          ...(startDateObj && {
+            dueDate: { gte: startDateObj },
+          }),
+          ...(endDateObj && {
+            dueDate: { lte: endDateObj },
+          }),
+        },
+      },
+    };
+
+    if (storeId) {
+      loanWhere.storeId = storeId;
+    }
+
+    if (search) {
+      loanWhere.OR = [
+        { loanCode: { contains: search, mode: 'insensitive' } },
+        { customer: { fullName: { contains: search, mode: 'insensitive' } } },
+        { customer: { phone: { contains: search } } },
+        { customer: { nationalId: { contains: search } } },
+      ];
+    }
+
+    // Build orderBy
+    const orderBy: any[] = [];
+    if (sortBy === 'earliestOverdueDate') {
+      // Sort by earliest overdue date (requires aggregation, use default)
+      orderBy.push({ createdAt: sortOrder || 'asc' });
+    } else if (sortBy === 'loanCode') {
+      orderBy.push({ loanCode: sortOrder || 'asc' });
+    } else if (sortBy === 'customerName') {
+      orderBy.push({ customer: { fullName: sortOrder || 'asc' } });
+    } else {
+      // Default: sort by loan creation (newest first for active management)
+      orderBy.push({ createdAt: 'desc' });
+    }
+
+    // Get total count and loans in parallel
+    const [totalItems, loans] = await Promise.all([
+      this.prisma.loan.count({ where: loanWhere }),
+      this.prisma.loan.findMany({
+        where: loanWhere,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          customer: {
+            select: {
+              fullName: true,
+              phone: true,
+              nationalId: true,
+            },
+          },
+          repaymentSchedule: {
+            where: {
+              status: RepaymentItemStatus.OVERDUE,
+              ...(startDateObj && { dueDate: { gte: startDateObj } }),
+              ...(endDateObj && { dueDate: { lte: endDateObj } }),
+            },
+            orderBy: [{ dueDate: 'asc' }, { periodNumber: 'asc' }],
+          },
+        },
+      }),
+    ]);
+
+    // Map loans to response format
+    const mappedLoans: OverdueLoanResponse[] = loans.map((loan) => {
+      const overdueItems = loan.repaymentSchedule;
+      const earliestOverdueDate =
+        overdueItems.length > 0 ? overdueItems[0].dueDate : new Date();
+
+      const totalOverdueAmount = overdueItems.reduce((sum, item) => {
+        const principalOut =
+          Number(item.principalAmount) - Number(item.paidPrincipal ?? 0);
+        const interestOut =
+          Number(item.interestAmount) - Number(item.paidInterest ?? 0);
+        const feeOut = Number(item.feeAmount) - Number(item.paidFee ?? 0);
+        const penaltyOut =
+          Number(item.penaltyAmount ?? 0) - Number(item.paidPenalty ?? 0);
+        return sum + principalOut + interestOut + feeOut + penaltyOut;
+      }, 0);
+
+      const daysOverdue = Math.floor(
+        (today.getTime() - earliestOverdueDate.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+
+      return {
+        loanId: loan.id,
+        loanCode: loan.loanCode,
+        loanStatus: loan.status,
+        customer: {
+          fullName: loan.customer.fullName,
+          phone: loan.customer.phone || '',
+          nationalId: loan.customer.nationalId,
+        },
+        totalOverdueAmount: Math.round(totalOverdueAmount),
+        overduePeriodsCount: overdueItems.length,
+        earliestOverdueDate: earliestOverdueDate.toISOString().slice(0, 10),
+        daysOverdue,
+        overdueItems: overdueItems.map((item) => this.mapItem(item)),
+      };
+    });
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: mappedLoans,
+      meta: {
+        totalItems: totalItems,
+        totalPages,
+        currentPage: page,
+        itemsPerPage: limit,
+      },
+    };
+  }
+
   async getOverdueItems(query: {
     minDaysOverdue?: number;
     page?: number;
@@ -118,7 +264,10 @@ export class RepaymentScheduleService {
     cutoffDate.setDate(cutoffDate.getDate() - minDaysOverdue);
 
     const where: any = {
-      status: 'OVERDUE' as const,
+      // Include items that are past due even if cron hasn't marked them OVERDUE yet
+      status: {
+        in: [RepaymentItemStatus.OVERDUE, RepaymentItemStatus.PENDING],
+      },
       dueDate: {
         lte: cutoffDate, // Due date must be at least minDaysOverdue ago
       },
