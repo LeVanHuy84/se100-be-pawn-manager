@@ -393,21 +393,21 @@ export class ReportsService {
       this.prisma.collateral.count({
         where: {
           createdAt: { gte: startDate, lte: endDate },
-          ...(storeId && { storeId  }),
+          ...(storeId && { storeId }),
         },
       }),
       this.prisma.collateral.count({
         where: {
           status: 'RELEASED',
           updatedAt: { gte: startDate, lte: endDate },
-          ...(storeId && {  storeId }),
+          ...(storeId && { storeId }),
         },
       }),
       this.prisma.collateral.count({
         where: {
           status: 'SOLD',
           updatedAt: { gte: startDate, lte: endDate },
-          ...(storeId && {  storeId  }),
+          ...(storeId && { storeId }),
         },
       }),
       // Revenue breakdown

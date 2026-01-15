@@ -16,6 +16,7 @@ export class MarkOverdueProcessor {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async run() {
     const today = this.toDateOnly(new Date());
+    const overdueThresholdDays = 3; // mark loan OVERDUE after earliest overdue period passes this threshold
 
     const candidates = await this.prisma.repaymentScheduleDetail.findMany({
       where: {
@@ -23,6 +24,11 @@ export class MarkOverdueProcessor {
           in: [RepaymentItemStatus.PENDING, RepaymentItemStatus.OVERDUE],
         },
         dueDate: { lt: today },
+        loan: {
+          status: {
+            in: ['ACTIVE', 'OVERDUE'],
+          },
+        },
       },
       include: {
         loan: {
@@ -113,23 +119,28 @@ export class MarkOverdueProcessor {
         const overdueDays = this.diffDays(lastAppliedDate, today);
         if (overdueDays <= 0) continue;
 
-        // penalty = overduePrincipal * rate% * days/30
+        // penalty = overduePrincipal * rate * days / 30
+        // e.g: 1,000,000 * 0.02 * 5 days / 30 = 3,333 VND
+        // Note: rate is already in decimal form (0.02 for 2%)
         const penalty = Math.round(
-          principalOutstanding *
-            (penaltyRateMonthly / 100) *
-            (overdueDays / 30),
+          (principalOutstanding * penaltyRateMonthly * overdueDays) / 30,
         );
 
         if (penalty <= 0) continue;
 
         const oldPenaltyAmount = Number(item.penaltyAmount ?? 0);
         const newPenaltyAmount = oldPenaltyAmount + penalty;
+        const newTotalAmount =
+          Number(item.principalAmount) +
+          Number(item.interestAmount) +
+          Number(item.feeAmount) +
+          newPenaltyAmount;
 
         await tx.repaymentScheduleDetail.update({
           where: { id: item.id },
           data: {
             penaltyAmount: newPenaltyAmount,
-            totalAmount: { increment: penalty }, // nếu bạn maintain totalAmount
+            totalAmount: newTotalAmount, // Calculate instead of increment
             lastPenaltyAppliedAt: today,
           },
         });
@@ -151,36 +162,65 @@ export class MarkOverdueProcessor {
         penaltyAccrued++;
       }
 
-      // ===== 4. Update Loan Status to OVERDUE (Fix Zombie Loan) =====
-      // If loan has any OVERDUE items and loan status is still ACTIVE, mark loan as OVERDUE
-      for (const loanId of affectedLoanIds) {
-        const loan = await tx.loan.findUnique({
-          where: { id: loanId },
-          select: { status: true, loanCode: true },
+      // ===== 4. Update Loan Status to OVERDUE =====
+      // Batch query all affected loans and their earliest overdue periods
+      const loansToCheck = await tx.loan.findMany({
+        where: {
+          id: { in: Array.from(affectedLoanIds) },
+          status: 'ACTIVE',
+        },
+        select: { id: true, loanCode: true, status: true },
+      });
+
+      if (loansToCheck.length > 0) {
+        // Batch query earliest overdue periods for all loans
+        const earliestOverdues = await tx.repaymentScheduleDetail.groupBy({
+          by: ['loanId'],
+          where: {
+            loanId: { in: loansToCheck.map((l) => l.id) },
+            status: RepaymentItemStatus.OVERDUE,
+          },
+          _min: { dueDate: true },
         });
 
-        if (loan && loan.status === 'ACTIVE') {
-          await tx.loan.update({
-            where: { id: loanId },
-            data: { status: 'OVERDUE' },
-          });
+        const earliestMap = new Map(
+          earliestOverdues.map((e) => [e.loanId, e._min.dueDate]),
+        );
 
-          // Log loan status change
-          await tx.auditLog.create({
-            data: {
-              action: 'SYSTEM_LOAN_STATUS_CHANGE',
-              entityId: loanId,
-              entityType: 'LOAN',
-              entityName: loan.loanCode,
-              actorId: null, // System action
-              description:
-                'Auto-changed loan status to OVERDUE due to overdue repayment items',
-              oldValue: { status: 'ACTIVE' },
-              newValue: { status: 'OVERDUE' },
-            },
-          });
+        for (const loan of loansToCheck) {
+          const earliestDueDate = earliestMap.get(loan.id);
+          if (!earliestDueDate) continue;
 
-          this.logger.log(`Updated loan ${loanId} status to OVERDUE`);
+          const daysOverdueFromEarliest = this.diffDays(
+            this.toDateOnly(earliestDueDate),
+            today,
+          );
+
+          // Only mark OVERDUE if past threshold from earliest overdue period
+          if (daysOverdueFromEarliest >= overdueThresholdDays) {
+            await tx.loan.update({
+              where: { id: loan.id },
+              data: { status: 'OVERDUE' },
+            });
+
+            // Log loan status change
+            await tx.auditLog.create({
+              data: {
+                action: 'SYSTEM_LOAN_STATUS_CHANGE',
+                entityId: loan.id,
+                entityType: 'LOAN',
+                entityName: loan.loanCode,
+                actorId: null, // System action
+                description: `Auto-changed loan status to OVERDUE (${daysOverdueFromEarliest} days past earliest overdue period)`,
+                oldValue: { status: 'ACTIVE' },
+                newValue: { status: 'OVERDUE' },
+              },
+            });
+
+            this.logger.log(
+              `Updated loan ${loan.id} status to OVERDUE (${daysOverdueFromEarliest} days overdue from earliest period)`,
+            );
+          }
         }
       }
     });

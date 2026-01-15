@@ -212,6 +212,11 @@ export class PaymentService {
       throw new ConflictException('Loan is already closed');
 
     const result = await this.prisma.$transaction(async (tx) => {
+      // Prevent concurrent payments from allocating the same schedule items.
+      await tx.$queryRaw(
+        Prisma.sql`SELECT "id" FROM "RepaymentScheduleDetail" WHERE "loanId" = ${loanId} AND "status" IN (${RepaymentItemStatus.PENDING}, ${RepaymentItemStatus.OVERDUE}) FOR UPDATE`,
+      );
+
       // 1) Load schedule outstanding
       const scheduleItems = await tx.repaymentScheduleDetail.findMany({
         where: {
@@ -306,61 +311,31 @@ export class PaymentService {
       }
 
       // 5) Allocate
-      let remainingAmount = Math.round(Number(amount));
+      let remainingAmount = Number(amount);
       const allocations: AllocationDraft[] = [];
 
       for (const period of allocatableItems) {
         if (remainingAmount <= 0) break;
 
-        const interestOut = Math.round(
-          Number(period.interestAmount) - Number(period.paidInterest ?? 0),
-        );
-        const feeOut = Math.round(
-          Number(period.feeAmount) - Number(period.paidFee ?? 0),
-        );
+        const {
+          interestOut,
+          feeOut,
+          penaltyOut,
+          principalOut,
 
-        const penaltyAmount = Math.round(
-          Number((period as any).penaltyAmount ?? 0),
-        );
-        const paidPenalty = Math.round(
-          Number((period as any).paidPenalty ?? 0),
-        );
-        const penaltyOut = penaltyAmount - paidPenalty;
-
-        const principalOut = Math.round(
-          Number(period.principalAmount) - Number(period.paidPrincipal ?? 0),
-        );
+          paidPenalty,
+        } = this.getOutstandingComponents(period);
 
         let payInterest = 0,
           payFee = 0,
           payLateFee = 0,
           payPrincipal = 0;
 
-        // Waterfall: INTEREST -> FEE -> LATE_FEE -> PRINCIPAL
-        if (interestOut > 0 && remainingAmount > 0) {
-          payInterest = Math.round(Math.min(remainingAmount, interestOut));
-          remainingAmount -= payInterest;
-          allocations.push({
-            componentType: PaymentComponent.INTEREST,
-            periodNumber: period.periodNumber,
-            amount: payInterest,
-            note: notes,
-          });
-        }
-
-        if (feeOut > 0 && remainingAmount > 0) {
-          payFee = Math.round(Math.min(remainingAmount, feeOut));
-          remainingAmount -= payFee;
-          allocations.push({
-            componentType: PaymentComponent.SERVICE_FEE,
-            periodNumber: period.periodNumber,
-            amount: payFee,
-            note: notes,
-          });
-        }
-
+        // Waterfall: LATE_FEE -> INTEREST -> FEE -> PRINCIPAL
+        // Calculate without rounding to preserve precision
+        // Priority 1: Pay penalty first to prevent accumulation
         if (penaltyOut > 0 && remainingAmount > 0) {
-          payLateFee = Math.round(Math.min(remainingAmount, penaltyOut));
+          payLateFee = Math.min(remainingAmount, penaltyOut);
           remainingAmount -= payLateFee;
           allocations.push({
             componentType: PaymentComponent.LATE_FEE,
@@ -370,8 +345,33 @@ export class PaymentService {
           });
         }
 
+        // Priority 2: Pay interest
+        if (interestOut > 0 && remainingAmount > 0) {
+          payInterest = Math.min(remainingAmount, interestOut);
+          remainingAmount -= payInterest;
+          allocations.push({
+            componentType: PaymentComponent.INTEREST,
+            periodNumber: period.periodNumber,
+            amount: payInterest,
+            note: notes,
+          });
+        }
+
+        // Priority 3: Pay service fee
+        if (feeOut > 0 && remainingAmount > 0) {
+          payFee = Math.min(remainingAmount, feeOut);
+          remainingAmount -= payFee;
+          allocations.push({
+            componentType: PaymentComponent.SERVICE_FEE,
+            periodNumber: period.periodNumber,
+            amount: payFee,
+            note: notes,
+          });
+        }
+
+        // Priority 4: Pay principal last
         if (principalOut > 0 && remainingAmount > 0) {
-          payPrincipal = Math.round(Math.min(remainingAmount, principalOut));
+          payPrincipal = Math.min(remainingAmount, principalOut);
           remainingAmount -= payPrincipal;
           allocations.push({
             componentType: PaymentComponent.PRINCIPAL,
@@ -383,11 +383,14 @@ export class PaymentService {
 
         // update item once
         if (payInterest + payFee + payLateFee + payPrincipal > 0) {
-          const newPaidInterest =
-            Number(period.paidInterest ?? 0) + payInterest;
-          const newPaidFee = Number(period.paidFee ?? 0) + payFee;
-          const newPaidPrincipal =
-            Number(period.paidPrincipal ?? 0) + payPrincipal;
+          // Round only when storing to database
+          const newPaidInterest = Math.round(
+            this.toVnd(period.paidInterest) + payInterest,
+          );
+          const newPaidFee = Math.round(this.toVnd(period.paidFee) + payFee);
+          const newPaidPrincipal = Math.round(
+            this.toVnd(period.paidPrincipal) + payPrincipal,
+          );
 
           const updateData: any = {
             paidInterest: newPaidInterest,
@@ -396,16 +399,14 @@ export class PaymentService {
           };
 
           if ((period as any).paidPenalty !== undefined) {
-            updateData.paidPenalty = paidPenalty + payLateFee;
+            updateData.paidPenalty = Math.round(paidPenalty + payLateFee);
           }
 
           const fullyPaid =
-            Number(period.interestAmount) - newPaidInterest <= 0 &&
-            Number(period.feeAmount) - newPaidFee <= 0 &&
-            ((period as any).penaltyAmount !== undefined
-              ? penaltyAmount - (paidPenalty + payLateFee) <= 0
-              : true) &&
-            Number(period.principalAmount) - newPaidPrincipal <= 0;
+            interestOut - payInterest <= 0.01 &&
+            feeOut - payFee <= 0.01 &&
+            penaltyOut - payLateFee <= 0.01 &&
+            principalOut - payPrincipal <= 0.01;
 
           if (fullyPaid) {
             updateData.status = RepaymentItemStatus.PAID;
@@ -427,12 +428,12 @@ export class PaymentService {
         );
       }
 
-      // 7) Save allocations
+      // 7) Save allocations (round amounts for storage)
       await tx.paymentAllocation.createMany({
         data: allocations.map((a) => ({
           paymentId: payment.id,
           componentType: a.componentType as any,
-          amount: a.amount,
+          amount: Math.round(a.amount),
           note: a.note,
         })),
       });
@@ -454,15 +455,45 @@ export class PaymentService {
       const balance = this.recalcLoanBalance(allSchedule);
 
       const wasClosedBefore = loan.status === 'CLOSED';
+      const wasOverdueBefore = loan.status === 'OVERDUE';
       const isNowClosed = balance.totalRemaining <= 0;
+
+      // Check if there are any overdue items remaining
+      const overdueCount = allSchedule.filter(
+        (item) => item.status === RepaymentItemStatus.OVERDUE,
+      ).length;
+
+      let newStatus = loan.status;
+      if (isNowClosed) {
+        newStatus = 'CLOSED';
+      } else if (overdueCount === 0 && wasOverdueBefore) {
+        // If all overdue items are paid and loan was OVERDUE, revert to ACTIVE
+        newStatus = 'ACTIVE';
+      }
 
       await tx.loan.update({
         where: { id: loanId },
         data: {
           remainingAmount: balance.totalRemaining,
-          ...(balance.totalRemaining <= 0 ? { status: 'CLOSED' } : {}),
+          ...(newStatus !== loan.status ? { status: newStatus } : {}),
         },
       });
+
+      // Log status changes
+      if (newStatus === 'ACTIVE' && wasOverdueBefore) {
+        await tx.auditLog.create({
+          data: {
+            action: 'REVERT_LOAN_STATUS',
+            entityId: loanId,
+            entityType: 'LOAN',
+            entityName: loan.loanCode,
+            actorId: null,
+            oldValue: { status: 'OVERDUE' },
+            newValue: { status: 'ACTIVE' },
+            description: `Khoản vay ${loan.loanCode} được chuyển về ACTIVE sau khi trả hết các kỳ quá hạn.`,
+          },
+        });
+      }
 
       if (isNowClosed && !wasClosedBefore) {
         // audit log
@@ -524,7 +555,7 @@ export class PaymentService {
       const nextPayment = next
         ? {
             dueDate: next.dueDate.toISOString().slice(0, 10),
-            amount: Math.round(Number(next.totalAmount)),
+            amount: this.calcTotalOutstanding([next]),
             periodNumber: next.periodNumber,
           }
         : { dueDate: null, amount: null, periodNumber: null };
@@ -588,73 +619,6 @@ export class PaymentService {
   }
 
   // ===== helpers =====
-  private calcTotalOutstanding(items: any[]): number {
-    let total = 0;
-    for (const p of items) {
-      total += Math.round(
-        Math.max(0, Number(p.interestAmount) - Number(p.paidInterest ?? 0)),
-      );
-      total += Math.round(
-        Math.max(0, Number(p.feeAmount) - Number(p.paidFee ?? 0)),
-      );
-      total += Math.round(
-        Math.max(0, Number(p.principalAmount) - Number(p.paidPrincipal ?? 0)),
-      );
-
-      if ((p as any).penaltyAmount !== undefined) {
-        total += Math.round(
-          Math.max(
-            0,
-            Number((p as any).penaltyAmount ?? 0) -
-              Number((p as any).paidPenalty ?? 0),
-          ),
-        );
-      }
-    }
-    return total;
-  }
-
-  private recalcLoanBalance(allSchedule: any[]) {
-    let remainingPrincipal = 0;
-    let remainingInterest = 0;
-    let remainingFees = 0;
-    let remainingPenalty = 0;
-
-    for (const p of allSchedule) {
-      remainingPrincipal += Math.round(
-        Math.max(0, Number(p.principalAmount) - Number(p.paidPrincipal ?? 0)),
-      );
-      remainingInterest += Math.round(
-        Math.max(0, Number(p.interestAmount) - Number(p.paidInterest ?? 0)),
-      );
-      remainingFees += Math.round(
-        Math.max(0, Number(p.feeAmount) - Number(p.paidFee ?? 0)),
-      );
-
-      if ((p as any).penaltyAmount !== undefined) {
-        remainingPenalty += Math.round(
-          Math.max(
-            0,
-            Number((p as any).penaltyAmount ?? 0) -
-              Number((p as any).paidPenalty ?? 0),
-          ),
-        );
-      }
-    }
-
-    return {
-      remainingPrincipal: Math.round(remainingPrincipal),
-      remainingInterest: Math.round(remainingInterest),
-      remainingFees: Math.round(remainingFees),
-      remainingPenalty: Math.round(remainingPenalty),
-      totalRemaining:
-        remainingPrincipal +
-        remainingInterest +
-        remainingFees +
-        remainingPenalty,
-    };
-  }
-
   /**
    * Validates and reconciles loan balance against schedule items.
    * If discrepancy detected, automatically heals by trusting calculated value.
@@ -720,6 +684,72 @@ export class PaymentService {
     }
   }
 
+  // ---- currency helpers ----
+  private toVnd(value: any): number {
+    return Math.round(Number(value ?? 0));
+  }
+
+  private getOutstandingComponents(period: any) {
+    const interest = this.toVnd(period.interestAmount);
+    const paidInterest = this.toVnd(period.paidInterest);
+    const fee = this.toVnd((period as any).feeAmount);
+    const paidFee = this.toVnd((period as any).paidFee);
+    const principal = this.toVnd(period.principalAmount);
+    const paidPrincipal = this.toVnd(period.paidPrincipal);
+    const penalty = this.toVnd((period as any).penaltyAmount);
+    const paidPenalty = this.toVnd((period as any).paidPenalty);
+
+    const interestOut = Math.max(0, interest - paidInterest);
+    const feeOut = Math.max(0, fee - paidFee);
+    const penaltyOut = Math.max(0, penalty - paidPenalty);
+    const principalOut = Math.max(0, principal - paidPrincipal);
+
+    return {
+      interestOut,
+      feeOut,
+      penaltyOut,
+      principalOut,
+      penaltyAmount: penalty,
+      paidPenalty,
+    };
+  }
+
+  private calcTotalOutstanding(items: any[]): number {
+    let total = 0;
+    for (const p of items) {
+      const out = this.getOutstandingComponents(p);
+      total += out.interestOut + out.feeOut + out.penaltyOut + out.principalOut;
+    }
+    return total;
+  }
+
+  private recalcLoanBalance(allSchedule: any[]) {
+    let remainingPrincipal = 0;
+    let remainingInterest = 0;
+    let remainingFees = 0;
+    let remainingPenalty = 0;
+
+    for (const p of allSchedule) {
+      const out = this.getOutstandingComponents(p);
+      remainingPrincipal += out.principalOut;
+      remainingInterest += out.interestOut;
+      remainingFees += out.feeOut;
+      remainingPenalty += out.penaltyOut;
+    }
+
+    return {
+      remainingPrincipal: Math.round(remainingPrincipal),
+      remainingInterest: Math.round(remainingInterest),
+      remainingFees: Math.round(remainingFees),
+      remainingPenalty: Math.round(remainingPenalty),
+      totalRemaining:
+        remainingPrincipal +
+        remainingInterest +
+        remainingFees +
+        remainingPenalty,
+    };
+  }
+
   /**
    * Record revenue in ledger from payment allocations
    * Only revenue-generating components are recorded: INTEREST, SERVICE_FEE, LATE_FEE
@@ -761,7 +791,7 @@ export class PaymentService {
       if (revenueType && allocation.amount > 0) {
         revenueEntries.push({
           type: revenueType,
-          amount: allocation.amount,
+          amount: Math.round(allocation.amount), // Round before storing
           refId: paymentId,
           storeId: storeId,
         });
