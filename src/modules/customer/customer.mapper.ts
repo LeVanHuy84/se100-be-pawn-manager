@@ -1,5 +1,5 @@
 import { ImageItem } from 'src/common/interfaces/media.interface';
-import { Customer, Loan } from '../../../generated/prisma';
+import { Customer, Loan, Location } from '../../../generated/prisma';
 import {
   CustomerResponse,
   ActiveLoan,
@@ -7,12 +7,13 @@ import {
 } from './dto/response/customer.response';
 import { CustomerType } from './enum/customer-type.enum';
 
-type CustomerWithLoans = Customer & {
+type CustomerWithRelations = Customer & {
   loans?: Loan[];
+  ward?: (Location & { parent?: Location | null }) | null;
 };
 
 export class CustomerMapper {
-  static toResponse(customer: Customer): CustomerResponse {
+  static toResponse(customer: CustomerWithRelations): CustomerResponse {
     const imagesData = customer.images as any;
 
     return {
@@ -47,10 +48,16 @@ export class CustomerMapper {
       // Extract emergency contact
       emergencyContactName: imagesData?.emergencyContact?.name,
       emergencyContactPhone: imagesData?.emergencyContact?.phone,
+
+      // Location info
+      wardId: customer.wardId || undefined,
+      wardName: customer.ward?.name || undefined,
+      provinceId: customer.ward?.parent?.id || undefined,
+      provinceName: customer.ward?.parent?.name || undefined,
     };
   }
 
-  static toDetailResponse(customer: CustomerWithLoans): CustomerResponse {
+  static toDetailResponse(customer: CustomerWithRelations): CustomerResponse {
     const loans = customer.loans || [];
 
     // Filter active loans
@@ -93,7 +100,7 @@ export class CustomerMapper {
     };
   }
 
-  static toResponseList(customers: Customer[]): CustomerResponse[] {
+  static toResponseList(customers: CustomerWithRelations[]): CustomerResponse[] {
     return customers.map((customer) => this.toResponse(customer));
   }
 }

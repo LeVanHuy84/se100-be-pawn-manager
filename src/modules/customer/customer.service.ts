@@ -53,6 +53,13 @@ export class CustomerService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: {
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
+        },
       }),
       this.prisma.customer.count({ where }),
     ]);
@@ -68,11 +75,16 @@ export class CustomerService {
     };
   }
 
-  async findOne(id: string): Promise<CustomerResponse> {
+  async findOne(id: string): Promise<BaseResult<CustomerResponse>> {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
         loans: true,
+        ward: {
+          include: {
+            parent: true,
+          },
+        },
       },
     });
 
@@ -80,27 +92,39 @@ export class CustomerService {
       throw new NotFoundException(`Customer with ID ${id} not found`);
     }
 
-    return CustomerMapper.toDetailResponse(customer);
+    return {
+      data: CustomerMapper.toDetailResponse(customer),
+    };
   }
 
   async create(
     data: CreateCustomerDTO,
     files?: { mattruoc?: MulterFile[]; matsau?: MulterFile[] },
-  ): Promise<CustomerResponse> {
+  ): Promise<BaseResult<CustomerResponse>> {
     // Validate required images
-      if (!files || !files.mattruoc || files.mattruoc.length === 0) {
-        throw new BadRequestException(
-          'Front ID image (mattruoc) is required. Use form-data key "mattruoc"',
-        );
-      }
+    if (!files || !files.mattruoc || files.mattruoc.length === 0) {
+      throw new BadRequestException(
+        'Front ID image (mattruoc) is required. Use form-data key "mattruoc"',
+      );
+    }
 
-      if (!files.matsau || files.matsau.length === 0) {
-        throw new BadRequestException(
-          'Back ID image (matsau) is required. Use form-data key "matsau"',
-        );
-      }
+    if (!files.matsau || files.matsau.length === 0) {
+      throw new BadRequestException(
+        'Back ID image (matsau) is required. Use form-data key "matsau"',
+      );
+    }
+
+    const location = await this.prisma.location.findFirst({
+      where: { id: data.wardId },
+    });
+
+    if (location?.parentId == null) {
+      throw new BadRequestException(
+        'Invalid wardId: must be a ward-level location',
+      );
+    }
+
     try {
-
       // Check for duplicate nationalId or phone
       const existing = await this.prisma.customer.findFirst({
         where: {
@@ -123,13 +147,12 @@ export class CustomerService {
           );
         }
       }
-
       // Prepare images JSON structure with all information
       const imagesData: any = {
         images: [],
         issuedDate: data.nationalIdIssueDate,
         issuedPlace: data.nationalIdIssuePlace,
-        
+
         // Thông tin gia đình
         family: {
           father: {
@@ -150,13 +173,13 @@ export class CustomerService {
             },
           }),
         },
-        
+
         // Nghề nghiệp & Thu nhập
         employment: {
           occupation: data.occupation,
           workplace: data.workplace,
         },
-        
+
         // Người liên hệ khẩn cấp
         emergencyContact: {
           name: data.emergencyContactName,
@@ -200,10 +223,20 @@ export class CustomerService {
           monthlyIncome: data.monthlyIncome,
           creditScore: data.creditScore,
           images: imagesData as Prisma.InputJsonValue,
+          wardId: data.wardId,
+        },
+        include: {
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
         },
       });
 
-      return CustomerMapper.toDetailResponse(customer);
+      return {
+        data: CustomerMapper.toDetailResponse(customer),
+      };
     } catch (error) {
       if (error instanceof ConflictException) {
         throw error;
@@ -216,7 +249,7 @@ export class CustomerService {
     id: string,
     data: UpdateCustomerRequest,
     files?: { mattruoc?: MulterFile[]; matsau?: MulterFile[] },
-  ): Promise<CustomerResponse> {
+  ): Promise<BaseResult<CustomerResponse>> {
     // Check if customer exists
     const existing = await this.prisma.customer.findUnique({
       where: { id },
@@ -256,6 +289,16 @@ export class CustomerService {
       }
     }
 
+    const location = await this.prisma.location.findFirst({
+      where: { id: data.wardId },
+    });
+
+    if (location?.parentId == null) {
+      throw new BadRequestException(
+        'Invalid wardId: must be a ward-level location',
+      );
+    }
+
     try {
       const updateData: Prisma.CustomerUpdateInput = {};
 
@@ -273,6 +316,8 @@ export class CustomerService {
         updateData.monthlyIncome = data.monthlyIncome;
       if (data.creditScore !== undefined)
         updateData.creditScore = data.creditScore;
+      if (data.wardId !== undefined)
+        updateData.ward = { connect: { id: data.wardId } };
 
       // Update images JSON structure
       const shouldUpdateImages =
@@ -306,46 +351,73 @@ export class CustomerService {
         }
 
         // Update family info
-        if (data.fatherName !== undefined || data.fatherPhone !== undefined || data.fatherOccupation !== undefined) {
+        if (
+          data.fatherName !== undefined ||
+          data.fatherPhone !== undefined ||
+          data.fatherOccupation !== undefined
+        ) {
           currentImagesData.family = currentImagesData.family || {};
           currentImagesData.family.father = {
             name: data.fatherName ?? currentImagesData.family.father?.name,
             phone: data.fatherPhone ?? currentImagesData.family.father?.phone,
-            occupation: data.fatherOccupation ?? currentImagesData.family.father?.occupation,
+            occupation:
+              data.fatherOccupation ??
+              currentImagesData.family.father?.occupation,
           };
         }
 
-        if (data.motherName !== undefined || data.motherPhone !== undefined || data.motherOccupation !== undefined) {
+        if (
+          data.motherName !== undefined ||
+          data.motherPhone !== undefined ||
+          data.motherOccupation !== undefined
+        ) {
           currentImagesData.family = currentImagesData.family || {};
           currentImagesData.family.mother = {
             name: data.motherName ?? currentImagesData.family.mother?.name,
             phone: data.motherPhone ?? currentImagesData.family.mother?.phone,
-            occupation: data.motherOccupation ?? currentImagesData.family.mother?.occupation,
+            occupation:
+              data.motherOccupation ??
+              currentImagesData.family.mother?.occupation,
           };
         }
 
-        if (data.spouseName !== undefined || data.spousePhone !== undefined || data.spouseOccupation !== undefined) {
+        if (
+          data.spouseName !== undefined ||
+          data.spousePhone !== undefined ||
+          data.spouseOccupation !== undefined
+        ) {
           currentImagesData.family = currentImagesData.family || {};
           currentImagesData.family.spouse = {
             name: data.spouseName ?? currentImagesData.family.spouse?.name,
             phone: data.spousePhone ?? currentImagesData.family.spouse?.phone,
-            occupation: data.spouseOccupation ?? currentImagesData.family.spouse?.occupation,
+            occupation:
+              data.spouseOccupation ??
+              currentImagesData.family.spouse?.occupation,
           };
         }
 
         // Update employment info
         if (data.occupation !== undefined || data.workplace !== undefined) {
           currentImagesData.employment = {
-            occupation: data.occupation ?? currentImagesData.employment?.occupation,
-            workplace: data.workplace ?? currentImagesData.employment?.workplace,
+            occupation:
+              data.occupation ?? currentImagesData.employment?.occupation,
+            workplace:
+              data.workplace ?? currentImagesData.employment?.workplace,
           };
         }
 
         // Update emergency contact
-        if (data.emergencyContactName !== undefined || data.emergencyContactPhone !== undefined) {
+        if (
+          data.emergencyContactName !== undefined ||
+          data.emergencyContactPhone !== undefined
+        ) {
           currentImagesData.emergencyContact = {
-            name: data.emergencyContactName ?? currentImagesData.emergencyContact?.name,
-            phone: data.emergencyContactPhone ?? currentImagesData.emergencyContact?.phone,
+            name:
+              data.emergencyContactName ??
+              currentImagesData.emergencyContact?.name,
+            phone:
+              data.emergencyContactPhone ??
+              currentImagesData.emergencyContact?.phone,
           };
         }
 
@@ -408,10 +480,19 @@ export class CustomerService {
       const customer = await this.prisma.customer.update({
         where: { id },
         data: updateData,
-        include: { loans: true },
+        include: {
+          loans: true,
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
+        },
       });
 
-      return CustomerMapper.toDetailResponse(customer);
+      return {
+        data: CustomerMapper.toDetailResponse(customer),
+      };
     } catch (error) {
       throw new BadRequestException('Failed to update customer');
     }

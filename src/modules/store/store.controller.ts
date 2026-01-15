@@ -15,13 +15,18 @@ import { CreateStoreDTO } from './dto/request/create-store.request';
 import { UpdateStoreDTO } from './dto/request/update-store.request';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 import { StoreService } from './store.service';
-import { ApiOkResponse } from '@nestjs/swagger';
-import { StoreListResponse } from './dto/response/store.response';
+import { ApiExtraModels, ApiOkResponse, ApiResponse, getSchemaPath } from '@nestjs/swagger';
+import {
+  StoreListResponse,
+  StoreResponse,
+} from './dto/response/store.response';
+import { BaseResult } from 'src/common/dto/base.response';
 
 @Controller({
   version: '1',
   path: 'stores',
 })
+@ApiExtraModels(BaseResult, StoreResponse, StoreListResponse)
 @ApiErrorResponses()
 export class StoreController {
   constructor(private readonly storeService: StoreService) {}
@@ -37,18 +42,60 @@ export class StoreController {
   }
 
   @Get('/:id')
+  @ApiResponse({
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(StoreResponse) },
+          },
+          required: ['data'],
+        },
+      ],
+    },
+  })
   @Roles(Role.MANAGER)
   getStore(@Param('id') id: string) {
     return this.storeService.findOne(id);
   }
 
   @Post()
+  @ApiResponse({
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(StoreResponse) },
+          },
+          required: ['data'],
+        },
+      ],
+    },
+  })
   @Roles(Role.MANAGER)
   createStore(@Body() body: CreateStoreDTO) {
     return this.storeService.create(body);
   }
 
   @Patch('/:id')
+  @ApiResponse({
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(StoreResponse) },
+          },
+          required: ['data'],
+        },
+      ],
+    },
+  })
   @Roles(Role.MANAGER)
   updateStore(@Param('id') id: string, @Body() body: UpdateStoreDTO) {
     return this.storeService.update(id, body);

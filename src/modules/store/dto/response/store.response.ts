@@ -10,6 +10,12 @@ export class StoreResponse {
   createdAt: string; // ISO datetime
   updatedAt: string; // ISO datetime
 
+  // Location info
+  wardId?: string;
+  wardName?: string;
+  provinceId?: string;
+  provinceName?: string;
+
   // Statistics (optional, for detailed view)
   totalCollaterals?: number;
   totalLoans?: number;

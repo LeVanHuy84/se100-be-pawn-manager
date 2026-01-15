@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { CollateralStatus } from 'generated/prisma/wasm';
 import { PaginationMeta } from 'src/common/dto/pagination.type';
 import { ImageItem } from 'src/common/interfaces/media.interface';
 import Api from 'twilio/lib/rest/Api';
@@ -34,4 +35,12 @@ export class CollateralAssetListResponse {
     type: PaginationMeta,
   })
   meta: PaginationMeta;
+}
+
+export class LiquidationCollateralResponse {
+  liquidationId: string | null;
+  status: CollateralStatus;
+  createdAt: string;
+  message: string;
+  collateralAssetId: string;
 }

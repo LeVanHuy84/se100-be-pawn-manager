@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GeminiService } from './gemini.service';
 import { ValuationRequestDto } from './dto/request/valuation.request';
 import { ValuationResponse } from './dto/response/valuation.response';
+import { BaseResult } from 'src/common/dto/base.response';
 
 @Injectable()
 export class ValuationService {
@@ -11,7 +12,7 @@ export class ValuationService {
     private readonly geminiService: GeminiService,
   ) {}
 
-  async createValuation(dto: ValuationRequestDto): Promise<ValuationResponse> {
+  async createValuation(dto: ValuationRequestDto): Promise<BaseResult<ValuationResponse>> {
     const collaeralType = await this.prisma.collateralType.findUnique({
       where: { id: dto.collateralTypeId },
       select: { name: true },
@@ -44,20 +45,22 @@ export class ValuationService {
     );
 
     return {
-      assetType: collaeralType?.name || 'UNKNOWN',
-      brand: dto.brand,
-      model: dto.model,
-      year: dto.year,
-      condition: dto.condition,
-      suggestedMarketValue: marketEstimate.estimatedPrice,
-      minValue: marketEstimate.minPrice,
-      maxValue: marketEstimate.maxPrice,
-      confidenceLevel: marketEstimate.confidence,
-      ltvRatio,
-      maxLoanAmount,
-      depreciationRate,
-      valuationDate: new Date(),
-      notes: marketEstimate.reasoning,
+      data: {
+        assetType: collaeralType?.name || 'UNKNOWN',
+        brand: dto.brand,
+        model: dto.model,
+        year: dto.year,
+        condition: dto.condition,
+        suggestedMarketValue: marketEstimate.estimatedPrice,
+        minValue: marketEstimate.minPrice,
+        maxValue: marketEstimate.maxPrice,
+        confidenceLevel: marketEstimate.confidence,
+        ltvRatio,
+        maxLoanAmount,
+        depreciationRate,
+        valuationDate: new Date(),
+        notes: marketEstimate.reasoning,
+      },
     };
   }
 

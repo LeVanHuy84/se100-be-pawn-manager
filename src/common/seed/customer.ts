@@ -4,6 +4,47 @@ import { CustomerType } from '../../../generated/prisma';
 const prisma = new PrismaClient();
 
 async function main() {
+  // Get some sample locations for Ho Chi Minh City
+  const hcmProvince = await prisma.location.findFirst({
+    where: { name: { contains: 'Hồ Chí Minh' }, level: 'PROVINCE' },
+  });
+
+  const ward1 = await prisma.location.findFirst({
+    where: { name: { contains: 'An Lạc' }, level: 'WARD' },
+  });
+
+  const ward3 = await prisma.location.findFirst({
+    where: { name: { contains: 'Gia Định' }, level: 'WARD' },
+  });
+
+  const ward5 = await prisma.location.findFirst({
+    where: { name: { contains: 'Tân Sơn Nhì' }, parentId: { not: null }, level: 'WARD' },
+  });
+
+  // Fallback to any province and ward if HCM not found
+  const fallbackProvince = await prisma.location.findFirst({
+    where: { level: 'PROVINCE' },
+  });
+
+  const fallbackWard = await prisma.location.findFirst({
+    where: { level: 'WARD', parentId: { not: null } },
+  });
+
+  const provinceId = hcmProvince?.id || fallbackProvince?.id || '';
+  const wardId1 = ward1?.id || fallbackWard?.id || '';
+  const wardId3 = ward3?.id || fallbackWard?.id || '';
+  const wardId5 = ward5?.id || fallbackWard?.id || '';
+
+  if (!provinceId || !wardId1) {
+    console.error('No locations found in database. Please run location seed first.');
+    process.exit(1);
+  }
+
+  // Type assertions after validation
+  const validWardId1 = wardId1 as string;
+  const validWardId3 = (wardId3 || wardId1) as string;
+  const validWardId5 = (wardId5 || wardId1) as string;
+
   const customers = [
     {
       fullName: 'Nguyen Van A',
@@ -13,10 +54,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0901234567',
       email: 'pawner-test@yopmail.com',
-      address: '123 Nguyen Hue, District 1, HCMC',
+      address: '123 Nguyen Hue',
       customerType: 'REGULAR',
       monthlyIncome: 15000000,
       creditScore: 700,
+      wardId: validWardId1,
     },
     {
       fullName: 'Tran Thi B',
@@ -26,10 +68,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0912345678',
       email: 'tranthib@example.com',
-      address: '456 Le Loi, District 3, HCMC',
+      address: '456 Le Loi',
       customerType: 'VIP',
       monthlyIncome: 40000000,
       creditScore: 800,
+      wardId: validWardId3,
     },
     {
       fullName: 'Le Thi C',
@@ -39,10 +82,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0923456789',
       email: 'lethic@example.com',
-      address: '789 Tran Hung Dao, District 5, HCMC',
+      address: '789 Tran Hung Dao',
       customerType: 'REGULAR',
       monthlyIncome: 8000000,
       creditScore: 650,
+      wardId: validWardId5,
     },
     {
       fullName: 'Pham Van D',
@@ -52,10 +96,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0934567890',
       email: 'phamvand@example.com',
-      address: '12 Le Duan, District 1, HCMC',
+      address: '12 Le Duan',
       customerType: 'REGULAR',
       monthlyIncome: 12000000,
       creditScore: 720,
+      wardId: validWardId1,
     },
     {
       fullName: 'Hoang Thi E',
@@ -65,10 +110,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0945678901',
       email: 'hoangthe@example.com',
-      address: '34 Vo Van Tan, District 3, HCMC',
+      address: '34 Vo Van Tan',
       customerType: 'VIP',
       monthlyIncome: 50000000,
       creditScore: 850,
+      wardId: validWardId3,
     },
     {
       fullName: 'Ngo Van F',
@@ -78,10 +124,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0956789012',
       email: 'ngovf@example.com',
-      address: '78 Nguyen Trai, District 5, HCMC',
+      address: '78 Nguyen Trai',
       customerType: 'REGULAR',
       monthlyIncome: 9000000,
       creditScore: 600,
+      wardId: validWardId5,
     },
     {
       fullName: 'Dang Thi G',
@@ -91,10 +138,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0967890123',
       email: 'dangthig@example.com',
-      address: '99 Hai Ba Trung, District 3, HCMC',
+      address: '99 Hai Ba Trung',
       customerType: 'REGULAR',
       monthlyIncome: 7000000,
       creditScore: 680,
+      wardId: validWardId3,
     },
     {
       fullName: 'Vu Van H',
@@ -104,10 +152,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0978901234',
       email: 'vuvanh@example.com',
-      address: '21 Bach Dang, District 1, HCMC',
+      address: '21 Bach Dang',
       customerType: 'VIP',
       monthlyIncome: 30000000,
       creditScore: 780,
+      wardId: validWardId1,
     },
     {
       fullName: 'Tran Van I',
@@ -117,10 +166,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0989012345',
       email: 'tranvani@example.com',
-      address: '55 Cach Mang Thang 8, District 10, HCMC',
+      address: '55 Cach Mang Thang 8',
       customerType: 'REGULAR',
       monthlyIncome: 11000000,
       creditScore: 710,
+      wardId: validWardId1,
     },
     {
       fullName: 'Le Van J',
@@ -130,10 +180,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0990123456',
       email: 'levanj@example.com',
-      address: '100 Dien Bien Phu, Binh Thanh, HCMC',
+      address: '100 Dien Bien Phu',
       customerType: 'VIP',
       monthlyIncome: 45000000,
       creditScore: 820,
+      wardId: validWardId3,
     },
     {
       fullName: 'Pham Thi K',
@@ -143,10 +194,11 @@ async function main() {
       nationalIdIssuePlace: 'Cục Cảnh sát QLHC về TTXH - Bộ Công an',
       phone: '0902233445',
       email: 'phamthik@example.com',
-      address: '200 Vo Van Kiet, District 6, HCMC',
+      address: '200 Vo Van Kiet',
       customerType: 'REGULAR',
       monthlyIncome: 6000000,
       creditScore: 640,
+      wardId: validWardId5,
     },
   ];
 
@@ -162,6 +214,7 @@ async function main() {
         customerType: c.customerType as CustomerType,
         monthlyIncome: c.monthlyIncome,
         creditScore: c.creditScore,
+        wardId: c.wardId,
       },
       create: {
         fullName: c.fullName,
@@ -173,6 +226,7 @@ async function main() {
         customerType: c.customerType as CustomerType,
         monthlyIncome: c.monthlyIncome,
         creditScore: c.creditScore,
+        wardId: c.wardId,
         images: {
           images: [],
           issuedDate: c.nationalIdIssueDate,

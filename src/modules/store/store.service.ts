@@ -42,6 +42,13 @@ export class StoreService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: {
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
+        },
       }),
       this.prisma.store.count({ where }),
     ]);
@@ -57,7 +64,7 @@ export class StoreService {
     };
   }
 
-  async findOne(id: string): Promise<StoreResponse> {
+  async findOne(id: string): Promise<BaseResult<StoreResponse>> {
     const store = await this.prisma.store.findUnique({
       where: { id },
       include: {
@@ -72,6 +79,11 @@ export class StoreService {
             status: true,
           },
         },
+        ward: {
+          include: {
+            parent: true,
+          },
+        },
       },
     });
 
@@ -79,10 +91,12 @@ export class StoreService {
       throw new NotFoundException(`Store with ID ${id} not found`);
     }
 
-    return StoreMapper.toDetailResponse(store);
+    return {
+      data: StoreMapper.toDetailResponse(store),
+    };
   }
 
-  async create(data: CreateStoreDTO): Promise<StoreResponse> {
+  async create(data: CreateStoreDTO): Promise<BaseResult<StoreResponse>> {
     try {
       // Check for duplicate store name
       const existing = await this.prisma.store.findFirst({
@@ -98,16 +112,34 @@ export class StoreService {
         throw new ConflictException('Store with this name already exists');
       }
 
+      const location = await this.prisma.location.findFirst({
+        where: { id: data.wardId },
+      });
+
+      if (location?.parentId == null) {
+        throw new BadRequestException(
+          'Invalid wardId: must be a ward-level location',
+        );
+      }
+
       const store = await this.prisma.store.create({
         data: {
           name: data.name,
           address: data.address,
           storeInfo: (data.storeInfo || {}) as Prisma.InputJsonValue,
           isActive: data.isActive ?? true,
+          wardId: data.wardId,
+        },
+        include: {
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
         },
       });
 
-      return StoreMapper.toResponse(store);
+      return { data: StoreMapper.toDetailResponse(store) };
     } catch (error) {
       if (error instanceof ConflictException) {
         throw error;
@@ -116,7 +148,7 @@ export class StoreService {
     }
   }
 
-  async update(id: string, data: UpdateStoreDTO): Promise<StoreResponse> {
+  async update(id: string, data: UpdateStoreDTO): Promise<BaseResult<StoreResponse>> {
     // Check if store exists
     const existing = await this.prisma.store.findUnique({
       where: { id },
@@ -149,6 +181,16 @@ export class StoreService {
       }
     }
 
+    const location = await this.prisma.location.findFirst({
+      where: { id: data.wardId },
+    });
+
+    if (location?.parentId == null) {
+      throw new BadRequestException(
+        'Invalid wardId: must be a ward-level location',
+      );
+    }
+
     try {
       const updateData: Prisma.StoreUpdateInput = {};
 
@@ -158,13 +200,22 @@ export class StoreService {
       if (data.storeInfo !== undefined) {
         updateData.storeInfo = data.storeInfo as Prisma.InputJsonValue;
       }
+      if (data.wardId !== undefined)
+        updateData.ward = { connect: { id: data.wardId } };
 
       const store = await this.prisma.store.update({
         where: { id },
         data: updateData,
+        include: {
+          ward: {
+            include: {
+              parent: true,
+            },
+          },
+        },
       });
 
-      return StoreMapper.toResponse(store);
+      return { data: StoreMapper.toDetailResponse(store) };
     } catch (error) {
       throw new BadRequestException('Failed to update store');
     }

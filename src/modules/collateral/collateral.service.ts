@@ -9,7 +9,7 @@ import { CollateralQueryDTO } from './dto/request/collateral.query';
 import { CreateCollateralDTO } from './dto/request/create-collateral.request';
 import { UpdateLocationRequest } from './dto/request/update-location.request';
 import { CreateLiquidationRequest } from './dto/request/liquidation.request';
-import { CollateralAssetResponse } from './dto/response/collateral.response';
+import { CollateralAssetResponse, LiquidationCollateralResponse } from './dto/response/collateral.response';
 import { CollateralMapper } from './collateral.mapper';
 import { BaseResult } from 'src/common/dto/base.response';
 import {
@@ -73,7 +73,7 @@ export class CollateralService {
     };
   }
 
-  async findOne(id: string): Promise<CollateralAssetResponse> {
+  async findOne(id: string): Promise<BaseResult<CollateralAssetResponse>> {
     const collateral = await this.prisma.collateral.findUnique({
       where: { id },
     });
@@ -82,13 +82,15 @@ export class CollateralService {
       throw new NotFoundException(`Collateral asset with ID ${id} not found`);
     }
 
-    return CollateralMapper.toResponse(collateral);
+    return {
+      data: CollateralMapper.toResponse(collateral),
+    };
   }
 
   async create(
     data: CreateCollateralDTO,
     files: MulterFile[],
-  ): Promise<CollateralAssetResponse> {
+  ): Promise<BaseResult<CollateralAssetResponse>> {
     try {
       // Validate loanId if provided
       if (data.loanId) {
@@ -136,7 +138,9 @@ export class CollateralService {
         },
       });
 
-      return CollateralMapper.toResponse(collateral);
+      return {
+        data: CollateralMapper.toResponse(collateral),
+      };
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
@@ -149,7 +153,7 @@ export class CollateralService {
     id: string,
     data: PatchCollateralDTO,
     files?: MulterFile[],
-  ): Promise<CollateralAssetResponse> {
+  ): Promise<BaseResult<CollateralAssetResponse>> {
     // Check if collateral exists
     const existing = await this.prisma.collateral.findUnique({
       where: { id },
@@ -203,7 +207,9 @@ export class CollateralService {
         data: updateData,
       });
 
-      return CollateralMapper.toResponse(collateral);
+      return {
+        data: CollateralMapper.toResponse(collateral),
+      };
     } catch (error) {
       throw new BadRequestException('Failed to update collateral asset');
     }
@@ -212,7 +218,7 @@ export class CollateralService {
   async updateLocation(
     id: string,
     data: UpdateLocationRequest,
-  ): Promise<boolean> {
+  ): Promise<BaseResult<boolean>> {
     // Check if collateral exists
     const existing = await this.prisma.collateral.findUnique({
       where: { id },
@@ -233,19 +239,14 @@ export class CollateralService {
         data: updateData,
       });
 
-      return true;
+      return { data: true };
     } catch (error) {
       throw new BadRequestException('Failed to update collateral location');
     }
   }
 
-  async createLiquidation(data: CreateLiquidationRequest): Promise<{
-    liquidationId: string | null;
-    status: CollateralStatus;
-    createdAt: string;
-    message: string;
-    collateralAssetId: string;
-  }> {
+  async createLiquidation(data: CreateLiquidationRequest): 
+  Promise<BaseResult<LiquidationCollateralResponse>> {
     // Validate collateral exists
     const collateral = await this.prisma.collateral.findUnique({
       where: { id: data.collateralId },
@@ -291,12 +292,14 @@ export class CollateralService {
       });
 
       return {
-        message: 'Liquidation process started successfully',
-        // i ain't creating a liquidation table, have fun with null liquidationId
-        liquidationId: null,
-        collateralAssetId: data.collateralId,
-        status: collateral.status,
-        createdAt: collateral.updatedAt.toISOString(),
+        data: {
+          message: 'Liquidation process started successfully',
+          // i ain't creating a liquidation table, have fun with null liquidationId
+          liquidationId: null,
+          collateralAssetId: data.collateralId,
+          status: collateral.status,
+          createdAt: collateral.updatedAt.toISOString(),
+        },
       };
     } catch (error) {
       throw new BadRequestException('Failed to initiate liquidation process');

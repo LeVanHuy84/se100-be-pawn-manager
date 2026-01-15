@@ -57,6 +57,12 @@ export class CustomerResponse {
   // Người liên hệ khẩn cấp
   emergencyContactName?: string;
   emergencyContactPhone?: string;
+
+  // Địa chỉ hành chính
+  wardId?: string;
+  wardName?: string;
+  provinceId?: string;
+  provinceName?: string;
 }
 
 export class CustomerListResponse {

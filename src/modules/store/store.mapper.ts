@@ -1,8 +1,17 @@
-import { Store } from '../../../generated/prisma';
+import { Store, Location } from '../../../generated/prisma';
 import { StoreResponse } from './dto/response/store.response';
 
+type StoreWithRelations = Store & {
+  ward?: (Location & { parent?: Location | null }) | null;
+  _count?: {
+    collaterals?: number;
+    loans?: number;
+  };
+  loans?: any[];
+};
+
 export class StoreMapper {
-  static toResponse(store: Store): StoreResponse {
+  static toResponse(store: StoreWithRelations): StoreResponse {
     return {
       id: store.id,
       name: store.name,
@@ -11,18 +20,14 @@ export class StoreMapper {
       isActive: store.isActive,
       createdAt: store.createdAt.toISOString(),
       updatedAt: store.updatedAt.toISOString(),
+      wardId: store.wardId || undefined,
+      wardName: store.ward?.name || undefined,
+      provinceId: store.ward?.parent?.id || undefined,
+      provinceName: store.ward?.parent?.name || undefined,
     };
   }
 
-  static toDetailResponse(
-    store: Store & {
-      _count?: {
-        collaterals?: number;
-        loans?: number;
-      };
-      loans?: any[];
-    },
-  ): StoreResponse {
+  static toDetailResponse(store: StoreWithRelations): StoreResponse {
     const response = this.toResponse(store);
 
     if (store._count) {
@@ -39,7 +44,7 @@ export class StoreMapper {
     return response;
   }
 
-  static toResponseList(stores: Store[]): StoreResponse[] {
+  static toResponseList(stores: StoreWithRelations[]): StoreResponse[] {
     return stores.map((store) => this.toResponse(store));
   }
 }

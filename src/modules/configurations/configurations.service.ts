@@ -8,6 +8,7 @@ import { ConfigurationResponse } from './dto/request/configurations.response';
 import { UpdateConfigurationDto } from './dto/request/update-configuration.request';
 import { ParameterGroup } from './enums/parameter-group.enum';
 import { SystemParameterDataType } from './enums/system-parameters.type';
+import { BaseResult } from 'src/common/dto/base.response';
 
 @Injectable()
 export class ConfigurationsService {
@@ -15,7 +16,7 @@ export class ConfigurationsService {
 
   async listConfigurations(
     group?: ParameterGroup,
-  ): Promise<ConfigurationResponse[]> {
+  ): Promise<BaseResult<ConfigurationResponse[]>> {
     const params = await this.prisma.systemParameter.findMany({
       where: {
         isActive: true,
@@ -24,13 +25,15 @@ export class ConfigurationsService {
       orderBy: [{ paramGroup: 'asc' }, { paramKey: 'asc' }],
     });
 
-    return params.map((p) => this.mapToResponse(p));
+    return {
+      data: params.map((p) => this.mapToResponse(p)),
+    };
   }
 
   async updateConfiguration(
     key: string,
     data: UpdateConfigurationDto,
-  ): Promise<ConfigurationResponse> {
+  ): Promise<BaseResult<ConfigurationResponse>> {
     const existing = await this.prisma.systemParameter.findFirst({
       where: {
         paramKey: key,
@@ -59,7 +62,9 @@ export class ConfigurationsService {
       },
     });
 
-    return this.mapToResponse(updated);
+    return {
+      data: this.mapToResponse(updated),
+    };
   }
 
   private normalizeValueByDataType(
