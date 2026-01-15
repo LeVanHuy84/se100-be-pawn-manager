@@ -15,22 +15,130 @@
   ],
   "loanTypes": [
     {
-      "name": "Standard Loan",
-      "description": "Standard pawn loan with 30 days duration",
-      "durationMonths": 1,
-      "interestRateMonthly": 0.05
+      "id": 1,
+      "name": "VEHICLE_BIKE_STANDARD_6M",
+      "description": "Standard motorbike collateral loans - 6 months",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.8
     },
     {
-      "name": "Gold Loan",
-      "description": "Special rate for gold items",
+      "id": 2,
+      "name": "VEHICLE_BIKE_STANDARD_12M",
+      "description": "Standard motorbike collateral loans - 12 months",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.8
+    },
+    {
+      "id": 3,
+      "name": "VEHICLE_BIKE_PREMIUM_6M",
+      "description": "Premium motorbike loans for newer/high-value bikes - 6 months",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.4
+    },
+    {
+      "id": 4,
+      "name": "VEHICLE_CAR_STANDARD_12M",
+      "description": "Standard car collateral loans - 12 months",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.3
+    },
+    {
+      "id": 5,
+      "name": "VEHICLE_CAR_PREMIUM_12M",
+      "description": "Premium car collateral loans - 12 months",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.1
+    },
+    {
+      "id": 6,
+      "name": "GOLD_SHORT_3M",
+      "description": "Short-term gold collateral loans (<= 3 months)",
       "durationMonths": 3,
-      "interestRateMonthly": 0.03
+      "interestRateMonthly": 1.5
     },
     {
-      "name": "Tech Loan",
-      "description": "Short term loan for high value electronics",
-      "durationMonths": 1,
-      "interestRateMonthly": 0.045
+      "id": 7,
+      "name": "GOLD_STANDARD_6M",
+      "description": "Standard gold collateral loans - 6 months",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.7
+    },
+    {
+      "id": 8,
+      "name": "GOLD_LONG_12M",
+      "description": "Long-term gold collateral loans - 12 months",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.9
+    },
+    {
+      "id": 9,
+      "name": "SALARY_STANDARD_6M",
+      "description": "Standard salary-based personal loans (no collateral) - 6 months",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.2
+    },
+    {
+      "id": 10,
+      "name": "SALARY_JUNIOR_6M",
+      "description": "Salary loan for junior employees/freshers - 6 months",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.5
+    },
+    {
+      "id": 11,
+      "name": "SALARY_SENIOR_12M",
+      "description": "Salary loan for senior/stable income - 12 months",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.0
+    },
+    {
+      "id": 12,
+      "name": "ELECTRONICS_PHONE_3M",
+      "description": "Collateral loans for smartphones - 3 months",
+      "durationMonths": 3,
+      "interestRateMonthly": 2.2
+    },
+    {
+      "id": 13,
+      "name": "ELECTRONICS_LAPTOP_6M",
+      "description": "Collateral loans for laptops - 6 months",
+      "durationMonths": 6,
+      "interestRateMonthly": 2.0
+    },
+    {
+      "id": 14,
+      "name": "HOME_APPLIANCE_3M",
+      "description": "Collateral loans for home appliances (TV, fridge, etc.) - 3 months",
+      "durationMonths": 3,
+      "interestRateMonthly": 2.1
+    },
+    {
+      "id": 15,
+      "name": "HOME_APPLIANCE_6M",
+      "description": "Collateral loans for home appliances (TV, fridge, etc.) - 6 months",
+      "durationMonths": 6,
+      "interestRateMonthly": 2.0
+    },
+    {
+      "id": 16,
+      "name": "SME_MICRO_6M",
+      "description": "Micro business working-capital loans - 6 months",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.9
+    },
+    {
+      "id": 17,
+      "name": "SME_SMALL_12M",
+      "description": "Small business working-capital loans - 12 months",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.6
+    },
+    {
+      "id": 18,
+      "name": "SME_SECURED_18M",
+      "description": "Secured SME loans (with collateral) - 18 months",
+      "durationMonths": 18,
+      "interestRateMonthly": 1.5
     }
   ],
   "commonCollateralTypes": [
@@ -42,22 +150,165 @@
   ],
   "systemParameters": [
     {
-      "paramGroup": "FINANCE",
-      "paramKey": "MAX_LOAN_AMOUNT",
-      "paramValue": "500000000",
-      "description": "Maximum loan amount allowed per transaction"
+      "paramGroup": "RATES",
+      "paramKey": "BIKE_DEFAULT_INTEREST",
+      "paramValue": "1.6",
+      "dataType": "DECIMAL",
+      "description": "Default interest rate for motorbike loans (%/month)"
     },
     {
-      "paramGroup": "FINANCE",
-      "paramKey": "DEFAULT_LATE_FEE_RATE",
-      "paramValue": "0.1",
-      "description": "Default late fee rate percentage"
+      "paramGroup": "RATES",
+      "paramKey": "PENALTY_INTEREST_RATE",
+      "paramValue": "0.05",
+      "dataType": "DECIMAL",
+      "description": "Penalty interest rate applied to overdue principal (%/month)"
+    },
+    {
+      "paramGroup": "RATES",
+      "paramKey": "LEGAL_INTEREST_CAP",
+      "paramValue": "20.0",
+      "dataType": "DECIMAL",
+      "description": "Legal maximum annual interest rate cap in Vietnam (%). System warns when total rate exceeds this limit (per Civil Code 2015)"
+    },
+    {
+      "paramGroup": "RATES",
+      "paramKey": "MANAGEMENT_FEE_PERCENT",
+      "paramValue": "0.02",
+      "dataType": "DECIMAL",
+      "description": "Management fee as percentage of loan amount (%)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "BIKE_MAX_LTV",
+      "paramValue": "70",
+      "dataType": "DECIMAL",
+      "description": "Maximum LTV ratio for motorbike collateral (%)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "CAR_MAX_LTV",
+      "paramValue": "80",
+      "dataType": "DECIMAL",
+      "description": "Maximum LTV ratio for car collateral (%)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "GOLD_MAX_LTV",
+      "paramValue": "85",
+      "dataType": "DECIMAL",
+      "description": "Maximum LTV ratio for gold collateral (%)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "MIN_INCOME_REQUIRED",
+      "paramValue": "5000000",
+      "dataType": "DECIMAL",
+      "description": "Minimum monthly income required for standard loans (VND)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "SALARY_INCOME_MULTIPLIER",
+      "paramValue": "3.0",
+      "dataType": "DECIMAL",
+      "description": "Maximum allowed total installment = multiplier × monthly income"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "MAX_ACTIVE_LOANS_PER_CUSTOMER",
+      "paramValue": "3",
+      "dataType": "INTEGER",
+      "description": "Maximum number of active loans per customer"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "MAX_TENOR_MONTHS",
+      "paramValue": "24",
+      "dataType": "INTEGER",
+      "description": "Maximum loan tenor allowed (months)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "MAX_TOTAL_OUTSTANDING_PER_CUSTOMER",
+      "paramValue": "100000000",
+      "dataType": "DECIMAL",
+      "description": "Maximum total outstanding across all loans per customer (VND)"
     },
     {
       "paramGroup": "SYSTEM",
-      "paramKey": "BUSINESS_HOURS",
-      "paramValue": "08:00-20:00",
-      "description": "Operating hours"
+      "paramKey": "CURRENCY",
+      "paramValue": "VND",
+      "dataType": "STRING",
+      "description": "Default display currency code"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "TIMEZONE",
+      "paramValue": "Asia/Ho_Chi_Minh",
+      "dataType": "STRING",
+      "description": "Default system timezone"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "AGE_REQUIREMENT_MIN",
+      "paramValue": "18",
+      "dataType": "INTEGER",
+      "description": "Minimum age requirement for loan applicants"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "ENABLE_AUTO_APPROVAL",
+      "paramValue": "false",
+      "dataType": "BOOLEAN",
+      "description": "Whether to enable auto approval for low-risk loans"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "AUTO_APPROVAL_MAX_AMOUNT",
+      "paramValue": "20000000",
+      "dataType": "DECIMAL",
+      "description": "Maximum loan amount eligible for auto approval (VND)"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "REMINDER_DAYS_BEFORE_DUE",
+      "paramValue": "2",
+      "dataType": "INTEGER",
+      "description": "Number of days before due date to send reminder"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "REMINDER_DAYS_AFTER_OVERDUE",
+      "paramValue": "1",
+      "dataType": "INTEGER",
+      "description": "Number of days after overdue to send reminder"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "MAX_LOGIN_ATTEMPTS",
+      "paramValue": "5",
+      "dataType": "INTEGER",
+      "description": "Max failed login attempts before account lock"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "SUPPORTED_ASSET_TYPES",
+      "paramValue": "[\"CAR\",\"MOTORBIKE\",\"GOLD\"]",
+      "dataType": "JSON",
+      "description": "List of supported asset types for collateral in JSON format"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "SUPPORTED_LOAN_PRODUCTS",
+      "paramValue": "[{\"id\":1,\"name\":\"VEHICLE_BIKE_STANDARD_6M\",\"description\":\"Standard motorbike collateral loans - 6 months\",\"durationMonths\":6,\"interestRateMonthly\":1.8},{\"id\":2,\"name\":\"VEHICLE_BIKE_STANDARD_12M\",\"description\":\"Standard motorbike collateral loans - 12 months\",\"durationMonths\":12,\"interestRateMonthly\":1.8},{\"id\":3,\"name\":\"VEHICLE_BIKE_PREMIUM_6M\",\"description\":\"Premium motorbike loans for newer/high-value bikes - 6 months\",\"durationMonths\":6,\"interestRateMonthly\":1.4},{\"id\":4,\"name\":\"VEHICLE_CAR_STANDARD_12M\",\"description\":\"Standard car collateral loans - 12 months\",\"durationMonths\":12,\"interestRateMonthly\":1.3},{\"id\":5,\"name\":\"VEHICLE_CAR_PREMIUM_12M\",\"description\":\"Premium car collateral loans - 12 months\",\"durationMonths\":12,\"interestRateMonthly\":1.1},{\"id\":6,\"name\":\"GOLD_SHORT_3M\",\"description\":\"Short-term gold collateral loans (<= 3 months)\",\"durationMonths\":3,\"interestRateMonthly\":1.5},{\"id\":7,\"name\":\"GOLD_STANDARD_6M\",\"description\":\"Standard gold collateral loans - 6 months\",\"durationMonths\":6,\"interestRateMonthly\":1.7},{\"id\":8,\"name\":\"GOLD_LONG_12M\",\"description\":\"Long-term gold collateral loans - 12 months\",\"durationMonths\":12,\"interestRateMonthly\":1.9},{\"id\":9,\"name\":\"SALARY_STANDARD_6M\",\"description\":\"Standard salary-based personal loans (no collateral) - 6 months\",\"durationMonths\":6,\"interestRateMonthly\":1.2},{\"id\":10,\"name\":\"SALARY_JUNIOR_6M\",\"description\":\"Salary loan for junior employees/freshers - 6 months\",\"durationMonths\":6,\"interestRateMonthly\":1.5},{\"id\":11,\"name\":\"SALARY_SENIOR_12M\",\"description\":\"Salary loan for senior/stable income - 12 months\",\"durationMonths\":12,\"interestRateMonthly\":1.0},{\"id\":12,\"name\":\"ELECTRONICS_PHONE_3M\",\"description\":\"Collateral loans for smartphones - 3 months\",\"durationMonths\":3,\"interestRateMonthly\":2.2},{\"id\":13,\"name\":\"ELECTRONICS_LAPTOP_6M\",\"description\":\"Collateral loans for laptops - 6 months\",\"durationMonths\":6,\"interestRateMonthly\":2.0},{\"id\":14,\"name\":\"HOME_APPLIANCE_3M\",\"description\":\"Collateral loans for home appliances (TV, fridge, etc.) - 3 months\",\"durationMonths\":3,\"interestRateMonthly\":2.1},{\"id\":15,\"name\":\"HOME_APPLIANCE_6M\",\"description\":\"Collateral loans for home appliances (TV, fridge, etc.) - 6 months\",\"durationMonths\":6,\"interestRateMonthly\":2.0},{\"id\":16,\"name\":\"SME_MICRO_6M\",\"description\":\"Micro business working-capital loans - 6 months\",\"durationMonths\":6,\"interestRateMonthly\":1.9},{\"id\":17,\"name\":\"SME_SMALL_12M\",\"description\":\"Small business working-capital loans - 12 months\",\"durationMonths\":12,\"interestRateMonthly\":1.6},{\"id\":18,\"name\":\"SME_SECURED_18M\",\"description\":\"Secured SME loans (with collateral) - 18 months\",\"durationMonths\":18,\"interestRateMonthly\":1.5}]",
+      "dataType": "JSON",
+      "description": "Configuration list of all supported loan products with IDs, rates, and duration."
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "DASHBOARD_DEFAULT_DATE_RANGE",
+      "paramValue": "LAST_30_DAYS",
+      "dataType": "STRING",
+      "description": "Default date range filter for dashboard views"
     }
   ],
   "customers": [
@@ -92,7 +343,87 @@
       "address": "789 Low St, D4",
       "customerType": "REGULAR",
       "images": {}
+    },
+    {
+      "fullName": "Pham Thi D",
+      "dob": "1992-03-10T00:00:00.000Z",
+      "nationalId": "079192000004",
+      "phone": "0904444444",
+      "email": "phamthid@example.com",
+      "address": "321 West St, D5",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Hoang Van E",
+      "dob": "1988-08-08T00:00:00.000Z",
+      "nationalId": "079188000005",
+      "phone": "0905555555",
+      "email": "hoangvane@example.com",
+      "address": "654 East St, D2",
+      "customerType": "VIP",
+      "monthlyIncome": 45000000,
+      "creditScore": 720,
+      "images": {}
+    },
+    {
+      "fullName": "Vu Thi F",
+      "dob": "1995-12-12T00:00:00.000Z",
+      "nationalId": "079195000006",
+      "phone": "0906666666",
+      "email": "vuthif@example.com",
+      "address": "987 North St, D1",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Dang Van G",
+      "dob": "1991-07-07T00:00:00.000Z",
+      "nationalId": "079191000007",
+      "phone": "0907777777",
+      "email": "dangvang@example.com",
+      "address": "147 South St, D7",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Bui Thi H",
+      "dob": "1998-09-09T00:00:00.000Z",
+      "nationalId": "079198000008",
+      "phone": "0908888888",
+      "email": "buithih@example.com",
+      "address": "258 Central St, D3",
+      "customerType": "VIP",
+      "monthlyIncome": 60000000,
+      "creditScore": 780,
+      "images": {}
+    },
+    {
+      "fullName": "Ngo Van I",
+      "dob": "1983-04-04T00:00:00.000Z",
+      "nationalId": "079183000009",
+      "phone": "0909999999",
+      "email": "ngovani@example.com",
+      "address": "369 Old St, D4",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Do Thi K",
+      "dob": "1996-06-06T00:00:00.000Z",
+      "nationalId": "079196000010",
+      "phone": "0900000000",
+      "email": "dothik@example.com",
+      "address": "741 New St, D5",
+      "customerType": "REGULAR",
+      "images": {}
     }
   ],
-  "employees": []
+  "employees": [
+    { "id": "emp-001", "name": "Manager John", "role": "MANAGER" },
+    { "id": "emp-002", "name": "Staff Mary", "role": "STAFF" },
+    { "id": "emp-003", "name": "Staff Peter", "role": "STAFF" },
+    { "id": "emp-004", "name": "Teller Susan", "role": "TELLER" },
+    { "id": "emp-005", "name": "Admin System", "role": "ADMIN" }
+  ]
 }

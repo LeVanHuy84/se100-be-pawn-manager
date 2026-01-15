@@ -901,10 +901,254 @@ components:
         parentId:
           type: string
 
+    # --- CONFIGURATIONS ---
+    ConfigurationResponse:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Unique parameter key identifier
+        value:
+          type: string
+          description: Current value stored as string
+        group:
+          type: string
+          enum: [RATES, LIMITS, SYSTEM]
+        description:
+          type: string
+        dataType:
+          type: string
+          enum: [STRING, DECIMAL, INTEGER, BOOLEAN, JSON]
+
+    UpdateConfigurationDto:
+      type: object
+      required:
+        - value
+      properties:
+        value:
+          type: string
+        description:
+          type: string
+    # --- REPAYMENT SCHEDULE ---
+    RepaymentItemStatus:
+      type: string
+      enum: [PENDING, PAID, OVERDUE]
+
+    RepaymentScheduleItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        loanId:
+          type: string
+        periodNumber:
+          type: integer
+        dueDate:
+          type: string
+          format: date
+        beginningBalance:
+          type: number
+        principalAmount:
+          type: number
+        interestAmount:
+          type: number
+        feeAmount:
+          type: number
+        totalAmount:
+          type: number
+        status:
+          $ref: '#/components/schemas/RepaymentItemStatus'
+        paidPrincipal:
+          type: number
+        paidInterest:
+          type: number
+        paidFee:
+          type: number
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    # --- COMMUNICATION ---
+    NotificationType:
+      type: string
+      enum:
+        [
+          LOAN_APPROVED,
+          INTEREST_REMINDER,
+          OVERDUE_REMINDER,
+          LIQUIDATION_WARNING,
+          PAYMENT_CONFIRMATION,
+        ]
+
+    NotificationChannel:
+      type: string
+      enum: [SMS, EMAIL, PHONE_CALL, IN_PERSON]
+
+    NotificationStatus:
+      type: string
+      enum:
+        [PENDING, SENT, DELIVERED, FAILED, ANSWERED, NO_ANSWER, PROMISE_TO_PAY]
+
+    LogCommunicationDto:
+      type: object
+      required:
+        - loanId
+        - type
+        - channel
+        - status
+      properties:
+        loanId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        channel:
+          $ref: '#/components/schemas/NotificationChannel'
+        status:
+          $ref: '#/components/schemas/NotificationStatus'
+        subject:
+          type: string
+          maxLength: 200
+        notes:
+          type: string
+          maxLength: 1000
+        callDuration:
+          type: integer
+          minimum: 1
+        promiseToPayDate:
+          type: string
+          format: date
+
+    NotificationLogResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        channel:
+          $ref: '#/components/schemas/NotificationChannel'
+        status:
+          $ref: '#/components/schemas/NotificationStatus'
+        loanId:
+          type: string
+        customerId:
+          type: string
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        subject:
+          type: string
+        message:
+          type: string
+        recipientContact:
+          type: string
+        callDuration:
+          type: number
+        employeeId:
+          type: string
+        notes:
+          type: string
+        promiseToPayDate:
+          type: string
+        sentAt:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    # --- LOAN SIMULATION ---
+    LoanSimulationRequestDto:
+      type: object
+      required:
+        - loanAmount
+        - totalFeeRate
+        - loanTypeId
+        - repaymentMethod
+      properties:
+        loanAmount:
+          type: number
+          minimum: 1
+        totalFeeRate:
+          type: number
+          minimum: 0
+        loanTypeId:
+          type: integer
+        repaymentMethod:
+          $ref: '#/components/schemas/RepaymentMethod'
+
+    LoanSimulationScheduleItem:
+      type: object
+      properties:
+        periodNumber:
+          type: integer
+        dueDate:
+          type: string
+          format: date
+        beginningBalance:
+          type: number
+        principalAmount:
+          type: number
+        interestAmount:
+          type: number
+        feeAmount:
+          type: number
+        totalAmount:
+          type: number
+
+    LoanSimulationResponse:
+      type: object
+      properties:
+        loanAmount:
+          type: number
+        durationMonths:
+          type: integer
+        productType:
+          type: string
+        appliedInterestRate:
+          type: number
+        appliedMgmtFeeRateMonthly:
+          type: number
+        totalCustodyFeeRate:
+          type: number
+        totalInterest:
+          type: number
+        totalFees:
+          type: number
+        totalRepayment:
+          type: number
+        monthlyPayment:
+          type: number
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoanSimulationScheduleItem'
+
 security:
   - bearerAuth: []
 
 paths:
+  # --- LOAN SIMULATIONS ---
+  /loan-simulations:
+    post:
+      summary: Simulate loan repayment schedule
+      tags: [Loan Simulations]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanSimulationRequestDto'
+      responses:
+        '201':
+          description: Simulation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanSimulationResponse'
+
   # --- CUSTOMERS ---
   /customers:
     get:
@@ -1569,3 +1813,204 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/WardResponse'
+
+  # --- CONFIGURATIONS ---
+  /configurations:
+    get:
+      tags: [System Configurations]
+      summary: List all system configurations
+      parameters:
+        - name: group
+          in: query
+          schema:
+            type: string
+            enum: [RATES, LIMITS, SYSTEM]
+      responses:
+        200:
+          description: List retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConfigurationResponse'
+
+  /configurations/{key}:
+    put:
+      tags: [System Configurations]
+      summary: Update system configuration
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Parameter Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConfigurationDto'
+      responses:
+        200:
+          description: Configuration updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigurationResponse'
+
+  # --- REPAYMENT SCHEDULE ---
+  /loans/{loanId}/repayment-schedule:
+    get:
+      summary: Get loan repayment schedule
+      tags: [Repayment Schedule]
+      parameters:
+        - name: loanId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RepaymentScheduleItemResponse'
+
+  /repayment-schedules/overdue:
+    get:
+      summary: Get overdue repayment items
+      tags: [Repayment Schedule]
+      parameters:
+        - name: minDaysOverdue
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RepaymentScheduleItemResponse'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  /repayment-schedules/{id}:
+    get:
+      summary: Get single repayment schedule item
+      tags: [Repayment Schedule]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RepaymentScheduleItemResponse'
+
+  # --- COMMUNICATION ---
+  /communications/log:
+    post:
+      summary: Log a communication attempt
+      tags: [Communication]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogCommunicationDto'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationLogResponse'
+
+  /communications/loans/{loanId}/history:
+    get:
+      summary: Get communication history for a loan
+      tags: [Communication]
+      parameters:
+        - name: loanId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationLogResponse'
+
+  /communications/promises-to-pay:
+    get:
+      summary: Get upcoming promise-to-pay commitments
+      tags: [Communication]
+      parameters:
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationLogResponse'

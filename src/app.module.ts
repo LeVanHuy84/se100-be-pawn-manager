@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
@@ -22,6 +22,8 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { DisbursementModule } from './modules/disbursement/disbursement.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LocationModule } from './modules/location/location.module';
+import { LoanTypesModule } from './modules/loan-types/loan-types.module';
+import { LoggerMiddleware } from './common/middleware/logger.middleware';
 
 @Module({
   imports: [
@@ -99,6 +101,7 @@ import { LocationModule } from './modules/location/location.module';
     ReportsModule,
     DisbursementModule,
     LocationModule,
+    LoanTypesModule,
   ],
   controllers: [],
   providers: [
@@ -108,4 +111,8 @@ import { LocationModule } from './modules/location/location.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggerMiddleware).forRoutes('*');
+  }
+}
