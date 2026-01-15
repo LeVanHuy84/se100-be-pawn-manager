@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { createZodDto } from 'nestjs-zod';
-import z from 'zod';
+import { z } from 'zod';
 
 export const revenueReportQuerySchema = z
   .object({
@@ -29,21 +29,23 @@ export const revenueReportQuerySchema = z
       message: 'Date range cannot exceed 30 days',
     },
   );
+
 export class RevenueReportQuery extends createZodDto(revenueReportQuerySchema) {
   @ApiProperty({
     description: 'Start date in YYYY-MM-DD format',
     example: '2024-01-01',
   })
   startDate: string;
+
   @ApiProperty({
     description: 'End date in YYYY-MM-DD format',
     example: '2024-01-31',
   })
   endDate: string;
-  @ApiProperty({
+
+  @ApiPropertyOptional({
     description: 'Filter by store UUID (for multi-location)',
     example: '550e8400-e29b-41d4-a716-446655440000',
-    required: false,
   })
   storeId?: string;
 }

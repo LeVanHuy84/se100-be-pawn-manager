@@ -1,7 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { BaseFilterQuery } from 'src/common/dto/filter.type';
+import { createZodDto } from 'nestjs-zod';
+import { baseFilterQuerySchema } from 'src/common/dto/filter.type';
+import { z } from 'zod';
 
-export class OverdueItemsQuery extends BaseFilterQuery {
+export const overdueItemsQuerySchema = baseFilterQuerySchema.extend({
+  minDaysOverdue: z.coerce.number().int().min(1).default(1).optional(),
+});
+
+export class OverdueItemsQuery extends createZodDto(overdueItemsQuerySchema) {
   @ApiPropertyOptional({
     description: 'Minimum days overdue',
     example: 1,
