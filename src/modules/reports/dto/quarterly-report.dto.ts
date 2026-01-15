@@ -1,6 +1,6 @@
-import { z } from 'zod';
-import { createZodDto } from 'nestjs-zod';
 import { ApiProperty } from '@nestjs/swagger';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
 export const quarterlyReportQuerySchema = z.object({
   year: z.coerce
@@ -10,6 +10,7 @@ export const quarterlyReportQuerySchema = z.object({
     .max(2100)
     .describe('Year (2000-2100)'),
   quarter: z.coerce.number().int().min(1).max(4).describe('Quarter (1-4)'),
+  storeId: z.uuid().optional().describe('Store ID (optional)'),
 });
 
 export class QuarterlyReportQuery extends createZodDto(
@@ -17,8 +18,16 @@ export class QuarterlyReportQuery extends createZodDto(
 ) {
   @ApiProperty({ description: 'Year', example: 2024 })
   year: number;
+
   @ApiProperty({ description: 'Quarter (1-4)', example: 1 })
   quarter: number;
+
+  @ApiProperty({
+    description: 'Store ID (optional)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    required: false,
+  })
+  storeId?: string;
 }
 
 class QuarterlyStatistics {

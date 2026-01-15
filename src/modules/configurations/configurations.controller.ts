@@ -29,7 +29,7 @@ import { BaseResult } from 'src/common/dto/base.response';
 export class ConfigurationsController {
   constructor(private readonly configurationsService: ConfigurationsService) {}
 
-  @Public()
+  @Roles(Role.MANAGER, Role.STAFF)
   @Get()
   @ApiOperation({
     summary: 'List all system configurations',

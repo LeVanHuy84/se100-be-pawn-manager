@@ -331,7 +331,7 @@ export class ReportsService {
   async getQuarterlyReport(
     query: QuarterlyReportQuery,
   ): Promise<BaseResult<QuarterlyReportResponse>> {
-    const { year, quarter } = query;
+    const { year, quarter, storeId } = query;
 
     // Calculate quarter date range
     const startMonth = (quarter - 1) * 3;
@@ -353,6 +353,7 @@ export class ReportsService {
       this.prisma.loan.findMany({
         where: {
           createdAt: { gte: startDate, lte: endDate },
+          ...(storeId && { storeId }),
         },
         select: {
           loanAmount: true,
@@ -369,6 +370,7 @@ export class ReportsService {
         where: {
           status: 'CLOSED',
           updatedAt: { gte: startDate, lte: endDate },
+          ...(storeId && { storeId }),
         },
       }),
       // Active loans at end of quarter
@@ -376,6 +378,7 @@ export class ReportsService {
         where: {
           status: 'ACTIVE',
           createdAt: { lte: endDate },
+          ...(storeId && { storeId }),
         },
       }),
       // Overdue loans at end of quarter
@@ -383,30 +386,35 @@ export class ReportsService {
         where: {
           status: 'OVERDUE',
           createdAt: { lte: endDate },
+          ...(storeId && { storeId }),
         },
       }),
       // Collaterals
       this.prisma.collateral.count({
         where: {
           createdAt: { gte: startDate, lte: endDate },
+          ...(storeId && { storeId }),
         },
       }),
       this.prisma.collateral.count({
         where: {
           status: 'RELEASED',
           updatedAt: { gte: startDate, lte: endDate },
+          ...(storeId && { storeId }),
         },
       }),
       this.prisma.collateral.count({
         where: {
           status: 'SOLD',
           updatedAt: { gte: startDate, lte: endDate },
+          ...(storeId && { storeId }),
         },
       }),
       // Revenue breakdown
       this.prisma.revenueLedger.findMany({
         where: {
           recordedAt: { gte: startDate, lte: endDate },
+          ...(storeId && { storeId }),
         },
         select: {
           amount: true,

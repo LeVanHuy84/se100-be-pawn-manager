@@ -1,8 +1,29 @@
-import { BaseFilterQuery } from 'src/common/dto/filter.type';
-import { DisbursementMethod } from 'generated/prisma';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { DisbursementMethod } from 'generated/prisma';
+import { createZodDto } from 'nestjs-zod';
+import { baseFilterQuerySchema } from 'src/common/dto/filter.type';
+import { z } from 'zod';
 
-export class ListDisbursementsQuery extends BaseFilterQuery {
+export const listDisbursementsQuerySchema = baseFilterQuerySchema.extend({
+  loanId: z.uuid().optional(),
+  storeId: z.uuid().optional(),
+  disbursementMethod: z.enum(DisbursementMethod).optional(),
+  dateFrom: z.iso
+    .datetime()
+    .or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/))
+    .optional(),
+  dateTo: z.iso
+    .datetime()
+    .or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/))
+    .optional(),
+  minAmount: z.coerce.number().min(0).optional(),
+  maxAmount: z.coerce.number().min(0).optional(),
+  recipientName: z.string().optional(),
+});
+
+export class ListDisbursementsQuery extends createZodDto(
+  listDisbursementsQuerySchema,
+) {
   @ApiPropertyOptional({
     description: 'Filter by loan ID',
     example: '550e8400-e29b-41d4-a716-446655440000',

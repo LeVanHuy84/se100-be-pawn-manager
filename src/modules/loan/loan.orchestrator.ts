@@ -437,7 +437,7 @@ export class LoanOrchestrator {
   ): Promise<BaseResult<LoanResponseDto>> {
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId },
-      include: { collaterals: true },
+      include: { collaterals: true, customer: true },
     });
 
     if (!loan) throw new NotFoundException('Loan not found');
