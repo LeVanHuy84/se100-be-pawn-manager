@@ -9,6 +9,7 @@ import { UpdateConfigurationDto } from './dto/request/update-configuration.reque
 import { ParameterGroup } from './enums/parameter-group.enum';
 import { SystemParameterDataType } from './enums/system-parameters.type';
 import { BaseResult } from 'src/common/dto/base.response';
+import { AuditEntityType } from 'generated/prisma';
 
 @Injectable()
 export class ConfigurationsService {
@@ -34,32 +35,68 @@ export class ConfigurationsService {
     key: string,
     data: UpdateConfigurationDto,
   ): Promise<BaseResult<ConfigurationResponse>> {
-    const existing = await this.prisma.systemParameter.findFirst({
-      where: {
-        paramKey: key,
-        isActive: true,
-      },
-    });
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.systemParameter.findFirst({
+        where: {
+          paramKey: key,
+          isActive: true,
+        },
+      });
 
-    if (!existing) {
-      throw new NotFoundException(`Parameter with key "${key}" not found`);
-    }
+      if (!existing) {
+        throw new NotFoundException(`Parameter with key "${key}" not found`);
+      }
 
-    const normalizedValue = this.normalizeValueByDataType(
-      data.value,
-      existing.dataType,
-      key,
-    );
+      const normalizedValue = this.normalizeValueByDataType(
+        data.value,
+        existing.dataType,
+        key,
+      );
 
-    const updated = await this.prisma.systemParameter.update({
-      where: { id: existing.id },
-      data: {
+      const updateData = {
         paramValue: normalizedValue,
         ...(data.description !== undefined && {
           description: data.description,
         }),
         updatedAt: new Date(),
-      },
+      };
+
+      const updatedParam = await tx.systemParameter.update({
+        where: { id: existing.id },
+        data: updateData,
+      });
+
+      // chỉ log những field thực sự thay đổi
+      const oldValue: Record<string, any> = {};
+      const newValue: Record<string, any> = {};
+
+      if (existing.paramValue !== normalizedValue) {
+        oldValue.paramValue = existing.paramValue;
+        newValue.paramValue = normalizedValue;
+      }
+
+      if (
+        data.description !== undefined &&
+        existing.description !== data.description
+      ) {
+        oldValue.description = existing.description;
+        newValue.description = data.description;
+      }
+
+      await tx.auditLog.create({
+        data: {
+          action: 'UPDATE_CONFIGURATION',
+          entityId: existing.id.toString(),
+          entityType: AuditEntityType.CONFIGURATION,
+          entityName: existing.paramKey,
+          oldValue,
+          newValue,
+          actorId: null, // sau này lấy từ request context
+          description: `Cập nhật cấu hình hệ thống với key "${existing.paramKey}"`,
+        },
+      });
+
+      return updatedParam;
     });
 
     return {

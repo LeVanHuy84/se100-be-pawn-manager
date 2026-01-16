@@ -22,6 +22,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { DisbursementModule } from './modules/disbursement/disbursement.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LocationModule } from './modules/location/location.module';
+import { LoanTypeModule } from './modules/loan-type/loan-type.module';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { LocationModule } from './modules/location/location.module';
     ReportsModule,
     DisbursementModule,
     LocationModule,
+    LoanTypeModule,
   ],
   controllers: [],
   providers: [
