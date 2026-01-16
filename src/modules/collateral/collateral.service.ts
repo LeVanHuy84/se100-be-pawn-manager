@@ -9,6 +9,7 @@ import { CollateralQueryDTO } from './dto/request/collateral.query';
 import { CreateCollateralDTO } from './dto/request/create-collateral.request';
 import { UpdateLocationRequest } from './dto/request/update-location.request';
 import { CreateLiquidationRequest } from './dto/request/liquidation.request';
+import { SellCollateralRequest } from './dto/request/sell-collateral.request';
 import { CollateralAssetResponse, LiquidationCollateralResponse } from './dto/response/collateral.response';
 import { CollateralMapper } from './collateral.mapper';
 import { BaseResult } from 'src/common/dto/base.response';
@@ -303,6 +304,45 @@ export class CollateralService {
       };
     } catch (error) {
       throw new BadRequestException('Failed to initiate liquidation process');
+    }
+  }
+
+  async sellCollateral(
+    id: string,
+    data: SellCollateralRequest,
+  ): Promise<BaseResult<CollateralAssetResponse>> {
+    // Validate collateral exists
+    const collateral = await this.prisma.collateral.findUnique({
+      where: { id },
+    });
+
+    if (!collateral) {
+      throw new NotFoundException(`Collateral asset with ID ${id} not found`);
+    }
+
+    // Check if collateral is in liquidating status
+    if (collateral.status !== CollateralStatus.LIQUIDATING) {
+      throw new BadRequestException(
+        'Collateral must be in LIQUIDATING status to be sold',
+      );
+    }
+
+    try {
+      // Update collateral with sell price and status to SOLD
+      const updatedCollateral = await this.prisma.collateral.update({
+        where: { id },
+        data: {
+          sellPrice: data.sellPrice,
+          sellDate: new Date(),
+          status: CollateralStatus.SOLD,
+        },
+      });
+
+      return {
+        data: CollateralMapper.toResponse(updatedCollateral),
+      };
+    } catch (error) {
+      throw new BadRequestException('Failed to sell collateral');
     }
   }
 }
