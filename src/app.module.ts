@@ -23,12 +23,14 @@ import { DisbursementModule } from './modules/disbursement/disbursement.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LocationModule } from './modules/location/location.module';
 import { LoanTypeModule } from './modules/loan-type/loan-type.module';
+import { CollateralTypeModule } from './modules/collateral-type/collateral-type.module';
 
 @Module({
   imports: [
     EmployeeModule,
     CustomerModule,
     CollateralModule,
+    CollateralTypeModule,
     ValuationModule,
     ContractModule,
     PrismaModule,
