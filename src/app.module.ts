@@ -24,6 +24,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { LocationModule } from './modules/location/location.module';
 import { LoanTypeModule } from './modules/loan-type/loan-type.module';
 import { CollateralTypeModule } from './modules/collateral-type/collateral-type.module';
+import { LoggerMiddleware } from './common/middleware/logger.middleware';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { CollateralTypeModule } from './modules/collateral-type/collateral-type.
         SMTP_USER: Joi.string().optional(),
         SMTP_PASSWORD: Joi.string().optional(),
         SMTP_FROM: Joi.string().optional(),
+
         // Redis config for BullMQ
         REDIS_URL: Joi.string().required(),
       }),

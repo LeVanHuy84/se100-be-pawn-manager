@@ -417,6 +417,27 @@
       "address": "741 New St, D5",
       "customerType": "REGULAR",
       "images": {}
+    },
+    {
+      "fullName": "Tran Van Risk",
+      "dob": "1980-01-01T00:00:00.000Z",
+      "nationalId": "079999999999",
+      "phone": "0999666666",
+      "email": "risk_guy@example.com",
+      "address": "Unknown",
+      "customerType": "REGULAR",
+      "creditScore": 250,
+      "images": {}
+    },
+    {
+      "fullName": "Nguyen No Email",
+      "dob": "1995-05-05T00:00:00.000Z",
+      "nationalId": "079888888888",
+      "phone": "0988888888",
+      "email": null,
+      "address": "Rural District",
+      "customerType": "REGULAR",
+      "images": {}
     }
   ],
   "employees": [
@@ -424,6 +445,7 @@
     { "id": "emp-002", "name": "Staff Mary", "role": "STAFF" },
     { "id": "emp-003", "name": "Staff Peter", "role": "STAFF" },
     { "id": "emp-004", "name": "Teller Susan", "role": "TELLER" },
-    { "id": "emp-005", "name": "Admin System", "role": "ADMIN" }
+    { "id": "emp-005", "name": "Admin System", "role": "ADMIN" },
+    { "id": "emp-099", "name": "Former Staff Lee", "role": "STAFF" }
   ]
 }
