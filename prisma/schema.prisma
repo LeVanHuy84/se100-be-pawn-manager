@@ -84,6 +84,8 @@ enum AuditEntityType {
   COLLATERAL
   CUSTOMER
   DISBURSEMENT
+  LOAN_TYPE
+  CONFIGURATION
 }
 
 enum RevenueType {

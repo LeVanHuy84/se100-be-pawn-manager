@@ -19,6 +19,7 @@ import { CollateralQueryDTO } from './dto/request/collateral.query';
 import { CreateCollateralDTO } from './dto/request/create-collateral.request';
 import { UpdateLocationRequest } from './dto/request/update-location.request';
 import { CreateLiquidationRequest } from './dto/request/liquidation.request';
+import { SellCollateralRequest } from './dto/request/sell-collateral.request';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
@@ -172,5 +173,28 @@ export class LiquidationController {
   @Roles(Role.MANAGER, Role.STAFF)
   createLiquidation(@Body() body: CreateLiquidationRequest) {
     return this.collateralService.createLiquidation(body);
+  }
+
+  @Post('/:id/sell')
+  @ApiResponse({
+        status: 200,
+        schema: {
+          allOf: [
+            {
+              type: 'object',
+              properties: {
+                data: { $ref: getSchemaPath(CollateralAssetResponse) },
+              },
+              required: ['data'],
+            },
+          ],
+        },
+      })
+  @Roles(Role.MANAGER)
+  sellCollateral(
+    @Param('id') id: string,
+    @Body() body: SellCollateralRequest,
+  ) {
+    return this.collateralService.sellCollateral(id, body);
   }
 }
