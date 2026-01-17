@@ -10,13 +10,22 @@ import { CreateCollateralDTO } from './dto/request/create-collateral.request';
 import { UpdateLocationRequest } from './dto/request/update-location.request';
 import { CreateLiquidationRequest } from './dto/request/liquidation.request';
 import { SellCollateralRequest } from './dto/request/sell-collateral.request';
-import { CollateralAssetResponse, LiquidationCollateralResponse } from './dto/response/collateral.response';
+import {
+  CollateralAssetResponse,
+  LiquidationCollateralResponse,
+} from './dto/response/collateral.response';
 import { CollateralMapper } from './collateral.mapper';
 import { BaseResult } from 'src/common/dto/base.response';
 import {
-  CollateralType,
   CollateralStatus,
   Prisma,
+  RepaymentItemStatus,
+  RevenueType,
+  LoanStatus,
+  PaymentType,
+  PaymentMethod,
+  PaymentComponent,
+  DisbursementMethod,
 } from '../../../generated/prisma';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -91,6 +100,7 @@ export class CollateralService {
   async create(
     data: CreateCollateralDTO,
     files: MulterFile[],
+    userId?: string,
   ): Promise<BaseResult<CollateralAssetResponse>> {
     try {
       // Validate loanId if provided
@@ -136,11 +146,32 @@ export class CollateralService {
             (data.status as CollateralStatus) || CollateralStatus.PROPOSED,
           storageLocation: data.storageLocation,
           receivedDate: data.receivedDate ? new Date(data.receivedDate) : null,
+          appraisedValue: data.appraisedValue,
+          appraisalDate: data.appraisalDate
+            ? new Date(data.appraisalDate)
+            : new Date(),
+          appraisalNotes: data.appraisalNotes,
+        },
+      });
+
+      const response = CollateralMapper.toResponse(collateral);
+
+      // Create Audit Log
+      await this.prisma.auditLog.create({
+        data: {
+          action: 'CREATE_COLLATERAL',
+          entityId: collateral.id,
+          entityType: 'COLLATERAL',
+          entityName: collateral.id,
+          actorId: userId || null,
+          actorName: userId ? 'STAFF' : 'SYSTEM',
+          newValue: collateral as unknown as Prisma.InputJsonValue,
+          description: `Created collateral asset for owner ${data.ownerName}`,
         },
       });
 
       return {
-        data: CollateralMapper.toResponse(collateral),
+        data: response,
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -211,7 +242,7 @@ export class CollateralService {
       return {
         data: CollateralMapper.toResponse(collateral),
       };
-    } catch (error) {
+    } catch {
       throw new BadRequestException('Failed to update collateral asset');
     }
   }
@@ -241,13 +272,14 @@ export class CollateralService {
       });
 
       return { data: true };
-    } catch (error) {
+    } catch {
       throw new BadRequestException('Failed to update collateral location');
     }
   }
 
-  async createLiquidation(data: CreateLiquidationRequest): 
-  Promise<BaseResult<LiquidationCollateralResponse>> {
+  async createLiquidation(
+    data: CreateLiquidationRequest,
+  ): Promise<BaseResult<LiquidationCollateralResponse>> {
     // Validate collateral exists
     const collateral = await this.prisma.collateral.findUnique({
       where: { id: data.collateralId },
@@ -302,7 +334,7 @@ export class CollateralService {
           createdAt: collateral.updatedAt.toISOString(),
         },
       };
-    } catch (error) {
+    } catch {
       throw new BadRequestException('Failed to initiate liquidation process');
     }
   }
@@ -311,9 +343,17 @@ export class CollateralService {
     id: string,
     data: SellCollateralRequest,
   ): Promise<BaseResult<CollateralAssetResponse>> {
-    // Validate collateral exists
+    // Validate collateral exists with loan and schedule included
     const collateral = await this.prisma.collateral.findUnique({
       where: { id },
+      include: {
+        loan: {
+          include: {
+            repaymentSchedule: true,
+            customer: true,
+          },
+        },
+      },
     });
 
     if (!collateral) {
@@ -327,22 +367,277 @@ export class CollateralService {
       );
     }
 
+    if (!collateral.loan) {
+      throw new BadRequestException(
+        'Collateral is not associated with any loan',
+      );
+    }
+
+    const loan = collateral.loan;
+    const sellPrice = data.sellPrice;
+
+    // Calculate total outstanding debt from repayment schedule
+    const scheduleItems = loan.repaymentSchedule;
+    let totalDebt = 0;
+    let totalInterest = 0;
+    let totalFees = 0;
+    let totalPenalty = 0;
+    let totalPrincipal = 0;
+
+    for (const item of scheduleItems) {
+      const interestOut = Math.max(
+        0,
+        Number(item.interestAmount) - Number(item.paidInterest || 0),
+      );
+      const feeOut = Math.max(
+        0,
+        Number(item.feeAmount) - Number(item.paidFee || 0),
+      );
+      const penaltyOut = Math.max(
+        0,
+        Number(item.penaltyAmount) - Number(item.paidPenalty || 0),
+      );
+      const principalOut = Math.max(
+        0,
+        Number(item.principalAmount) - Number(item.paidPrincipal || 0),
+      );
+
+      totalInterest += interestOut;
+      totalFees += feeOut;
+      totalPenalty += penaltyOut;
+      totalPrincipal += principalOut;
+      totalDebt += interestOut + feeOut + penaltyOut + principalOut;
+    }
+
+    // Validate that sell price covers the debt
+    if (sellPrice < totalDebt) {
+      throw new BadRequestException(
+        `Sell price (${sellPrice}) must be greater than or equal to total debt (${Math.round(totalDebt)}). We do not handle partial debt coverage.`,
+      );
+    }
+
+    // Calculate excess amount to refund to customer
+    const excessAmount = sellPrice - totalDebt;
+
     try {
-      // Update collateral with sell price and status to SOLD
-      const updatedCollateral = await this.prisma.collateral.update({
-        where: { id },
-        data: {
-          sellPrice: data.sellPrice,
-          sellDate: new Date(),
-          status: CollateralStatus.SOLD,
-        },
+      // Execute everything in a transaction
+      const updatedCollateral = await this.prisma.$transaction(async (tx) => {
+        // 1. Update collateral status to SOLD
+        const soldCollateral = await tx.collateral.update({
+          where: { id },
+          data: {
+            sellPrice: sellPrice,
+            sellDate: new Date(),
+            status: CollateralStatus.SOLD,
+          },
+        });
+
+        // 2. Mark all unpaid schedule items as PAID (settling the debt)
+        for (const item of scheduleItems) {
+          if (item.status !== RepaymentItemStatus.PAID) {
+            await tx.repaymentScheduleDetail.update({
+              where: { id: item.id },
+              data: {
+                status: RepaymentItemStatus.PAID,
+                paidPrincipal: Number(item.principalAmount),
+                paidInterest: Number(item.interestAmount),
+                paidFee: Number(item.feeAmount),
+                paidPenalty: Number(item.penaltyAmount),
+                paidAt: new Date(),
+              },
+            });
+          }
+        }
+
+        // 3. Close the loan
+        await tx.loan.update({
+          where: { id: loan.id },
+          data: {
+            status: LoanStatus.CLOSED,
+            remainingAmount: 0,
+            updatedAt: new Date(),
+          },
+        });
+
+        // 4. Generate payment reference code
+        const year = new Date().getFullYear();
+        const paymentSequence = await tx.paymentSequence.upsert({
+          where: { year },
+          create: { year, value: 1 },
+          update: { value: { increment: 1 } },
+        });
+        const paymentRefCode = `PAY-LIQ-${year}-${paymentSequence.value.toString().padStart(6, '0')}`;
+
+        // 5. Create LoanPayment record for the debt payoff (MONEY IN from asset sale)
+        const loanPayment = await tx.loanPayment.create({
+          data: {
+            loanId: loan.id,
+            storeId: loan.storeId,
+            amount: Math.round(totalDebt), // The debt portion paid off
+            paymentType: PaymentType.PAYOFF,
+            paymentMethod: PaymentMethod.CASH, // Liquidation treated as cash
+            referenceCode: paymentRefCode,
+            idempotencyKey: `LIQUIDATION-${id}-${Date.now()}`,
+            recorderEmployeeId: null, // System action
+          },
+        });
+
+        // 6. Create PaymentAllocations (breakdown of how the debt was paid)
+        const allocations: {
+          componentType: PaymentComponent;
+          amount: number;
+        }[] = [];
+
+        if (totalPenalty > 0) {
+          allocations.push({
+            componentType: PaymentComponent.LATE_FEE,
+            amount: Math.round(totalPenalty),
+          });
+        }
+        if (totalInterest > 0) {
+          allocations.push({
+            componentType: PaymentComponent.INTEREST,
+            amount: Math.round(totalInterest),
+          });
+        }
+        if (totalFees > 0) {
+          allocations.push({
+            componentType: PaymentComponent.SERVICE_FEE,
+            amount: Math.round(totalFees),
+          });
+        }
+        if (totalPrincipal > 0) {
+          allocations.push({
+            componentType: PaymentComponent.PRINCIPAL,
+            amount: Math.round(totalPrincipal),
+          });
+        }
+
+        for (const alloc of allocations) {
+          await tx.paymentAllocation.create({
+            data: {
+              paymentId: loanPayment.id,
+              componentType: alloc.componentType,
+              amount: alloc.amount,
+              note: `Thanh lý tài sản - ${alloc.componentType}`,
+            },
+          });
+        }
+
+        // 7. Record revenue in ledger (for revenue reports)
+        // Record revenue components (Interest, Fees, Penalties earned)
+        if (totalInterest > 0) {
+          await tx.revenueLedger.create({
+            data: {
+              type: RevenueType.INTEREST,
+              amount: Math.round(totalInterest),
+              refId: loanPayment.id,
+              storeId: loan.storeId,
+            },
+          });
+        }
+
+        if (totalFees > 0) {
+          await tx.revenueLedger.create({
+            data: {
+              type: RevenueType.SERVICE_FEE,
+              amount: Math.round(totalFees),
+              refId: loanPayment.id,
+              storeId: loan.storeId,
+            },
+          });
+        }
+
+        if (totalPenalty > 0) {
+          await tx.revenueLedger.create({
+            data: {
+              type: RevenueType.LATE_FEE,
+              amount: Math.round(totalPenalty),
+              refId: loanPayment.id,
+              storeId: loan.storeId,
+            },
+          });
+        }
+
+        // 8. If there's excess, create a Disbursement to refund the customer (MONEY OUT)
+        if (excessAmount > 0) {
+          // Generate disbursement reference code
+          const disbursementSequence = await tx.disbursementSequence.upsert({
+            where: { year },
+            create: { year, value: 1 },
+            update: { value: { increment: 1 } },
+          });
+          const disbursementRefCode = `DSB-LIQ-${year}-${disbursementSequence.value.toString().padStart(6, '0')}`;
+
+          await tx.disbursement.create({
+            data: {
+              loanId: loan.id,
+              storeId: loan.storeId,
+              amount: Math.round(excessAmount),
+              disbursementMethod: DisbursementMethod.CASH,
+              referenceCode: disbursementRefCode,
+              idempotencyKey: `LIQUIDATION-REFUND-${id}-${Date.now()}`,
+              disbursedBy: null, // System action
+              recipientName: loan.customer?.fullName || collateral.ownerName,
+              recipientIdNumber: loan.customer?.nationalId || null,
+              notes: `Hoàn trả tiền dư từ thanh lý tài sản. Giá bán: ${sellPrice.toLocaleString('vi-VN')} VND. Tổng nợ: ${Math.round(totalDebt).toLocaleString('vi-VN')} VND.`,
+            },
+          });
+
+          // Record excess refund in revenue ledger (as negative/outflow for tracking)
+          await tx.revenueLedger.create({
+            data: {
+              type: RevenueType.EXCESS_REFUND,
+              amount: -Math.round(excessAmount), // Negative to indicate outflow
+              refId: loan.id,
+              storeId: loan.storeId,
+            },
+          });
+        }
+
+        // 9. Create Audit Log for liquidation closure
+        await tx.auditLog.create({
+          data: {
+            action: 'LIQUIDATION_CLOSE',
+            entityId: loan.id,
+            entityType: 'LOAN',
+            entityName: loan.loanCode,
+            actorId: null, // System action
+            actorName: 'SYSTEM',
+            oldValue: {
+              status: loan.status,
+              remainingAmount: Number(loan.remainingAmount),
+            },
+            newValue: {
+              status: 'CLOSED',
+              remainingAmount: 0,
+              sellPrice: sellPrice,
+              totalDebt: Math.round(totalDebt),
+              excessRefund: Math.round(excessAmount),
+              paymentId: loanPayment.id,
+              paymentRefCode: paymentRefCode,
+            },
+            description: `Khoản vay ${loan.loanCode} được đóng thông qua thanh lý tài sản. Giá bán: ${sellPrice.toLocaleString('vi-VN')} VND. Tổng nợ: ${Math.round(totalDebt).toLocaleString('vi-VN')} VND. Hoàn trả khách: ${Math.round(excessAmount).toLocaleString('vi-VN')} VND.`,
+          },
+        });
+
+        return soldCollateral;
       });
 
       return {
         data: CollateralMapper.toResponse(updatedCollateral),
       };
     } catch (error) {
-      throw new BadRequestException('Failed to sell collateral');
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      console.error('Failed to sell collateral:', error);
+      throw new BadRequestException(
+        'Failed to sell collateral and settle loan',
+      );
     }
   }
 }

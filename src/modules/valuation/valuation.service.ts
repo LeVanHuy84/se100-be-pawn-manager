@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GeminiService } from './gemini.service';
 import { ValuationRequestDto } from './dto/request/valuation.request';
@@ -12,21 +12,37 @@ export class ValuationService {
     private readonly geminiService: GeminiService,
   ) {}
 
-  async createValuation(dto: ValuationRequestDto): Promise<BaseResult<ValuationResponse>> {
+  async createValuation(
+    dto: ValuationRequestDto,
+  ): Promise<BaseResult<ValuationResponse>> {
     const collaeralType = await this.prisma.collateralType.findUnique({
       where: { id: dto.collateralTypeId },
       select: { name: true },
     });
 
-    // Get AI-powered market price estimate
-    const marketEstimate = await this.geminiService.getMarketPriceEstimate(
-      collaeralType?.name || 'UNKNOWN',
-      dto.brand,
-      dto.model,
-      dto.year,
-      dto.condition,
-      dto.mileage,
-    );
+    let marketEstimate;
+    let valuationMethod: 'AI' | 'MANUAL' = 'AI';
+
+    if (dto.assessmentAmount) {
+      valuationMethod = 'MANUAL';
+      marketEstimate = {
+        estimatedPrice: dto.assessmentAmount,
+        minPrice: dto.assessmentAmount,
+        maxPrice: dto.assessmentAmount,
+        confidence: 'HIGH',
+        reasoning: 'Manual appraisal by staff',
+      };
+    } else {
+      // Get AI-powered market price estimate
+      marketEstimate = await this.geminiService.getMarketPriceEstimate(
+        collaeralType?.name || 'UNKNOWN',
+        dto.brand,
+        dto.model,
+        dto.year,
+        dto.condition,
+        dto.mileage,
+      );
+    }
 
     // Calculate depreciation rate
     const currentYear = new Date().getFullYear();
@@ -60,6 +76,7 @@ export class ValuationService {
         depreciationRate,
         valuationDate: new Date(),
         notes: marketEstimate.reasoning,
+        valuationMethod,
       },
     };
   }
@@ -101,7 +118,7 @@ export class ValuationService {
       if (param && param.paramValue) {
         return parseFloat(param.paramValue);
       }
-    } catch (error) {
+    } catch {
       // If parameter not found, use default
     }
 

@@ -92,7 +92,9 @@ enum RevenueType {
   INTEREST
   LATE_FEE
   SERVICE_FEE
-  LIQUIDATION_EXCESS
+  LIQUIDATION_EXCESS    // Net profit from liquidation (after paying off debt and refund)
+  LIQUIDATION_SALE      // Total amount received from selling collateral
+  EXCESS_REFUND         // Amount refunded to customer (recorded as negative/outflow)
 }
 
 enum NotificationType {

@@ -214,7 +214,7 @@ export class PaymentService {
     const result = await this.prisma.$transaction(async (tx) => {
       // Prevent concurrent payments from allocating the same schedule items.
       await tx.$queryRaw(
-        Prisma.sql`SELECT "id" FROM "RepaymentScheduleDetail" WHERE "loanId" = ${loanId} AND "status" IN (${RepaymentItemStatus.PENDING}, ${RepaymentItemStatus.OVERDUE}) FOR UPDATE`,
+        Prisma.sql`SELECT "id" FROM "RepaymentScheduleDetail" WHERE "loanId" = ${loanId}::uuid AND "status" IN (${RepaymentItemStatus.PENDING}::"RepaymentItemStatus", ${RepaymentItemStatus.OVERDUE}::"RepaymentItemStatus") FOR UPDATE`,
       );
 
       // 1) Load schedule outstanding

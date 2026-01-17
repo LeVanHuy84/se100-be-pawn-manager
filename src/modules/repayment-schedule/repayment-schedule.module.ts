@@ -8,5 +8,6 @@ import { CommunicationModule } from '../communication/communication.module';
   imports: [CommunicationModule],
   controllers: [RepaymentScheduleController],
   providers: [RepaymentScheduleService, MarkOverdueProcessor],
+  exports: [RepaymentScheduleService],
 })
 export class RepaymentScheduleModule {}

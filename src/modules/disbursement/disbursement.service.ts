@@ -148,6 +148,14 @@ export class DisbursementService {
         },
       });
 
+      // Update Loan startDate
+      await tx.loan.update({
+        where: { id: dto.loanId },
+        data: {
+          startDate: new Date(),
+        },
+      });
+
       return disbursement;
     });
 

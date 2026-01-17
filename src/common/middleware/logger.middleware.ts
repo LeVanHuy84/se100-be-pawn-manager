@@ -12,10 +12,10 @@ export class LoggerMiddleware implements NestMiddleware {
 
     // Log the incoming request
     this.logger.log(`Incoming Request: ${method} ${originalUrl}`);
-    if (method !== 'GET' && Object.keys(body).length > 0) {
+    if (method !== 'GET' && body && Object.keys(body).length > 0) {
       this.logger.log(`Body: ${JSON.stringify(body, null, 2)}`);
     }
-    if (Object.keys(query).length > 0) {
+    if (query && Object.keys(query).length > 0) {
       this.logger.log(`Query: ${JSON.stringify(query, null, 2)}`);
     }
 

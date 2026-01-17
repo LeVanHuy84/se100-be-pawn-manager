@@ -4,6 +4,8 @@ export enum AssetStatus {
   STORED = 'STORED',
   RELEASED = 'RELEASED',
   REJECTED = 'REJECTED',
+  LIQUIDATING = 'LIQUIDATING',
+  SOLD = 'SOLD',
 }
 
 export default AssetStatus;

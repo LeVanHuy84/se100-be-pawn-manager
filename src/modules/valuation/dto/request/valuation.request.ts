@@ -20,6 +20,10 @@ const ValuationRequestSchema = z.object({
     .int()
     .min(0, 'Mileage must be positive')
     .optional(),
+  assessmentAmount: z.coerce
+    .number()
+    .positive('Assessment amount must be positive')
+    .optional(),
 });
 
 export class ValuationRequestDto extends createZodDto(ValuationRequestSchema) {}

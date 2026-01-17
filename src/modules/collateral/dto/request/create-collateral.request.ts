@@ -9,7 +9,7 @@ export const CreateCollateralSchema = z.object({
     if (typeof val === 'string' && val.length > 0) {
       try {
         return JSON.parse(val);
-      } catch (e) {
+      } catch {
         return val;
       }
     }
@@ -21,6 +21,12 @@ export const CreateCollateralSchema = z.object({
   loanId: z.string().uuid().optional(),
   storageLocation: z.string().optional(),
   receivedDate: z.string().optional(),
+  appraisedValue: z.coerce
+    .number()
+    .int()
+    .min(0, 'Appraised value must be non-negative'),
+  appraisalDate: z.string().optional(),
+  appraisalNotes: z.string().optional(),
 });
 
 export class CreateCollateralDTO extends createZodDto(CreateCollateralSchema) {}

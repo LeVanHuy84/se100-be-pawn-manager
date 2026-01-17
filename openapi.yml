@@ -151,6 +151,8 @@ components:
           enum: [EXCELLENT, GOOD, FAIR, POOR]
         mileage:
           type: integer
+        assessmentAmount:
+          type: number
 
     ValuationResponse:
       type: object
@@ -182,6 +184,9 @@ components:
         valuationDate:
           type: string
           format: date-time
+        valuationMethod:
+          type: string
+          enum: [AI, MANUAL]
         notes:
           type: string
 
@@ -677,6 +682,7 @@ components:
       required:
         - collateralTypeId
         - ownerName
+        - appraisedValue
       properties:
         collateralTypeId:
           type: integer
@@ -695,6 +701,13 @@ components:
         receivedDate:
           type: string
           format: date
+        appraisedValue:
+          type: number
+        appraisalDate:
+          type: string
+          format: date-time
+        appraisalNotes:
+          type: string
 
     PatchCollateralDTO:
       type: object
@@ -997,6 +1010,52 @@ components:
               type: number
             liquidationProfit:
               type: number
+        assetBreakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetBreakdownItem'
+        employees:
+          $ref: '#/components/schemas/EmployeeReport'
+        security:
+          $ref: '#/components/schemas/SecurityPersonnelReport'
+
+    AssetBreakdownItem:
+      type: object
+      properties:
+        category:
+          type: string
+        receivedCount:
+          type: number
+        receivedValue:
+          type: number
+        releasedCount:
+          type: number
+        releasedValue:
+          type: number
+        liquidatedCount:
+          type: number
+        liquidatedValue:
+          type: number
+        inStockCount:
+          type: number
+        inStockValue:
+          type: number
+
+    EmployeeReport:
+      type: object
+      properties:
+        total:
+          type: number
+        male:
+          type: number
+        female:
+          type: number
+
+    SecurityPersonnelReport:
+      type: object
+      properties:
+        count:
+          type: number
 
     QuarterlyCompliance:
       type: object
@@ -1613,6 +1672,56 @@ paths:
                 properties:
                   message: { type: string }
                   loan: { $ref: '#/components/schemas/LoanResponseDto' }
+
+  /loans/overdue:
+    get:
+      summary: Get overdue loans with their overdue repayment items
+      tags: [Loans]
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: storeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverdueLoanResponseWrapper'
 
   /loans/{id}:
     get:
@@ -2276,56 +2385,6 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/RepaymentScheduleItemResponse'
-
-  /loans/overdue:
-    get:
-      summary: Get overdue loans with their overdue repayment items
-      tags: [Repayment Schedule]
-      parameters:
-        - name: startDate
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: endDate
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: storeId
-          in: query
-          schema:
-            type: string
-            format: uuid
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
-        - name: sortBy
-          in: query
-          schema:
-            type: string
-        - name: sortOrder
-          in: query
-          schema:
-            type: string
-        - name: search
-          in: query
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OverdueLoanResponseWrapper'
 
   /repayment-schedules/{id}:
     get:

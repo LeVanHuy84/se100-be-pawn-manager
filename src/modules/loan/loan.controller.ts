@@ -33,6 +33,9 @@ import {
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 import { BaseResult } from 'src/common/dto/base.response';
 import { PaginationMeta } from 'src/common/dto/pagination.type';
+import { RepaymentScheduleService } from '../repayment-schedule/repayment-schedule.service';
+import { OverdueLoansQuery } from '../repayment-schedule/dto/request/overdue-items.query';
+import { OverdueLoanResponse } from '../repayment-schedule/dto/response/overdue-loan.response';
 
 @ApiTags('Loans')
 @Controller({
@@ -44,12 +47,15 @@ import { PaginationMeta } from 'src/common/dto/pagination.type';
   LoanResponseDto,
   LoanSummaryResponseDto,
   PaginationMeta,
+  OverdueLoansQuery,
+  OverdueLoanResponse,
 )
 @ApiErrorResponses()
 export class LoanController {
   constructor(
     private loanOrchestrator: LoanOrchestrator,
     private loanService: LoanService,
+    private repaymentScheduleService: RepaymentScheduleService,
   ) {}
 
   @Post()
@@ -167,6 +173,36 @@ export class LoanController {
     query: ListLoansQuery,
   ): Promise<BaseResult<LoanSummaryResponseDto[]>> {
     return this.loanService.listLoans(query);
+  }
+
+  @Get('overdue')
+  @ApiOperation({
+    summary: 'Get overdue loans with their overdue repayment items',
+    description:
+      'Retrieve paginated list of loans that have overdue repayment items. Each loan includes all its overdue periods. Supports filtering by date range (max 30 days), store, and search. Used for debt collection and customer follow-up.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Overdue loans retrieved successfully',
+    schema: {
+      allOf: [
+        { $ref: getSchemaPath(BaseResult) },
+        {
+          properties: {
+            data: {
+              type: 'array',
+              items: { $ref: getSchemaPath(OverdueLoanResponse) },
+            },
+            meta: { $ref: getSchemaPath(PaginationMeta) },
+          },
+        },
+      ],
+    },
+  })
+  async getOverdueLoans(
+    @Query() query: OverdueLoansQuery,
+  ): Promise<BaseResult<OverdueLoanResponse[]>> {
+    return this.repaymentScheduleService.getOverdueLoans(query);
   }
 
   @Get(':id')
