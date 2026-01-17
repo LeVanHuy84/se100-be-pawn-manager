@@ -9,6 +9,10 @@ export const CreateLoanSchema = z.object({
   loanAmount: z.coerce.number().positive(),
   repaymentMethod: z.enum(RepaymentMethod),
   loanTypeId: z.number().int(),
+  storeId: z
+    .string()
+    .optional()
+    .describe('Option storeId where loan is issued'),
 
   // ---- OPTIONAL ----
   notes: z.string().optional(),
