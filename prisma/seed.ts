@@ -19,21 +19,21 @@ import * as path from 'path';
 const prisma = new PrismaClient();
 
 // Configuration
-const LOANS_PER_STORE_MIN = 15;
-const LOANS_PER_STORE_MAX = 25;
+const LOANS_PER_STORE_MIN = 30; // Increased for better data density
+const LOANS_PER_STORE_MAX = 50;
 
 async function main() {
-  console.log('🚀 Starting comprehensive seeding process...');
+  console.log('🚀 Bắt đầu quá trình khởi tạo dữ liệu mẫu...');
 
   const dataPath = path.join(__dirname, 'seed-data.json');
   const data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
   const employees = data.employees || [
-    { id: 'emp-001', name: 'Manager John', role: 'MANAGER' },
-    { id: 'emp-002', name: 'Staff Mary', role: 'STAFF' },
+    { id: 'emp-001', name: 'Quản lý Hùng', role: 'MANAGER' },
+    { id: 'emp-002', name: 'Nhân viên Mai', role: 'STAFF' },
   ];
 
   // 0. Seed Locations
-  console.log('🌱 Seeding Locations...');
+  console.log('🌱 Khởi tạo Địa điểm (Locations)...');
   let city = await prisma.location.findUnique({ where: { code: '79' } });
   if (!city) {
     city = await prisma.location.create({
@@ -58,7 +58,7 @@ async function main() {
   const defaultWardId = ward.id;
 
   // 1. Seed Stores
-  console.log('🌱 Seeding Stores...');
+  console.log('🌱 Khởi tạo Cửa hàng (Stores)...');
   const createdStores = [];
   for (const store of data.stores) {
     const existing = await prisma.store.findFirst({
@@ -76,7 +76,7 @@ async function main() {
   }
 
   // 2. Seed LoanTypes
-  console.log('🌱 Seeding LoanTypes...');
+  console.log('🌱 Khởi tạo Loại hình vay (LoanTypes)...');
   const allLoanTypes = [];
   for (const loanType of data.loanTypes) {
     const existing = await prisma.loanType.findUnique({
@@ -85,7 +85,6 @@ async function main() {
     if (!existing) {
       const { id, ...dataWithoutId } = loanType;
       // Remove ID to let autoincrement work if needed, or keep it if using @id
-      // Schema uses @default(autoincrement()), passing ID is okay if it doesn't conflict
       allLoanTypes.push(await prisma.loanType.create({ data: dataWithoutId }));
     } else {
       allLoanTypes.push(existing);
@@ -93,7 +92,7 @@ async function main() {
   }
 
   // 3. Seed CollateralTypes
-  console.log('🌱 Seeding CollateralTypes...');
+  console.log('🌱 Khởi tạo Loại tài sản (CollateralTypes)...');
   const allCollateralTypes = [];
   for (const type of data.commonCollateralTypes) {
     const existing = await prisma.collateralType.findFirst({
@@ -110,7 +109,7 @@ async function main() {
 
   // 4. Seed SystemParameters
   if (data.systemParameters) {
-    console.log('🌱 Seeding SystemParameters...');
+    console.log('🌱 Khởi tạo Tham số hệ thống (SystemParameters)...');
     for (const param of data.systemParameters) {
       if (param.paramKey === 'SUPPORTED_LOAN_PRODUCTS') {
         param.paramValue = JSON.stringify(allLoanTypes);
@@ -156,13 +155,11 @@ async function main() {
   }
 
   // 5. Seed Customers
-  console.log('🌱 Seeding Customers...');
+  console.log('🌱 Khởi tạo Khách hàng (Customers)...');
   const allCustomers = [];
   for (const customer of data.customers) {
-    // Handle 'No Email' case properly (JSON doesn't support undefined, but value might be null)
     if (customer.email === null) {
-      delete customer.email; // Prisma create shouldn't receive 'null' if we want it to trigger default logic or if field is optional unique
-      // Wait, Schema: email String? @unique. Pass null is fine.
+      delete customer.email;
     }
 
     // Check by nationalId
@@ -181,16 +178,17 @@ async function main() {
   }
 
   // 6. Generate Comprehensive Loans
-  console.log('🌱 Generating comprehensive loan data for reports...');
+  console.log('🌱 Tạo dữ liệu Hợp đồng vay tổng hợp cho báo cáo...');
 
   const statuses: LoanStatus[] = [
     'ACTIVE',
     'ACTIVE',
     'ACTIVE', // Bias towards Active
+    'ACTIVE',
     'CLOSED',
     'CLOSED',
     'OVERDUE',
-    'OVERDUE',
+    'OVERDUE', // Increased Overdue frequency slightly
     'PENDING',
     'REJECTED',
   ];
@@ -198,7 +196,7 @@ async function main() {
   let totalLoansCreated = 0;
 
   for (const store of createdStores) {
-    console.log(`   Processing store: ${store.name}`);
+    console.log(`   Đang xử lý cửa hàng: ${store.name}`);
     const loanCount = getRandomInt(LOANS_PER_STORE_MIN, LOANS_PER_STORE_MAX);
 
     for (let i = 0; i < loanCount; i++) {
@@ -223,7 +221,7 @@ async function main() {
       const uniqueSuffix = `${Date.now().toString().slice(-6)}${Math.floor(
         Math.random() * 1000,
       )}`;
-      const loanCode = `LN-${store.name
+      const loanCode = `HĐ-${store.name
         .substring(0, 3)
         .toUpperCase()}-${uniqueSuffix}`;
 
@@ -262,7 +260,7 @@ async function main() {
   }
 
   console.log(
-    `✨ Seeding completed. Total loans created: ${totalLoansCreated}`,
+    `✨ Quá trình seed dữ liệu hoàn tất. Tổng số hợp đồng: ${totalLoansCreated}`,
   );
 }
 
@@ -350,8 +348,6 @@ async function createFullLoan(
   totalRepayment += totalFees;
 
   // --- TIMELINE ---
-  // Strategy: Shift everything to "Fresh" data for easier testing.
-  // Report validation needs data "today" or "upcoming".
 
   let startDate = new Date(); // Default: NOW
   let approvedAt: Date | null = null;
@@ -366,30 +362,51 @@ async function createFullLoan(
   // 2. REJECTED: Created today, rejected today
   else if (status === 'REJECTED') {
     startDate = new Date();
-    approvedAt = null; // Spec doesn't strictly need approvedAt for rejection, usually separate rejectedAt
+    approvedAt = null;
   }
 
-  // 3. ACTIVE: Created recently (Today or slightly before to allow for "Upcoming Due" testing)
+  // 3. ACTIVE: Spread across duration to enable revenue population
   else if (status === 'ACTIVE') {
-    // Scenario A: Brand new loan (started today)
-    // Scenario B: Started a few days ago (so first payment is coming up soon)
-    const daysAgo = getRandomInt(0, 15);
+    // Randomly place the start date in the past, up to the duration limit.
+    // This allows us to have loans in various stages (month 1, month 5, etc.)
+    // generating revenue (Paid status) for past months.
+    const maxHistoryDays = Math.max((durationMonths - 1) * 30, 30);
+    const daysAgo = getRandomInt(0, maxHistoryDays);
     startDate.setDate(startDate.getDate() - daysAgo);
 
     approvedAt = new Date(startDate);
-    approvedAt.setHours(approvedAt.getHours() - 2); // Approved 2 hours before start
+    approvedAt.setHours(approvedAt.getHours() - 4);
     approvedByEmp = getRandomElement(employees);
   }
 
-  // 4. CLOSED/OVERDUE: Minimal historical data for validation (1-2 months ago max)
-  else if (status === 'CLOSED' || status === 'OVERDUE') {
-    // Start date just enough in the past to fit the duration or allow closing
-    // If duration is 6 months, we simulate it started 7 months ago
-    const offsetMonths = durationMonths + 1;
+  // 4. CLOSED: Completed or liquidated in the recent past
+  else if (status === 'CLOSED') {
+    // Start date enough in past to complete duration
+    // Plus some random months so they didn't all close yesterday
+    const offsetMonths = durationMonths + getRandomInt(1, 6);
     startDate.setMonth(startDate.getMonth() - offsetMonths);
 
     approvedAt = new Date(startDate);
     approvedAt.setDate(approvedAt.getDate() - 1);
+    approvedByEmp = getRandomElement(employees);
+  }
+
+  // 5. OVERDUE: "NEAR" - The loan is active but missed a recent payment.
+  else if (status === 'OVERDUE') {
+    // Determine start date such that a payment was due recently (e.g., 5-10 days ago) and missed.
+    // Let's say we are in Month 2. Start date = Now - (1 month + 10 days).
+    // Payment 1 (due 10 days ago) -> Missed -> Overdue.
+
+    // Pick a random month to be the overdue one (usually early in loan).
+    const overdueMonthIndex = getRandomInt(1, Math.min(3, durationMonths));
+    const overdueDays = getRandomInt(1, 15); // Days it has been overdue
+
+    // Start date = Now - (overdueMonthIndex * 30 days) - overdueDays
+    const daysAgo = overdueMonthIndex * 30 + overdueDays;
+    startDate.setDate(startDate.getDate() - daysAgo);
+
+    approvedAt = new Date(startDate);
+    approvedAt.setHours(approvedAt.getHours() - 2);
     approvedByEmp = getRandomElement(employees);
   }
 
@@ -420,14 +437,14 @@ async function createFullLoan(
       approvedAt: approvedAt,
       approvedBy: approvedByEmp ? approvedByEmp.id : null,
       activatedAt: activatedAt,
-      remainingAmount: status === 'CLOSED' ? 0 : totalRepayment,
+      remainingAmount: status === 'CLOSED' ? 0 : totalRepayment, // Simplified remaining calc
       createdBy: createdByEmp.id,
       createdAt: createdAt,
-      updatedAt: new Date(), // Always fresh update
+      updatedAt: new Date(),
     },
   });
 
-  // 2. Audit Log: Use createdAt
+  // 2. Audit Log
   await prisma.auditLog.create({
     data: {
       action: 'CREATE_LOAN',
@@ -436,7 +453,7 @@ async function createFullLoan(
       entityName: loanCode,
       actorId: createdByEmp.id,
       actorName: createdByEmp.name,
-      description: `Loan application created for ${customer.fullName}`,
+      description: `Hồ sơ vay mới cho khách hàng ${customer.fullName}`,
       createdAt: createdAt,
     },
   });
@@ -447,11 +464,11 @@ async function createFullLoan(
       data: {
         action: 'APPROVE_LOAN',
         entityId: loan.id,
-        entityType: AuditEntityType.LOAN, // Fixed Enum
+        entityType: AuditEntityType.LOAN,
         entityName: loanCode,
         actorId: approvedByEmp.id,
         actorName: approvedByEmp.name,
-        description: `Loan approved by ${approvedByEmp.name}`,
+        description: `Hợp đồng được duyệt bởi ${approvedByEmp.name}`,
         createdAt: approvedAt,
       },
     });
@@ -463,8 +480,8 @@ async function createFullLoan(
         status: NotificationStatus.SENT,
         loanId: loan.id,
         customerId: customer.id,
-        subject: 'Loan Approved',
-        message: `Your loan ${loanCode} has been approved.`,
+        subject: 'Hợp đồng được duyệt',
+        message: `Hợp đồng vay ${loanCode} của quý khách đã được duyệt.`,
         sentAt: approvedAt,
         createdAt: approvedAt,
       },
@@ -478,17 +495,13 @@ async function createFullLoan(
         entityType: AuditEntityType.LOAN,
         entityName: loanCode,
         actorId: getRandomElement(employees).id,
-        description: 'Loan rejected due to policy.',
+        description: 'Hồ sơ bị từ chối do không đạt yêu cầu.',
         createdAt: new Date(),
       },
     });
   }
 
   // 4. Collateral
-  // Logic: REJECTED -> PROPOSED (Never held) or RELEASED (Returned)
-  // Logic: CLOSED + Liquidation -> SOLD
-  // Logic: CLOSED + Normal -> RELEASED
-  // Logic: ACTIVE/OVERDUE -> STORED
   let collateralStatus = 'STORED';
   if (status === 'REJECTED') collateralStatus = 'PROPOSED';
   else if (status === 'PENDING') collateralStatus = 'PROPOSED';
@@ -503,10 +516,10 @@ async function createFullLoan(
       collateralTypeId: collateralType.id,
       ownerName: customer.fullName,
       collateralInfo: {
-        description: `Seeded ${collateralType.name} Item for ${loanCode}`,
-        condition: 'Good',
+        description: `Tài sản ${collateralType.name} cho HĐ ${loanCode}`,
+        condition: 'Tốt (Good)',
       },
-      status: collateralStatus as any, // Cast if string doesn't implicitly match enum in TS
+      status: collateralStatus as any,
       loanId: loan.id,
       storeId: store.id,
       receivedDate:
@@ -534,7 +547,6 @@ async function createFullLoan(
 
   // 5. Disbursement
   if (activatedAt) {
-    // Varied Method
     const method =
       Math.random() > 0.5
         ? DisbursementMethod.CASH
@@ -549,7 +561,7 @@ async function createFullLoan(
         disbursementMethod: method,
         disbursedAt: activatedAt,
         recipientName: customer.fullName,
-        notes: 'Seeded disbursement',
+        notes: 'Giải ngân hợp đồng mới',
         disbursedBy: disburser.id,
         bankName: method === 'BANK_TRANSFER' ? 'Vietcombank' : null,
         bankAccountNumber: method === 'BANK_TRANSFER' ? '9999888877' : null,
@@ -558,20 +570,16 @@ async function createFullLoan(
   }
 
   // 6. Schedule & Payments (The critical part for Dashboard)
-  // We want dates in the FUTURE for Active loans.
   let remainingPrincipal = loanAmount;
 
   for (let i = 1; i <= durationMonths; i++) {
-    // Generate FUTURE dates for schedules
+    // Generate dates based on startDate
     const pDate = new Date(startDate);
     pDate.setMonth(pDate.getMonth() + i);
 
-    // If Loan is ACTIVE, pDate should likely be in the future (or very recent past)
-    // If Loan is CLOSED, pDate was in the past.
-
     const isLast = i === durationMonths;
 
-    // Per-period values depend on methodology
+    // Per-period values
     let periodPrincipal = 0;
     let periodInterest = 0;
     let periodFee = i === 1 ? totalFees : 0;
@@ -581,8 +589,7 @@ async function createFullLoan(
       periodInterest = loanAmount * monthlyRateDecimal;
       periodPrincipal = isLast ? loanAmount : 0;
     } else {
-      // Equal Installment (Amortization)
-      // PMT = P * r * (1+r)^n / ((1+r)^n - 1)
+      // Equal Installment
       if (monthlyRateDecimal === 0) {
         monthlyPayment = loanAmount / durationMonths;
         totalInterest = 0;
@@ -595,14 +602,11 @@ async function createFullLoan(
           Math.pow(1 + monthlyRateDecimal, durationMonths) - 1;
         monthlyPayment = numerator / denominator;
       }
-      // Interest part
       periodInterest = remainingPrincipal * monthlyRateDecimal;
-      // Principal part
       periodPrincipal = monthlyPayment - periodInterest;
-      // Adjust for last month precision
       if (isLast) {
         periodPrincipal = remainingPrincipal;
-        periodInterest = monthlyPayment - periodPrincipal; // Recalculate interest match
+        periodInterest = monthlyPayment - periodPrincipal;
       }
     }
 
@@ -611,27 +615,33 @@ async function createFullLoan(
     const periodTotal = periodPrincipal + periodInterest + periodFee;
 
     // --- STATUS LOGIC FOR DASHBOARD ---
-    let itemStatus: RepaymentItemStatus = 'PENDING'; // Default to FUTURE
+    let itemStatus: RepaymentItemStatus = 'PENDING';
     let paidDate: Date | null = null;
     let recorderEmp: any = null;
 
     if (status === 'CLOSED') {
       itemStatus = 'PAID';
-      paidDate = pDate; // Past Date
+      // Jitter payment date slightly for realism
+      paidDate = new Date(pDate);
+      paidDate.setDate(paidDate.getDate() + getRandomInt(-2, 2));
     } else if (status === 'OVERDUE') {
-      // If the schedule date is in the past, it's overdue
       if (pDate < new Date()) {
+        // This schedule is in the past
+        // Randomly decide if this specific one was missed or paid, but at least one must be missed to be OVERDUE
+        // Logic: If it's the *latest* one, it's missed. Previous ones might be paid.
+        // Simple logic: All past due are overdue for this seed scenario to emphasize "Overdue" status
         itemStatus = 'OVERDUE';
       } else {
         itemStatus = 'PENDING';
       }
     } else if (status === 'ACTIVE') {
-      // If date is in past, it must be PAID (since status is Active aka 'Good Standing')
       if (pDate <= new Date()) {
+        // Date is in past -> Assumed PAID for Good Standing Active Loans
         itemStatus = 'PAID';
-        paidDate = pDate;
+        paidDate = new Date(pDate);
+        // Add random jitter to paidDate (-2 to +2 days) to populate daily revenue chart naturally
+        paidDate.setDate(paidDate.getDate() + getRandomInt(-2, 2));
       } else {
-        // Date is in Future -> PENDING (This is what you want for dashboards)
         itemStatus = 'PENDING';
       }
     }
@@ -660,6 +670,8 @@ async function createFullLoan(
       const payMethod =
         Math.random() > 0.6 ? PaymentMethod.BANK_TRANSFER : PaymentMethod.CASH;
 
+      const actPayDate = paidDate || new Date();
+
       const payment = await prisma.loanPayment.create({
         data: {
           loanId: loan.id,
@@ -667,14 +679,14 @@ async function createFullLoan(
           amount: periodTotal,
           paymentType: 'PERIODIC',
           paymentMethod: payMethod,
-          paidAt: paidDate || new Date(),
+          paidAt: actPayDate,
           referenceCode: `PAY-${loanCode}-${i}`,
           recorderEmployeeId: recorderEmp.id,
-          createdAt: paidDate || new Date(),
+          createdAt: actPayDate,
         },
       });
 
-      // Simple Allocation for standard payments
+      // Simple Allocation
       if (periodPrincipal > 0) {
         await prisma.paymentAllocation.create({
           data: {
@@ -698,7 +710,7 @@ async function createFullLoan(
             amount: periodInterest,
             refId: payment.id,
             storeId: store.id,
-            recordedAt: paidDate || new Date(),
+            recordedAt: actPayDate,
           },
         });
       }
@@ -716,7 +728,7 @@ async function createFullLoan(
             amount: periodFee,
             refId: payment.id,
             storeId: store.id,
-            recordedAt: paidDate || new Date(),
+            recordedAt: actPayDate,
           },
         });
       }
