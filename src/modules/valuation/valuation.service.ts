@@ -12,7 +12,9 @@ export class ValuationService {
     private readonly geminiService: GeminiService,
   ) {}
 
-  async createValuation(dto: ValuationRequestDto): Promise<BaseResult<ValuationResponse>> {
+  async createValuation(
+    dto: ValuationRequestDto,
+  ): Promise<BaseResult<ValuationResponse>> {
     const collaeralType = await this.prisma.collateralType.findUnique({
       where: { id: dto.collateralTypeId },
       select: { name: true },

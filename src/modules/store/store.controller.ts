@@ -15,7 +15,12 @@ import { CreateStoreDTO } from './dto/request/create-store.request';
 import { UpdateStoreDTO } from './dto/request/update-store.request';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 import { StoreService } from './store.service';
-import { ApiExtraModels, ApiOkResponse, ApiResponse, getSchemaPath } from '@nestjs/swagger';
+import {
+  ApiExtraModels,
+  ApiOkResponse,
+  ApiResponse,
+  getSchemaPath,
+} from '@nestjs/swagger';
 import {
   StoreListResponse,
   StoreResponse,

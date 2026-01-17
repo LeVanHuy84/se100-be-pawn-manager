@@ -6,7 +6,7 @@ export const CreateCollateralTypeSchema = z.object({
   custodyFeeRateMonthly: z.coerce
     .number()
     .min(0, 'Custody fee rate must be non-negative')
-    .max(1, 'Custody fee rate cannot exceed 100%')
+    .max(1, 'Custody fee rate cannot exceed 100%'),
 });
 
 export class CreateCollateralTypeDTO extends createZodDto(

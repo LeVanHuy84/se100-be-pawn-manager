@@ -10,24 +10,27 @@ import { CreateCollateralDTO } from './dto/request/create-collateral.request';
 import { UpdateLocationRequest } from './dto/request/update-location.request';
 import { CreateLiquidationRequest } from './dto/request/liquidation.request';
 import { SellCollateralRequest } from './dto/request/sell-collateral.request';
-import { CollateralAssetResponse, LiquidationCollateralResponse } from './dto/response/collateral.response';
+import {
+  CollateralAssetResponse,
+  LiquidationCollateralResponse,
+} from './dto/response/collateral.response';
 import { CollateralMapper } from './collateral.mapper';
 import { BaseResult } from 'src/common/dto/base.response';
-import {
-  CollateralType,
-  CollateralStatus,
-  Prisma,
-} from '../../../generated/prisma';
+import { CollateralStatus, Prisma } from '../../../generated/prisma';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import pLimit from 'p-limit';
 import { ImageItem } from 'src/common/interfaces/media.interface';
+import { PaymentService } from '../payment/payment.service';
+import { DisbursementService } from '../disbursement/disbursement.service';
 
 @Injectable()
 export class CollateralService {
   constructor(
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
+    private paymentService: PaymentService,
+    private disbursementService: DisbursementService,
   ) {}
 
   async findAll(
@@ -246,8 +249,9 @@ export class CollateralService {
     }
   }
 
-  async createLiquidation(data: CreateLiquidationRequest): 
-  Promise<BaseResult<LiquidationCollateralResponse>> {
+  async createLiquidation(
+    data: CreateLiquidationRequest,
+  ): Promise<BaseResult<LiquidationCollateralResponse>> {
     // Validate collateral exists
     const collateral = await this.prisma.collateral.findUnique({
       where: { id: data.collateralId },
@@ -310,10 +314,26 @@ export class CollateralService {
   async sellCollateral(
     id: string,
     data: SellCollateralRequest,
+    employee: any,
   ): Promise<BaseResult<CollateralAssetResponse>> {
     // Validate collateral exists
     const collateral = await this.prisma.collateral.findUnique({
       where: { id },
+      include: {
+        loan: {
+          select: {
+            id: true,
+            customerId: true,
+            storeId: true,
+            customer: {
+              select: {
+                fullName: true,
+                nationalId: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!collateral) {
@@ -327,22 +347,64 @@ export class CollateralService {
       );
     }
 
+    if (!collateral.loan) {
+      throw new BadRequestException(
+        'Collateral must be associated with a loan',
+      );
+    }
+
     try {
-      // Update collateral with sell price and status to SOLD
-      const updatedCollateral = await this.prisma.collateral.update({
-        where: { id },
-        data: {
+      // Process liquidation payment through payment service
+      // This will calculate outstanding, apply payment to loan, and return excess amount
+      const paymentResult = await this.paymentService.processLiquidationPayment(
+        {
+          collateralId: id,
           sellPrice: data.sellPrice,
-          sellDate: new Date(),
-          status: CollateralStatus.SOLD,
+          paymentMethod: data.paymentMethod || 'CASH',
+          notes: `Bán tài sản thế chấp thanh lý`,
         },
+        employee,
+      );
+
+      // If there's excess amount, create disbursement to return to customer
+      if (paymentResult.excessAmount > 0) {
+        const idempotencyKey = `liquidation-excess-${id}-${Date.now()}`;
+        await this.disbursementService.createDisbursement(idempotencyKey, {
+          loanId: collateral.loan.id,
+          storeId: collateral.loan.storeId,
+          amount: paymentResult.excessAmount,
+          disbursementMethod: data.paymentMethod || 'CASH',
+          disbursedBy: employee.id,
+          recipientName: collateral.loan.customer.fullName,
+          recipientIdNumber: collateral.loan.customer.nationalId,
+          notes: `Hoàn trả tiền dư từ thanh lý tài sản ${id}`,
+        });
+      }
+
+      // Get updated collateral
+      const updatedCollateral = await this.prisma.collateral.findUnique({
+        where: { id },
       });
+
+      if (!updatedCollateral) {
+        throw new NotFoundException(
+          `Collateral asset with ID ${id} not found after update`,
+        );
+      }
 
       return {
         data: CollateralMapper.toResponse(updatedCollateral),
       };
     } catch (error) {
-      throw new BadRequestException('Failed to sell collateral');
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Failed to sell collateral: ${error.message}`,
+      );
     }
   }
 }

@@ -23,8 +23,17 @@ import { SellCollateralRequest } from './dto/request/sell-collateral.request';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
-import { ApiOkResponse, ApiResponse, ApiExtraModels, getSchemaPath } from '@nestjs/swagger';
-import { CollateralAssetListResponse, CollateralAssetResponse, LiquidationCollateralResponse } from './dto/response/collateral.response';
+import {
+  ApiOkResponse,
+  ApiResponse,
+  ApiExtraModels,
+  getSchemaPath,
+} from '@nestjs/swagger';
+import {
+  CollateralAssetListResponse,
+  CollateralAssetResponse,
+  LiquidationCollateralResponse,
+} from './dto/response/collateral.response';
 import { boolean } from 'joi';
 
 @Controller({
@@ -32,7 +41,11 @@ import { boolean } from 'joi';
   path: 'collateral-assets',
 })
 @ApiErrorResponses()
-@ApiExtraModels(CollateralAssetResponse, CollateralAssetListResponse, LiquidationCollateralResponse)
+@ApiExtraModels(
+  CollateralAssetResponse,
+  CollateralAssetListResponse,
+  LiquidationCollateralResponse,
+)
 export class CollateralController {
   constructor(private readonly collateralService: CollateralService) {}
 
@@ -48,19 +61,19 @@ export class CollateralController {
 
   @Get('/:id')
   @ApiResponse({
-        status: 200,
-        schema: {
-          allOf: [
-            {
-              type: 'object',
-              properties: {
-                data: { $ref: getSchemaPath(CollateralAssetResponse) },
-              },
-              required: ['data'],
-            },
-          ],
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(CollateralAssetResponse) },
+          },
+          required: ['data'],
         },
-      })
+      ],
+    },
+  })
   @Roles(Role.MANAGER, Role.STAFF)
   getCollateral(@Param('id') id: string) {
     return this.collateralService.findOne(id);
@@ -68,19 +81,19 @@ export class CollateralController {
 
   @Post()
   @ApiResponse({
-        status: 200,
-        schema: {
-          allOf: [
-            {
-              type: 'object',
-              properties: {
-                data: { $ref: getSchemaPath(CollateralAssetResponse) },
-              },
-              required: ['data'],
-            },
-          ],
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(CollateralAssetResponse) },
+          },
+          required: ['data'],
         },
-      })
+      ],
+    },
+  })
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
   createCollateral(
@@ -92,19 +105,19 @@ export class CollateralController {
 
   @Patch('/:id')
   @ApiResponse({
-        status: 200,
-        schema: {
-          allOf: [
-            {
-              type: 'object',
-              properties: {
-                data: { $ref: getSchemaPath(CollateralAssetResponse) },
-              },
-              required: ['data'],
-            },
-          ],
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(CollateralAssetResponse) },
+          },
+          required: ['data'],
         },
-      })
+      ],
+    },
+  })
   @UseInterceptors(FilesInterceptor('files'))
   @Roles(Role.MANAGER, Role.STAFF)
   updateCollateral(
@@ -127,19 +140,19 @@ export class CollateralLocationController {
 
   @Put('/:id/location')
   @ApiResponse({
-        status: 200,
-        schema: {
-          allOf: [
-            {
-              type: 'object',
-              properties: {
-                data: { $ref: getSchemaPath(boolean) },
-              },
-              required: ['data'],
-            },
-          ],
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(boolean) },
+          },
+          required: ['data'],
         },
-      })
+      ],
+    },
+  })
   @Roles(Role.MANAGER, Role.STAFF)
   updateLocation(@Param('id') id: string, @Body() body: UpdateLocationRequest) {
     return this.collateralService.updateLocation(id, body);
@@ -157,19 +170,19 @@ export class LiquidationController {
 
   @Post()
   @ApiResponse({
-        status: 200,
-        schema: {
-          allOf: [
-            {
-              type: 'object',
-              properties: {
-                data: { $ref: getSchemaPath(LiquidationCollateralResponse) },
-              },
-              required: ['data'],
-            },
-          ],
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(LiquidationCollateralResponse) },
+          },
+          required: ['data'],
         },
-      })
+      ],
+    },
+  })
   @Roles(Role.MANAGER, Role.STAFF)
   createLiquidation(@Body() body: CreateLiquidationRequest) {
     return this.collateralService.createLiquidation(body);
@@ -177,24 +190,26 @@ export class LiquidationController {
 
   @Post('/:id/sell')
   @ApiResponse({
-        status: 200,
-        schema: {
-          allOf: [
-            {
-              type: 'object',
-              properties: {
-                data: { $ref: getSchemaPath(CollateralAssetResponse) },
-              },
-              required: ['data'],
-            },
-          ],
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(CollateralAssetResponse) },
+          },
+          required: ['data'],
         },
-      })
+      ],
+    },
+  })
   @Roles(Role.MANAGER)
   sellCollateral(
     @Param('id') id: string,
     @Body() body: SellCollateralRequest,
+    @Req() req: any,
   ) {
-    return this.collateralService.sellCollateral(id, body);
+    const employee = { id: req.auth?.userId, name: req.auth?.userName };
+    return this.collateralService.sellCollateral(id, body, employee);
   }
 }

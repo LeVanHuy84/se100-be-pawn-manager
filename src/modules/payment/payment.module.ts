@@ -7,5 +7,6 @@ import { CommunicationModule } from '../communication/communication.module';
   imports: [CommunicationModule],
   controllers: [PaymentController],
   providers: [PaymentService],
+  exports: [PaymentService],
 })
 export class PaymentModule {}

@@ -47,7 +47,9 @@ async function main() {
   const cauGiayWardId = cauGiayWard?.id || fallbackWard?.id;
 
   if (!hanoiProvinceId || !dongDaWardId) {
-    console.error('No locations found in database. Please run location seed first.');
+    console.error(
+      'No locations found in database. Please run location seed first.',
+    );
     process.exit(1);
   }
 

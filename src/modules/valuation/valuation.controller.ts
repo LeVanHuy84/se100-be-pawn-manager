@@ -18,23 +18,21 @@ export class ValuationController {
 
   @Post()
   @ApiResponse({
-        status: 200,
-        schema: {
-          allOf: [
-            {
-              type: 'object',
-              properties: {
-                data: { $ref: getSchemaPath(ValuationResponse) },
-              },
-              required: ['data'],
-            },
-          ],
+    status: 200,
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            data: { $ref: getSchemaPath(ValuationResponse) },
+          },
+          required: ['data'],
         },
-      })
+      ],
+    },
+  })
   @Roles(Role.MANAGER, Role.STAFF)
-  createValuation(
-    @Body() dto: ValuationRequestDto,
-  ) {
+  createValuation(@Body() dto: ValuationRequestDto) {
     return this.valuationService.createValuation(dto);
   }
 }
