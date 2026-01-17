@@ -47,6 +47,7 @@ export class LoanOrchestrator {
       const {
         customerId,
         loanTypeId,
+        storeId,
         loanAmount,
         repaymentMethod,
         notes,
@@ -56,7 +57,9 @@ export class LoanOrchestrator {
       // Kiểm tra customer, store tồn tại
       const [customer, store] = await Promise.all([
         this.prisma.customer.findUnique({ where: { id: customerId } }),
-        this.prisma.store.findUnique({ where: { id: employee.storeId } }),
+        this.prisma.store.findUnique({
+          where: { id: storeId ?? employee.storeId },
+        }),
       ]);
 
       if (!customer) {
@@ -132,7 +135,7 @@ export class LoanOrchestrator {
             repaymentMethod: repaymentMethod as RepaymentMethod,
             loanTypeId,
             createdBy: employee.id,
-            storeId: employee.storeId,
+            storeId: storeId ?? employee.storeId,
 
             // snapshot
             durationMonths: simulationResult.durationMonths,
@@ -247,6 +250,7 @@ export class LoanOrchestrator {
       loanAmount: loan.loanAmount.toString(),
       repaymentMethod: loan.repaymentMethod,
       loanTypeId: loan.loanTypeId,
+      storeId: loan.storeId,
       durationMonths: loan.durationMonths,
       appliedInterestRate: loan.appliedInterestRate,
       latePaymentPenaltyRate: loan.latePaymentPenaltyRate,
@@ -307,7 +311,7 @@ export class LoanOrchestrator {
           repaymentMethod:
             (dto.repaymentMethod as RepaymentMethod) ?? loan.repaymentMethod,
           loanTypeId: dto.loanTypeId ?? loan.loanTypeId,
-
+          storeId: dto.storeId ?? loan.storeId,
           // snapshot từ simulation
           durationMonths: simulation.durationMonths,
           appliedInterestRate: simulation.appliedInterestRate,
@@ -380,6 +384,7 @@ export class LoanOrchestrator {
         loanAmount: updatedLoan.loanAmount.toString(),
         repaymentMethod: updatedLoan.repaymentMethod,
         loanTypeId: updatedLoan.loanTypeId,
+        storeId: updatedLoan.storeId,
         durationMonths: updatedLoan.durationMonths,
         appliedInterestRate: updatedLoan.appliedInterestRate,
         latePaymentPenaltyRate: updatedLoan.latePaymentPenaltyRate,
