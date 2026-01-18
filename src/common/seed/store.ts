@@ -10,10 +10,6 @@ async function main() {
     where: { name: { contains: 'Hà Nội' }, level: 'PROVINCE' },
   });
 
-  const hcmProvince = await prisma.location.findFirst({
-    where: { name: { contains: 'Hồ Chí Minh' }, level: 'PROVINCE' },
-  });
-
   const dongDaWard = await prisma.location.findFirst({
     where: { name: { contains: 'Phường Hai Bà Trưng' }, level: 'WARD' },
   });
@@ -40,7 +36,6 @@ async function main() {
   });
 
   const hanoiProvinceId = hanoiProvince?.id || fallbackProvince?.id;
-  const hcmProvinceId = hcmProvince?.id || fallbackProvince?.id;
   const dongDaWardId = dongDaWard?.id || fallbackWard?.id;
   const district1WardId = district1Ward?.id || fallbackWard?.id;
   const yenLangWardId = yenLangWard?.id || fallbackWard?.id;
@@ -61,15 +56,15 @@ async function main() {
 
   const stores = [
     {
-      name: 'Phùng Khắc Khoan - TP.HCM',
-      address: '88 Láng Hạ',
+      name: 'Hội Sở Chính - TP.HCM',
+      address: '88 Phùng Khắc Khoan, Q.1',
       storeInfo: {
         type: 'HEADQUARTERS', // Loại cửa hàng
         hotline: '1800-1111',
         email: 'contact@finance.vn',
         manager: 'Nguyễn Văn Giám Đốc',
         operatingHours: '08:00 - 17:30',
-        coordinates: { lat: 21.016, lng: 105.815 }, // Tọa độ
+        coordinates: { lat: 10.782, lng: 106.695 }, // Tọa độ HCM
         bankAccount: {
           // Tài khoản nhận tiền
           bankName: 'Vietcombank',
@@ -78,12 +73,11 @@ async function main() {
         },
       },
       isActive: true,
-
       wardId: validDistrict1WardId,
     },
     {
       name: 'PGD Nguyễn Trãi - TP.HCM',
-      address: '256 Nguyễn Trãi',
+      address: '256 Nguyễn Trãi, Q.1',
       storeInfo: {
         type: 'BRANCH',
         hotline: '028.3999.8888',
@@ -96,32 +90,60 @@ async function main() {
       wardId: validDistrict1WardId,
     },
     {
-      name: 'Cửa hàng Yên Lãng',
-      address: 'Số 36 Ngõ 120',
+      name: 'Chi nhánh Tân Bình - TP.HCM',
+      address: 'Số 36 Ngõ 120 Cộng Hòa',
       storeInfo: {
-        type: 'WAREHOUSE',
-        hotline: '0909.123.456',
-        manager: 'Lê Văn Thủ Kho',
-        capacity: {
-          carSlots: 50, // Sức chứa 50 ô tô
-          motorSlots: 200, // Sức chứa 200 xe máy
-        },
-        securityLevel: 'A', // Mức độ an ninh
-        facilities: ['Mái che', 'Camera 24/7', 'PCCC'],
+        type: 'BRANCH',
+        hotline: '028.3888.7777',
+        manager: 'Lê Văn Chi',
+        operatingHours: '08:30 - 20:00',
+        services: ['Cầm cố xe máy', 'Cầm cố vàng', 'Cầm cố điện thoại'],
+        cashLimit: 300000000,
       },
       isActive: true,
       wardId: validYenLangWardId,
     },
     {
-      name: 'PGD Cầu Giấy (Đang sửa chữa)',
-      address: '102 Cầu Giấy',
+      name: 'Chi nhánh Bình Thạnh - TP.HCM',
+      address: '45 Xô Viết Nghệ Tĩnh, Bình Thạnh',
       storeInfo: {
         type: 'BRANCH',
-        note: 'Tạm ngưng hoạt động để nâng cấp',
-        reopenDate: '2024-01-01',
+        hotline: '028.3777.6666',
+        manager: 'Phạm Thị Bình',
+        operatingHours: '08:00 - 20:00',
+        services: ['Cầm cố ô tô', 'Cầm cố xe máy', 'Thanh lý tài sản'],
+        cashLimit: 700000000,
       },
-      isActive: false, // Set false để test logic lọc cửa hàng active
+      isActive: true,
       wardId: validCauGiayWardId,
+    },
+    {
+      name: 'Chi nhánh Thủ Đức - TP.HCM',
+      address: '123 Võ Văn Ngân, Thủ Đức',
+      storeInfo: {
+        type: 'BRANCH',
+        hotline: '028.3666.5555',
+        manager: 'Nguyễn Văn Đức',
+        operatingHours: '08:30 - 19:30',
+        services: ['Cầm cố điện thoại', 'Cầm cố laptop', 'Cầm cố máy ảnh'],
+        cashLimit: 200000000,
+      },
+      isActive: true,
+      wardId: validDongDaWardId,
+    },
+    {
+      name: 'Chi nhánh Gò Vấp - TP.HCM (Tạm đóng)',
+      address: '789 Quang Trung, Gò Vấp',
+      storeInfo: {
+        type: 'BRANCH',
+        hotline: '028.3555.4444',
+        manager: 'Trần Văn Vấp',
+        operatingHours: 'Tạm đóng cửa',
+        services: [],
+        cashLimit: 0,
+      },
+      isActive: false, // Store tạm đóng
+      wardId: validDistrict1WardId,
     },
   ];
 

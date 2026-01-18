@@ -131,13 +131,13 @@ export class LoanOrchestrator {
           data: {
             loanCode,
             customerId,
-            loanAmount,
+            loanAmount: Math.ceil(loanAmount), // Round up loan amount
             repaymentMethod: repaymentMethod as RepaymentMethod,
             loanTypeId,
             createdBy: employee.id,
             storeId: storeId ?? employee.storeId,
 
-            // snapshot
+            // snapshot - already rounded from simulation
             durationMonths: simulationResult.durationMonths,
             appliedInterestRate: simulationResult.appliedInterestRate,
 

@@ -464,39 +464,14 @@ export class PaymentService {
       return { payment, allocations, balance, nextPayment, allSchedule };
     });
 
-    // Cancel scheduled reminders for periods that were fully paid
-    try {
-      const paidPeriods = result.allSchedule
-        .filter((period) => period.status === RepaymentItemStatus.PAID)
-        .map((period) => period.periodNumber);
-
-      if (paidPeriods.length > 0) {
-        await this.reminderProcessor.cancelRemindersForPayments(
-          loanId,
-          paidPeriods,
-        );
-      }
-    } catch (error) {
-      // Log error but don't fail the payment
-      console.error('Failed to cancel scheduled reminders:', error);
-    }
-
-    // Send payment confirmation notification
-    try {
-      await this.communicationService.schedulePaymentConfirmation(
-        loanId,
-        result.payment.id,
-        amount,
-        result.allocations.map((a) => ({
-          periodNumber: a.periodNumber,
-          component: a.componentType,
-          amount: Math.round(a.amount),
-        })),
-      );
-    } catch (error) {
-      // Log error but don't fail the payment
-      console.error('Failed to send payment confirmation:', error);
-    }
+    // Handle post-payment actions (cancel reminders + send notifications)
+    await this.handlePostPaymentActions(
+      loanId,
+      result.payment.id,
+      amount,
+      result.allocations,
+      result.allSchedule,
+    );
 
     return {
       data: {
@@ -520,6 +495,52 @@ export class PaymentService {
   }
 
   // ===== helpers =====
+  /**
+   * Handle post-payment actions: cancel reminders and send notifications
+   * This is called after payment transaction completes successfully
+   */
+  private async handlePostPaymentActions(
+    loanId: string,
+    paymentId: string,
+    amount: number,
+    allocations: AllocationDraft[],
+    allSchedule: any[],
+  ): Promise<void> {
+    // Cancel scheduled reminders for periods that were fully paid
+    try {
+      const paidPeriods = allSchedule
+        .filter((period) => period.status === RepaymentItemStatus.PAID)
+        .map((period) => period.periodNumber);
+
+      if (paidPeriods.length > 0) {
+        await this.reminderProcessor.cancelRemindersForPayments(
+          loanId,
+          paidPeriods,
+        );
+      }
+    } catch (error) {
+      // Log error but don't fail the payment
+      console.error('Failed to cancel scheduled reminders:', error);
+    }
+
+    // Send payment confirmation notification
+    try {
+      await this.communicationService.schedulePaymentConfirmation(
+        loanId,
+        paymentId,
+        amount,
+        allocations.map((a) => ({
+          periodNumber: a.periodNumber,
+          component: a.componentType,
+          amount: Math.round(a.amount),
+        })),
+      );
+    } catch (error) {
+      // Log error but don't fail the payment
+      console.error('Failed to send payment confirmation:', error);
+    }
+  }
+
   /**
    * Validates and reconciles loan balance against schedule items.
    * If discrepancy detected, automatically heals by trusting calculated value.
@@ -587,7 +608,7 @@ export class PaymentService {
 
   // ---- currency helpers ----
   private toVnd(value: any): number {
-    return Math.round(Number(value ?? 0));
+    return Number(value ?? 0); // No rounding, just convert to number
   }
 
   /**
@@ -720,10 +741,11 @@ export class PaymentService {
     const penalty = this.toVnd((period as any).penaltyAmount);
     const paidPenalty = this.toVnd((period as any).paidPenalty);
 
-    const interestOut = Math.max(0, interest - paidInterest);
-    const feeOut = Math.max(0, fee - paidFee);
-    const penaltyOut = Math.max(0, penalty - paidPenalty);
-    const principalOut = Math.max(0, principal - paidPrincipal);
+    // Outstanding amounts - use Math.ceil (customer owes, round up)
+    const interestOut = Math.ceil(Math.max(0, interest - paidInterest));
+    const feeOut = Math.ceil(Math.max(0, fee - paidFee));
+    const penaltyOut = Math.ceil(Math.max(0, penalty - paidPenalty));
+    const principalOut = Math.ceil(Math.max(0, principal - paidPrincipal));
 
     return {
       interestOut,
@@ -741,7 +763,7 @@ export class PaymentService {
       const out = this.getOutstandingComponents(p);
       total += out.interestOut + out.feeOut + out.penaltyOut + out.principalOut;
     }
-    return total;
+    return total; // Already rounded in getOutstandingComponents
   }
 
   private recalcLoanBalance(allSchedule: any[]) {
@@ -758,11 +780,11 @@ export class PaymentService {
       remainingPenalty += out.penaltyOut;
     }
 
-    // Round individual components
-    const roundedPrincipal = Math.round(remainingPrincipal);
-    const roundedInterest = Math.round(remainingInterest);
-    const roundedFees = Math.round(remainingFees);
-    const roundedPenalty = Math.round(remainingPenalty);
+    // Round individual components (already rounded in getOutstandingComponents, just sum)
+    const roundedPrincipal = remainingPrincipal; // Already rounded
+    const roundedInterest = remainingInterest; // Already rounded
+    const roundedFees = remainingFees; // Already rounded
+    const roundedPenalty = remainingPenalty; // Already rounded
 
     return {
       remainingPrincipal: roundedPrincipal,
@@ -816,7 +838,7 @@ export class PaymentService {
       if (revenueType && allocation.amount > 0) {
         revenueEntries.push({
           type: revenueType,
-          amount: Math.round(allocation.amount), // Round before storing
+          amount: Math.round(allocation.amount), // Round for storage
           refId: paymentId,
           storeId: storeId,
         });
@@ -915,8 +937,12 @@ export class PaymentService {
       const totalOutstanding = this.calcTotalOutstanding(scheduleItems);
 
       // 3. Determine amounts
-      const amountPaidToLoan = Math.min(sellPrice, totalOutstanding);
-      const excessAmount = Math.max(0, sellPrice - totalOutstanding);
+      const amountPaidToLoan = Math.round(
+        Math.min(sellPrice, totalOutstanding),
+      );
+      const excessAmount = Math.round(
+        Math.max(0, sellPrice - totalOutstanding),
+      );
 
       // 4. Generate payment reference code
       const referenceCode = await this.generatePaymentReferenceCode(tx);
@@ -1029,10 +1055,22 @@ export class PaymentService {
       }
 
       return {
+        paymentId: payment.id,
         amountPaidToLoan,
         excessAmount,
+        allocations,
+        allSchedule,
       };
     });
+
+    // Handle post-payment actions (cancel reminders + send notifications)
+    await this.handlePostPaymentActions(
+      loanId,
+      result.paymentId,
+      result.amountPaidToLoan,
+      result.allocations,
+      result.allSchedule,
+    );
 
     // Return simple result for sellCollateral to handle disbursement
     return {

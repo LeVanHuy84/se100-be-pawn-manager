@@ -1,23 +1,22 @@
 import { Body, Controller, Get, Param, Put, Query } from '@nestjs/common';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-  ApiQuery,
   ApiBody,
   ApiExtraModels,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
   getSchemaPath,
 } from '@nestjs/swagger';
-import { Public } from 'src/common/decorators/public.decorator';
+import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 import { Roles } from 'src/common/decorators/role.decorator';
+import { BaseResult } from 'src/common/dto/base.response';
 import { Role } from '../employee/enum/role.enum';
 import { ConfigurationsService } from './configurations.service';
 import { ListConfigurationsQueryDto } from './dto/request/configurations.query';
 import { ConfigurationResponse } from './dto/request/configurations.response';
 import { UpdateConfigurationDto } from './dto/request/update-configuration.request';
-import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
-import { BaseResult } from 'src/common/dto/base.response';
 
 @ApiTags('System Configurations')
 @ApiExtraModels(BaseResult, ConfigurationResponse)

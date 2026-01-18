@@ -92,7 +92,6 @@ enum RevenueType {
   INTEREST
   LATE_FEE
   SERVICE_FEE
-  LIQUIDATION_EXCESS
 }
 
 enum NotificationType {
@@ -237,7 +236,7 @@ model Loan {
   createdBy String?
 
   // ---- RELATIONS ----
-  loanType          LoanType                  @relation(fields: [loanTypeId], references: [id])
+  loanType          LoanType                  @relation(fields: [loanTypeId], references: [id] )
   customer          Customer                  @relation(fields: [customerId], references: [id])
   repaymentSchedule RepaymentScheduleDetail[]
   payments          LoanPayment[]
@@ -477,7 +476,7 @@ model AuditLog {
 // ==================================================
 model RevenueLedger {
   id         String      @id @default(uuid()) @db.Uuid
-  type       RevenueType // "INTEREST", "FEE", "LIQUIDATION_EXCESS"
+  type       RevenueType // "INTEREST", "SERVICE_FEE", "LATE_FEE"
   amount     Decimal
   refId      String // LoanID hoặc PaymentID
   storeId    String      @db.Uuid

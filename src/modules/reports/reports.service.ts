@@ -83,7 +83,6 @@ export class ReportsService {
       interest: 0,
       serviceFee: 0,
       lateFee: 0,
-      liquidationExcess: 0,
     };
     let summaryExpense = 0;
 
@@ -123,7 +122,6 @@ export class ReportsService {
         interest: 0,
         serviceFee: 0,
         lateFee: 0,
-        liquidationExcess: 0,
       };
 
       let dayTotalRevenue = 0;
@@ -141,9 +139,6 @@ export class ReportsService {
             break;
           case 'LATE_FEE':
             dayBreakdown.lateFee += amount;
-            break;
-          case 'LIQUIDATION_EXCESS':
-            dayBreakdown.liquidationExcess += amount;
             break;
         }
       });
@@ -163,16 +158,15 @@ export class ReportsService {
 
       dailyData.push({
         date: dateString,
-        totalRevenue: Math.round(dayTotalRevenue),
+        totalRevenue: Math.ceil(dayTotalRevenue),
         breakdown: {
-          interest: Math.round(dayBreakdown.interest),
-          serviceFee: Math.round(dayBreakdown.serviceFee),
-          lateFee: Math.round(dayBreakdown.lateFee),
-          liquidationExcess: Math.round(dayBreakdown.liquidationExcess),
+          interest: Math.ceil(dayBreakdown.interest),
+          serviceFee: Math.ceil(dayBreakdown.serviceFee),
+          lateFee: Math.ceil(dayBreakdown.lateFee),
         },
-        totalExpense: Math.round(dayExpense),
+        totalExpense: Math.ceil(dayExpense),
         expenseBreakdown: {
-          loanDisbursement: Math.round(dayExpense),
+          loanDisbursement: Math.ceil(dayExpense),
         },
       });
 
@@ -181,7 +175,6 @@ export class ReportsService {
       summaryBreakdown.interest += dayBreakdown.interest;
       summaryBreakdown.serviceFee += dayBreakdown.serviceFee;
       summaryBreakdown.lateFee += dayBreakdown.lateFee;
-      summaryBreakdown.liquidationExcess += dayBreakdown.liquidationExcess;
       summaryExpense += dayExpense;
 
       // Move to next day
@@ -192,15 +185,12 @@ export class ReportsService {
       data: {
         detail: dailyData,
         summary: {
-          totalRevenue: Math.round(summaryRevenue),
-          totalInterest: Math.round(summaryBreakdown.interest),
-          totalServiceFee: Math.round(summaryBreakdown.serviceFee),
-          totalLateFee: Math.round(summaryBreakdown.lateFee),
-          totalLiquidationExcess: Math.round(
-            summaryBreakdown.liquidationExcess,
-          ),
-          totalExpense: Math.round(summaryExpense),
-          totalLoanDisbursement: Math.round(summaryExpense),
+          totalRevenue: Math.ceil(summaryRevenue),
+          totalInterest: Math.ceil(summaryBreakdown.interest),
+          totalServiceFee: Math.ceil(summaryBreakdown.serviceFee),
+          totalLateFee: Math.ceil(summaryBreakdown.lateFee),
+          totalExpense: Math.ceil(summaryExpense),
+          totalLoanDisbursement: Math.ceil(summaryExpense),
         },
       },
     };
@@ -316,9 +306,8 @@ export class ReportsService {
         summary: {
           totalNewLoans: newLoans.length,
           totalClosedLoans: closedLoans.length,
-          totalNewLoanAmount: newLoans.reduce(
-            (sum, loan) => sum + Number(loan.loanAmount),
-            0,
+          totalNewLoanAmount: Math.ceil(
+            newLoans.reduce((sum, loan) => sum + Number(loan.loanAmount), 0),
           ),
         },
       },
@@ -425,9 +414,8 @@ export class ReportsService {
 
     // Calculate statistics
     const loansIssued = loansInQuarter.length;
-    const totalLoanAmount = loansInQuarter.reduce(
-      (sum, loan) => sum + Number(loan.loanAmount),
-      0,
+    const totalLoanAmount = Math.ceil(
+      loansInQuarter.reduce((sum, loan) => sum + Number(loan.loanAmount), 0),
     );
 
     // Revenue breakdown
@@ -435,7 +423,6 @@ export class ReportsService {
       interest: 0,
       serviceFee: 0,
       lateFee: 0,
-      liquidationProfit: 0,
     };
 
     let totalRevenue = 0;
@@ -451,9 +438,6 @@ export class ReportsService {
           break;
         case 'LATE_FEE':
           revenueBreakdown.lateFee += amount;
-          break;
-        case 'LIQUIDATION_EXCESS':
-          revenueBreakdown.liquidationProfit += amount;
           break;
       }
     });
@@ -490,19 +474,18 @@ export class ReportsService {
         period: `Q${quarter} ${year}`,
         statistics: {
           totalLoansIssued: loansIssued,
-          totalLoanAmount: Math.round(totalLoanAmount),
+          totalLoanAmount: Math.ceil(totalLoanAmount),
           totalLoansClosed: loansClosed,
           totalLoansActive: loansActive,
           totalLoansOverdue: loansOverdue,
           totalCollateralsReceived: collateralsReceived,
           totalCollateralsReleased: collateralsReleased,
           totalLiquidations: liquidations,
-          totalRevenue: Math.round(totalRevenue),
+          totalRevenue: Math.ceil(totalRevenue),
           revenueBreakdown: {
-            interest: Math.round(revenueBreakdown.interest),
-            serviceFee: Math.round(revenueBreakdown.serviceFee),
-            lateFee: Math.round(revenueBreakdown.lateFee),
-            liquidationProfit: Math.round(revenueBreakdown.liquidationProfit),
+            interest: Math.ceil(revenueBreakdown.interest),
+            serviceFee: Math.ceil(revenueBreakdown.serviceFee),
+            lateFee: Math.ceil(revenueBreakdown.lateFee),
           },
         },
         compliance: {

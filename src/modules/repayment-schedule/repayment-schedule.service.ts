@@ -204,7 +204,13 @@ export class RepaymentScheduleService {
         const feeOut = Number(item.feeAmount) - Number(item.paidFee ?? 0);
         const penaltyOut =
           Number(item.penaltyAmount ?? 0) - Number(item.paidPenalty ?? 0);
-        return sum + principalOut + interestOut + feeOut + penaltyOut;
+        return (
+          sum +
+          Math.ceil(principalOut) +
+          Math.ceil(interestOut) +
+          Math.ceil(feeOut) +
+          Math.ceil(penaltyOut)
+        );
       }, 0);
 
       const daysOverdue = Math.floor(
@@ -361,15 +367,15 @@ export class RepaymentScheduleService {
       loanId: item.loanId,
       periodNumber: item.periodNumber,
       dueDate: item.dueDate.toISOString().slice(0, 10),
-      beginningBalance: Number(item.beginningBalance),
-      principalAmount: Number(item.principalAmount),
-      interestAmount: Number(item.interestAmount),
-      feeAmount: Number((item as any).feeAmount ?? 0),
-      totalAmount: Number(item.totalAmount),
+      beginningBalance: Math.ceil(Number(item.beginningBalance)),
+      principalAmount: Math.ceil(Number(item.principalAmount)),
+      interestAmount: Math.ceil(Number(item.interestAmount)),
+      feeAmount: Math.ceil(Number((item as any).feeAmount ?? 0)),
+      totalAmount: Math.ceil(Number(item.totalAmount)),
       status: item.status,
-      paidPrincipal: Number(item.paidPrincipal ?? 0),
-      paidInterest: Number(item.paidInterest ?? 0),
-      paidFee: Number((item as any).paidFee ?? 0),
+      paidPrincipal: Math.ceil(Number(item.paidPrincipal ?? 0)),
+      paidInterest: Math.ceil(Number(item.paidInterest ?? 0)),
+      paidFee: Math.ceil(Number((item as any).paidFee ?? 0)),
       paidAt: item.paidAt ? item.paidAt.toISOString() : null,
     };
   }

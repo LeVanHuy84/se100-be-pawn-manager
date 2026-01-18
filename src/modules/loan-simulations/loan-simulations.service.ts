@@ -59,41 +59,46 @@ export class LoanSimulationsService {
     // 2) Calculate schedule theo method
     if (repaymentMethod === RepaymentMethod.EQUAL_INSTALLMENT) {
       // gốc đều, lãi giảm dần
-      const principalPerMonth = Math.round(loanAmount / durationMonths);
+      const principalPerMonth = loanAmount / durationMonths; // Keep raw for accuracy
       let remaining = loanAmount;
-      let totalPrincipalPaid = 0;
+      let totalRoundedPrincipalPaid = 0; // Track rounded amounts for final adjustment
 
       for (let i = 1; i <= durationMonths; i++) {
         const beginningBalance = remaining;
 
-        // Làm tròn từng khoản ngay khi tính
-        const interestAmount = Math.round(
-          beginningBalance * (interestRateMonthly / 100),
-        );
+        // Tính toán raw, chưa làm tròn
+        const interestAmount = beginningBalance * (interestRateMonthly / 100);
 
-        // Kỳ cuối: trả hết phần còn lại để đảm bảo tổng chính xác
-        const principalAmount =
-          i === durationMonths
-            ? loanAmount - totalPrincipalPaid
-            : principalPerMonth;
+        // Tính principal amount
+        const principalAmount = principalPerMonth;
 
         // Fee is fixed per month (pawn shop model)
-        const feeAmount = Math.round(monthlyFeeFixed);
+        const feeAmount = i === 1 ? monthlyFeeFixed : 0;
 
-        const totalAmount = principalAmount + interestAmount + feeAmount;
+        // Chỉ làm tròn ở bước cuối cùng (khi lưu vào schedule)
+        let roundedPrincipal = Math.ceil(principalAmount);
 
-        totalInterest += interestAmount;
-        totalFees += feeAmount;
-        totalPrincipalPaid += principalAmount;
-        remaining = beginningBalance - principalAmount;
+        // Kỳ cuối: điều chỉnh để tổng các kỳ đã rounded = chính xác loan amount
+        if (i === durationMonths) {
+          roundedPrincipal = loanAmount - totalRoundedPrincipalPaid;
+        }
+
+        const roundedInterest = Math.ceil(interestAmount);
+        const roundedFee = Math.ceil(feeAmount);
+        const totalAmount = roundedPrincipal + roundedInterest + roundedFee;
+
+        totalInterest += roundedInterest;
+        totalFees += roundedFee;
+        totalRoundedPrincipalPaid += roundedPrincipal; // Track rounded for adjustment
+        remaining = beginningBalance - principalAmount; // Use raw for next iteration
 
         schedule.push({
           periodNumber: i,
           dueDate: dueDateStr(i),
-          beginningBalance: Math.round(beginningBalance),
-          principalAmount: Math.round(principalAmount),
-          interestAmount: interestAmount,
-          feeAmount: feeAmount,
+          beginningBalance: Math.ceil(beginningBalance),
+          principalAmount: roundedPrincipal,
+          interestAmount: roundedInterest,
+          feeAmount: roundedFee,
           totalAmount: totalAmount,
         });
       }
@@ -105,42 +110,40 @@ export class LoanSimulationsService {
       for (let i = 1; i <= durationMonths; i++) {
         const beginningBalance = loanAmount; // giữ nguyên tới cuối kỳ
 
-        // Làm tròn từng khoản ngay khi tính
-        let interestAmount = Math.round(
-          loanAmount * (interestRateMonthly / 100),
-        );
-
-        // Fee is fixed per month (pawn shop model)
-        let feeAmount = Math.round(monthlyFeeFixed);
+        // Tính toán chuẩn, chưa làm tròn
+        let interestAmount = loanAmount * (interestRateMonthly / 100);
+        let feeAmount = monthlyFeeFixed;
 
         // Kỳ cuối: điều chỉnh interest và fee nếu có sai lệch tích lũy
         if (i === durationMonths) {
-          const expectedTotalInterest = Math.round(
-            loanAmount * (interestRateMonthly / 100) * durationMonths,
-          );
-          const expectedTotalFees = Math.round(
-            monthlyFeeFixed * durationMonths,
-          );
+          const expectedTotalInterest =
+            loanAmount * (interestRateMonthly / 100) * durationMonths;
+          const expectedTotalFees = monthlyFeeFixed * durationMonths;
 
           interestAmount = expectedTotalInterest - totalInterestPaid;
           feeAmount = expectedTotalFees - totalFeesPaid;
         }
 
         const principalAmount = i === durationMonths ? loanAmount : 0;
-        const totalAmount = principalAmount + interestAmount + feeAmount;
 
-        totalInterest += interestAmount;
-        totalFees += feeAmount;
-        totalInterestPaid += interestAmount;
-        totalFeesPaid += feeAmount;
+        // Chỉ làm tròn ở bước cuối cùng
+        const roundedPrincipal = Math.ceil(principalAmount);
+        const roundedInterest = Math.ceil(interestAmount);
+        const roundedFee = Math.ceil(feeAmount);
+        const totalAmount = roundedPrincipal + roundedInterest + roundedFee;
+
+        totalInterest += roundedInterest;
+        totalFees += roundedFee;
+        totalInterestPaid += interestAmount; // raw for tracking
+        totalFeesPaid += feeAmount; // raw for tracking
 
         schedule.push({
           periodNumber: i,
           dueDate: dueDateStr(i),
-          beginningBalance: beginningBalance,
-          principalAmount: principalAmount,
-          interestAmount: interestAmount,
-          feeAmount: feeAmount,
+          beginningBalance: Math.ceil(beginningBalance),
+          principalAmount: roundedPrincipal,
+          interestAmount: roundedInterest,
+          feeAmount: roundedFee,
           totalAmount: totalAmount,
         });
       }
@@ -152,12 +155,12 @@ export class LoanSimulationsService {
     }
 
     // 3) Totals - đã được làm tròn trong quá trình tính
-    const totalRepayment = loanAmount + totalInterest + totalFees;
+    const totalRepayment = Math.ceil(loanAmount + totalInterest + totalFees);
 
     // monthlyPayment:
     // - equal_installment: có thể dùng trung bình, hoặc dùng kỳ 1 (tuỳ UX)
     // - interest_only: trung bình sẽ "ảo" vì kỳ cuối to, nhưng vẫn ok để hiển thị thêm
-    const monthlyPayment = Math.round(totalRepayment / durationMonths);
+    const monthlyPayment = Math.ceil(totalRepayment / durationMonths);
 
     return {
       loanAmount,
