@@ -32,16 +32,10 @@ import { BaseResult } from 'src/common/dto/base.response';
   version: '1',
   path: 'collateral-types',
 })
-@ApiExtraModels(
-  BaseResult,
-  CollateralTypeResponse,
-  CollateralTypeListResponse,
-)
+@ApiExtraModels(BaseResult, CollateralTypeResponse, CollateralTypeListResponse)
 @ApiErrorResponses()
 export class CollateralTypeController {
-  constructor(
-    private readonly collateralTypeService: CollateralTypeService,
-  ) {}
+  constructor(private readonly collateralTypeService: CollateralTypeService) {}
 
   @Get()
   @Roles(Role.MANAGER, Role.STAFF)

@@ -148,7 +148,10 @@ export class StoreService {
     }
   }
 
-  async update(id: string, data: UpdateStoreDTO): Promise<BaseResult<StoreResponse>> {
+  async update(
+    id: string,
+    data: UpdateStoreDTO,
+  ): Promise<BaseResult<StoreResponse>> {
     // Check if store exists
     const existing = await this.prisma.store.findUnique({
       where: { id },

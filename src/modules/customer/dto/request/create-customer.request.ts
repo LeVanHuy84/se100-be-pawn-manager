@@ -33,11 +33,9 @@ export const CreateCustomerSchema = z.object({
     .refine((val) => isAdult(val), {
       message: 'Customer must be at least 18 years old',
     }),
-  nationalId: z
-    .string()
-    .refine((val) => cccdRegex.test(val), {
-      message: 'National ID must be exactly 12 digits (CCCD format)',
-    }),
+  nationalId: z.string().refine((val) => cccdRegex.test(val), {
+    message: 'National ID must be exactly 12 digits (CCCD format)',
+  }),
   nationalIdIssueDate: z
     .string()
     .refine((val) => isoDateRegex.test(val), {

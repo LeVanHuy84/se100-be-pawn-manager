@@ -9,9 +9,6 @@ class RevenueBreakdown {
 
   @ApiProperty({ description: 'Late fee revenue', example: 500000 })
   lateFee: number;
-
-  @ApiProperty({ description: 'Liquidation excess revenue', example: 200000 })
-  liquidationExcess: number;
 }
 
 class ExpenseBreakdown {
@@ -69,12 +66,6 @@ class RevenueSummary {
   totalLateFee: number;
 
   @ApiProperty({
-    description: 'Total liquidation excess revenue',
-    example: 2000000,
-  })
-  totalLiquidationExcess: number;
-
-  @ApiProperty({
     description: 'Total expenses across all periods',
     example: 150000000,
   })
@@ -100,7 +91,6 @@ export class RevenueReportListResponse {
           interest: 100000.0,
           serviceFee: 30000.0,
           lateFee: 20000.0,
-          liquidationExcess: 0.0,
         },
         totalExpense: 10000000.0,
         expenseBreakdown: { loanDisbursement: 10000000.0 },
@@ -112,7 +102,6 @@ export class RevenueReportListResponse {
           interest: 150000.0,
           serviceFee: 40000.0,
           lateFee: 10000.0,
-          liquidationExcess: 0.0,
         },
         totalExpense: 5000000.0,
         expenseBreakdown: { loanDisbursement: 5000000.0 },

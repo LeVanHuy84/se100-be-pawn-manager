@@ -100,7 +100,9 @@ export class CustomerMapper {
     };
   }
 
-  static toResponseList(customers: CustomerWithRelations[]): CustomerResponse[] {
+  static toResponseList(
+    customers: CustomerWithRelations[],
+  ): CustomerResponse[] {
     return customers.map((customer) => this.toResponse(customer));
   }
 }

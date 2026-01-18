@@ -7,9 +7,11 @@ import {
 import { CollateralService } from './collateral.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { PaymentModule } from '../payment/payment.module';
+import { DisbursementModule } from '../disbursement/disbursement.module';
 
 @Module({
-  imports: [PrismaModule, CloudinaryModule],
+  imports: [PrismaModule, CloudinaryModule, PaymentModule, DisbursementModule],
   controllers: [
     CollateralController,
     CollateralLocationController,

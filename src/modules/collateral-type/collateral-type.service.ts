@@ -70,13 +70,11 @@ export class CollateralTypeService {
     });
 
     if (!collateralType) {
-      throw new NotFoundException(
-        `Collateral type with ID ${id} not found`,
-      );
+      throw new NotFoundException(`Collateral type with ID ${id} not found`);
     }
 
     return {
-        data: CollateralTypeMapper.toResponse(collateralType),
+      data: CollateralTypeMapper.toResponse(collateralType),
     };
   }
 
@@ -134,9 +132,7 @@ export class CollateralTypeService {
     });
 
     if (!existing) {
-      throw new NotFoundException(
-        `Collateral type with ID ${id} not found`,
-      );
+      throw new NotFoundException(`Collateral type with ID ${id} not found`);
     }
 
     // Check for duplicate name (excluding current type)

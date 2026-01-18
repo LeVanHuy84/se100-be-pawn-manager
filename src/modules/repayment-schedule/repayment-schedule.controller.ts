@@ -29,6 +29,7 @@ import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.dec
 )
 @Controller({
   version: '1',
+  path: 'repayment-schedules',
 })
 @ApiErrorResponses()
 export class RepaymentScheduleController {
@@ -36,7 +37,7 @@ export class RepaymentScheduleController {
     private readonly repaymentScheduleService: RepaymentScheduleService,
   ) {}
 
-  @Get('loans/:loanId/repayment-schedule')
+  @Get('loans/:loanId')
   @ApiOperation({
     summary: 'Get loan repayment schedule',
     description:
@@ -72,7 +73,7 @@ export class RepaymentScheduleController {
     return this.repaymentScheduleService.getLoanRepaymentSchedule(loanId);
   }
 
-  @Get('loans/overdue')
+  @Get('overdue-loans')
   @ApiOperation({
     summary: 'Get overdue loans with their overdue repayment items',
     description:
@@ -102,7 +103,7 @@ export class RepaymentScheduleController {
     return this.repaymentScheduleService.getOverdueLoans(query);
   }
 
-  @Get('repayment-schedules/:id')
+  @Get(':id')
   @ApiOperation({
     summary: 'Get single repayment schedule item',
     description:
