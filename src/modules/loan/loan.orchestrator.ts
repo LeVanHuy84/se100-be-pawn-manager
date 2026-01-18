@@ -54,6 +54,11 @@ export class LoanOrchestrator {
         collateralIds,
       } = dto;
 
+      const storeIdToUse = employee.storeId || storeId;
+      if (!storeIdToUse) {
+        throw new BadRequestException('Store ID is required');
+      }
+
       // Kiểm tra customer, store tồn tại
       const [customer, store] = await Promise.all([
         this.prisma.customer.findUnique({ where: { id: customerId } }),
@@ -480,6 +485,7 @@ export class LoanOrchestrator {
         data: {
           status: LoanStatus.ACTIVE,
           approvedAt: new Date(),
+          activatedAt: new Date(),
           approvedBy: employee.id,
           notes: dto.note
             ? loan.notes + '\n- Approval Note: ' + dto.note

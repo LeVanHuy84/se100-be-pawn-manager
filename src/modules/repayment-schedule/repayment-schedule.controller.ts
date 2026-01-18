@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiExtraModels,
@@ -10,9 +10,7 @@ import {
 } from '@nestjs/swagger';
 import { BaseResult } from 'src/common/dto/base.response';
 import { PaginationMeta } from 'src/common/dto/pagination.type';
-import { OverdueLoansQuery } from './dto/request/overdue-items.query';
 import { RepaymentScheduleItemResponse } from './dto/response/reschedule-payment-item.response';
-import { OverdueLoanResponse } from './dto/response/overdue-loan.response';
 
 import { RepaymentScheduleService } from './repayment-schedule.service';
 
@@ -20,13 +18,7 @@ import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.dec
 
 @ApiTags('Repayment Schedule')
 @ApiBearerAuth()
-@ApiExtraModels(
-  BaseResult,
-  RepaymentScheduleItemResponse,
-  PaginationMeta,
-  OverdueLoansQuery,
-  OverdueLoanResponse,
-)
+@ApiExtraModels(BaseResult, RepaymentScheduleItemResponse, PaginationMeta)
 @Controller({
   version: '1',
   path: 'repayment-schedules',
@@ -73,37 +65,7 @@ export class RepaymentScheduleController {
     return this.repaymentScheduleService.getLoanRepaymentSchedule(loanId);
   }
 
-  @Get('overdue-loans')
-  @ApiOperation({
-    summary: 'Get overdue loans with their overdue repayment items',
-    description:
-      'Retrieve paginated list of loans that have overdue repayment items. Each loan includes all its overdue periods. Supports filtering by date range (max 30 days), store, and search. Used for debt collection and customer follow-up.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Overdue loans retrieved successfully',
-    schema: {
-      allOf: [
-        { $ref: getSchemaPath(BaseResult) },
-        {
-          properties: {
-            data: {
-              type: 'array',
-              items: { $ref: getSchemaPath(OverdueLoanResponse) },
-            },
-            meta: { $ref: getSchemaPath(PaginationMeta) },
-          },
-        },
-      ],
-    },
-  })
-  async getOverdueLoans(
-    @Query() query: OverdueLoansQuery,
-  ): Promise<BaseResult<OverdueLoanResponse[]>> {
-    return this.repaymentScheduleService.getOverdueLoans(query);
-  }
-
-  @Get(':id')
+  @Get('repayment-schedules/:id')
   @ApiOperation({
     summary: 'Get single repayment schedule item',
     description:

@@ -6,9 +6,15 @@ import { LoanSimulationsModule } from '../loan-simulations/loan-simulations.modu
 import { CommunicationModule } from '../communication/communication.module';
 import { DisbursementModule } from '../disbursement/disbursement.module';
 import { LoanCodeGenerate } from './loan-code.generate';
+import { RepaymentScheduleModule } from '../repayment-schedule/repayment-schedule.module';
 
 @Module({
-  imports: [LoanSimulationsModule, CommunicationModule, DisbursementModule],
+  imports: [
+    LoanSimulationsModule,
+    CommunicationModule,
+    DisbursementModule,
+    RepaymentScheduleModule,
+  ],
   controllers: [LoanController],
   providers: [LoanService, LoanOrchestrator, LoanCodeGenerate],
 })

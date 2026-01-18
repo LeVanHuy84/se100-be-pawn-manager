@@ -1,6 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import Joi from 'joi';
 import { APP_GUARD } from '@nestjs/core';
@@ -23,6 +23,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { LocationModule } from './modules/location/location.module';
 import { LoanTypeModule } from './modules/loan-type/loan-type.module';
 import { CollateralTypeModule } from './modules/collateral-type/collateral-type.module';
+import { LoggerMiddleware } from './common/middleware/logger.middleware';
 
 @Module({
   imports: [
@@ -48,33 +49,46 @@ import { CollateralTypeModule } from './modules/collateral-type/collateral-type.
         SMTP_USER: Joi.string().optional(),
         SMTP_PASSWORD: Joi.string().optional(),
         SMTP_FROM: Joi.string().optional(),
+
         // Redis config for BullMQ
         REDIS_URL: Joi.string().required(),
       }),
     }),
-    BullModule.forRoot({
-      connection: {
-        url: process.env.REDIS_URL,
-        tls: {
-          rejectUnauthorized: false,
-        },
-        maxRetriesPerRequest: null,
-        enableReadyCheck: false,
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => {
+        const redisUrl = configService.get<string>('REDIS_URL');
+        const isTls = redisUrl?.startsWith('rediss://');
+        return {
+          connection: {
+            url: redisUrl,
+            ...(isTls
+              ? {
+                  tls: {
+                    rejectUnauthorized: false,
+                  },
+                }
+              : {}),
+            maxRetriesPerRequest: null,
+            enableReadyCheck: false,
+          },
+          defaultJobOptions: {
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+            removeOnComplete: {
+              age: 3600, // 1 hour
+              count: 1000, // Keep last 1000
+            },
+            removeOnFail: {
+              age: 86400, // Keep failed jobs for 24 hours
+            },
+          },
+        };
       },
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-        removeOnComplete: {
-          age: 3600, // 1 hour
-          count: 1000, // Keep last 1000
-        },
-        removeOnFail: {
-          age: 86400, // Keep failed jobs for 24 hours
-        },
-      },
+      inject: [ConfigService],
     }),
     ScheduleModule.forRoot(),
     LoanModule,
@@ -98,4 +112,8 @@ import { CollateralTypeModule } from './modules/collateral-type/collateral-type.
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggerMiddleware).forRoutes('*');
+  }
+}

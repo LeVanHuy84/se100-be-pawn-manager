@@ -12,5 +12,6 @@ export class ValuationResponse {
   maxLoanAmount: number;
   depreciationRate: number;
   valuationDate: Date;
+  valuationMethod: 'AI' | 'MANUAL';
   notes: string;
 }

@@ -30,6 +30,45 @@ export class QuarterlyReportQuery extends createZodDto(
   storeId?: string;
 }
 
+class AssetBreakdownItem {
+  @ApiProperty({ description: 'Asset category name', example: 'Laptop' })
+  category: string;
+
+  @ApiProperty({ description: 'Number of assets received', example: 10 })
+  receivedCount: number;
+  @ApiProperty({ description: 'Value of assets received', example: 50000000 })
+  receivedValue: number;
+
+  @ApiProperty({ description: 'Number of assets released', example: 5 })
+  releasedCount: number;
+  @ApiProperty({ description: 'Value of assets released', example: 25000000 })
+  releasedValue: number;
+
+  @ApiProperty({ description: 'Number of assets liquidated', example: 2 })
+  liquidatedCount: number;
+  @ApiProperty({ description: 'Value of assets liquidated', example: 10000000 })
+  liquidatedValue: number;
+
+  @ApiProperty({ description: 'Number of assets in stock', example: 20 })
+  inStockCount: number;
+  @ApiProperty({ description: 'Value of assets in stock', example: 100000000 })
+  inStockValue: number;
+}
+
+class EmployeeReport {
+  @ApiProperty({ description: 'Total employees', example: 5 })
+  total: number;
+  @ApiProperty({ description: 'Male employees', example: 3 })
+  male: number;
+  @ApiProperty({ description: 'Female employees', example: 2 })
+  female: number;
+}
+
+class SecurityPersonnelReport {
+  @ApiProperty({ description: 'Total security personnel', example: 2 })
+  count: number;
+}
+
 class QuarterlyStatistics {
   @ApiProperty({ description: 'Total loans issued in quarter', example: 150 })
   totalLoansIssued: number;
@@ -70,6 +109,21 @@ class QuarterlyStatistics {
     serviceFee: number;
     lateFee: number;
   };
+
+  @ApiProperty({
+    type: [AssetBreakdownItem],
+    description: 'Activity by asset type',
+  })
+  assetBreakdown: AssetBreakdownItem[];
+
+  @ApiProperty({ type: EmployeeReport, description: 'Employee statistics' })
+  employees: EmployeeReport;
+
+  @ApiProperty({
+    type: SecurityPersonnelReport,
+    description: 'Security personnel statistics',
+  })
+  security: SecurityPersonnelReport;
 }
 
 class QuarterlyCompliance {

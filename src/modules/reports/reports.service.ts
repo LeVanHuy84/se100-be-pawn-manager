@@ -13,6 +13,7 @@ import {
 } from './dto/quarterly-report.dto';
 import { RevenueReportQuery } from './dto/revenue-report.query';
 import { BaseResult } from 'src/common/dto/base.response';
+import { clerkClient } from 'src/clerk/clerk.config';
 
 @Injectable()
 export class ReportsService {
@@ -83,6 +84,9 @@ export class ReportsService {
       interest: 0,
       serviceFee: 0,
       lateFee: 0,
+      liquidationExcess: 0,
+      liquidationSale: 0,
+      excessRefund: 0,
     };
     let summaryExpense = 0;
 
@@ -122,6 +126,9 @@ export class ReportsService {
         interest: 0,
         serviceFee: 0,
         lateFee: 0,
+        liquidationExcess: 0,
+        liquidationSale: 0,
+        excessRefund: 0,
       };
 
       let dayTotalRevenue = 0;
@@ -139,6 +146,15 @@ export class ReportsService {
             break;
           case 'LATE_FEE':
             dayBreakdown.lateFee += amount;
+            break;
+          case 'LIQUIDATION_EXCESS':
+            dayBreakdown.liquidationExcess += amount;
+            break;
+          case 'LIQUIDATION_SALE':
+            dayBreakdown.liquidationSale += amount;
+            break;
+          case 'EXCESS_REFUND':
+            dayBreakdown.excessRefund += amount; // This is negative (outflow)
             break;
         }
       });
@@ -160,9 +176,12 @@ export class ReportsService {
         date: dateString,
         totalRevenue: Math.ceil(dayTotalRevenue),
         breakdown: {
-          interest: Math.ceil(dayBreakdown.interest),
-          serviceFee: Math.ceil(dayBreakdown.serviceFee),
-          lateFee: Math.ceil(dayBreakdown.lateFee),
+          interest: Math.round(dayBreakdown.interest),
+          serviceFee: Math.round(dayBreakdown.serviceFee),
+          lateFee: Math.round(dayBreakdown.lateFee),
+          liquidationExcess: Math.round(dayBreakdown.liquidationExcess),
+          liquidationSale: Math.round(dayBreakdown.liquidationSale),
+          excessRefund: Math.round(dayBreakdown.excessRefund),
         },
         totalExpense: Math.ceil(dayExpense),
         expenseBreakdown: {
@@ -175,6 +194,9 @@ export class ReportsService {
       summaryBreakdown.interest += dayBreakdown.interest;
       summaryBreakdown.serviceFee += dayBreakdown.serviceFee;
       summaryBreakdown.lateFee += dayBreakdown.lateFee;
+      summaryBreakdown.liquidationExcess += dayBreakdown.liquidationExcess;
+      summaryBreakdown.liquidationSale += dayBreakdown.liquidationSale;
+      summaryBreakdown.excessRefund += dayBreakdown.excessRefund;
       summaryExpense += dayExpense;
 
       // Move to next day
@@ -185,12 +207,17 @@ export class ReportsService {
       data: {
         detail: dailyData,
         summary: {
-          totalRevenue: Math.ceil(summaryRevenue),
-          totalInterest: Math.ceil(summaryBreakdown.interest),
-          totalServiceFee: Math.ceil(summaryBreakdown.serviceFee),
-          totalLateFee: Math.ceil(summaryBreakdown.lateFee),
-          totalExpense: Math.ceil(summaryExpense),
-          totalLoanDisbursement: Math.ceil(summaryExpense),
+          totalRevenue: Math.round(summaryRevenue),
+          totalInterest: Math.round(summaryBreakdown.interest),
+          totalServiceFee: Math.round(summaryBreakdown.serviceFee),
+          totalLateFee: Math.round(summaryBreakdown.lateFee),
+          totalLiquidationExcess: Math.round(
+            summaryBreakdown.liquidationExcess,
+          ),
+          totalLiquidationSale: Math.round(summaryBreakdown.liquidationSale),
+          totalExcessRefund: Math.round(summaryBreakdown.excessRefund),
+          totalExpense: Math.round(summaryExpense),
+          totalLoanDisbursement: Math.round(summaryExpense),
         },
       },
     };
@@ -327,18 +354,25 @@ export class ReportsService {
     const startDate = new Date(year, startMonth, 1);
     const endDate = new Date(year, startMonth + 3, 0, 23, 59, 59, 999);
 
-    // Parallel queries for better performance
+    // Get asset types for breakdown mapping
+    const collateralTypes = await this.prisma.collateralType.findMany();
+    const typeMap = new Map<number, string>();
+    collateralTypes.forEach((t) => typeMap.set(t.id, t.name));
+
+    // Parallel queries for stats
     const [
-      loansInQuarter,
+      loansInQuarter, // For loan stats
       loansClosed,
       loansActive,
       loansOverdue,
-      collateralsReceived,
-      collateralsReleased,
-      liquidations,
+      loansIssuedCount, // Total issued count (redundant with loansInQuarter.length but kept for consistency)
+      collateralsReceivedStats,
+      collateralsReleasedStats,
+      liquidatedStats,
+      inStockStats,
       revenues,
     ] = await Promise.all([
-      // Loans issued in quarter
+      // Loans issued in quarter (for compliance & loan amount)
       this.prisma.loan.findMany({
         where: {
           createdAt: { gte: startDate, lte: endDate },
@@ -378,26 +412,59 @@ export class ReportsService {
           ...(storeId && { storeId }),
         },
       }),
-      // Collaterals
-      this.prisma.collateral.count({
+      // Total issued count
+      this.prisma.loan.count({
         where: {
           createdAt: { gte: startDate, lte: endDate },
           ...(storeId && { storeId }),
         },
       }),
-      this.prisma.collateral.count({
+      // Collaterals Received Breakdown
+      this.prisma.collateral.groupBy({
+        by: ['collateralTypeId'],
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          ...(storeId && { storeId }),
+        },
+        _count: { _all: true },
+        _sum: { appraisedValue: true },
+      }),
+      // Collaterals Released Breakdown
+      this.prisma.collateral.groupBy({
+        by: ['collateralTypeId'],
         where: {
           status: 'RELEASED',
           updatedAt: { gte: startDate, lte: endDate },
           ...(storeId && { storeId }),
         },
+        _count: { _all: true },
+        _sum: { appraisedValue: true },
+        // note: released value is usually appraised value or loan amount. Using appraised value for consistency.
       }),
-      this.prisma.collateral.count({
+      // Liquidations Breakdown
+      this.prisma.collateral.groupBy({
+        by: ['collateralTypeId'],
         where: {
           status: 'SOLD',
           updatedAt: { gte: startDate, lte: endDate },
           ...(storeId && { storeId }),
         },
+        _count: { _all: true },
+        _sum: {
+          appraisedValue: true,
+          sellPrice: true,
+        },
+      }),
+      // In Stock Breakdown (Active/Stored)
+      this.prisma.collateral.groupBy({
+        by: ['collateralTypeId'],
+        where: {
+          status: { in: ['PROPOSED', 'PLEDGED', 'STORED'] },
+          createdAt: { lte: endDate },
+          ...(storeId && { storeId }),
+        },
+        _count: { _all: true },
+        _sum: { appraisedValue: true },
       }),
       // Revenue breakdown
       this.prisma.revenueLedger.findMany({
@@ -412,10 +479,92 @@ export class ReportsService {
       }),
     ]);
 
-    // Calculate statistics
-    const loansIssued = loansInQuarter.length;
-    const totalLoanAmount = Math.ceil(
-      loansInQuarter.reduce((sum, loan) => sum + Number(loan.loanAmount), 0),
+    // Fetch Employees (Clerk)
+    let totalEmployees = 0;
+    try {
+      // NOTE: Clerk API pagination/filtering limitations may apply.
+      // Ideally we sync employees to our DB or have a better way to count.
+      // Fetching list for now.
+      const employeeList = await clerkClient.users.getUserList({
+        limit: 100, // Reasonable limit for now per store
+      });
+
+      // Filter by storeId if needed (assuming storeId is in metadata)
+      const employees = storeId
+        ? employeeList.data.filter((u) => u.publicMetadata?.storeId === storeId)
+        : employeeList.data;
+      totalEmployees = employees.length;
+    } catch (e) {
+      this.logger.error('Failed to fetch employees count', e);
+    }
+
+    // Process Asset Breakdown
+    const assetBreakdownMap = new Map<number, any>();
+
+    const getOrCreateItem = (typeId: number) => {
+      if (!assetBreakdownMap.has(typeId)) {
+        assetBreakdownMap.set(typeId, {
+          category: typeMap.get(typeId) || 'Unknown',
+          receivedCount: 0,
+          receivedValue: 0,
+          releasedCount: 0,
+          releasedValue: 0,
+          liquidatedCount: 0,
+          liquidatedValue: 0,
+          inStockCount: 0,
+          inStockValue: 0,
+        });
+      }
+      return assetBreakdownMap.get(typeId);
+    };
+
+    // Merge Stats
+    collateralsReceivedStats.forEach((stat) => {
+      const item = getOrCreateItem(stat.collateralTypeId);
+      item.receivedCount += stat._count._all;
+      item.receivedValue += Number(stat._sum.appraisedValue || 0);
+    });
+
+    collateralsReleasedStats.forEach((stat) => {
+      const item = getOrCreateItem(stat.collateralTypeId);
+      item.releasedCount += stat._count._all;
+      item.releasedValue += Number(stat._sum.appraisedValue || 0);
+    });
+
+    liquidatedStats.forEach((stat) => {
+      const item = getOrCreateItem(stat.collateralTypeId);
+      item.liquidatedCount += stat._count._all;
+      item.liquidatedValue += Number(
+        stat._sum.sellPrice || stat._sum.appraisedValue || 0,
+      );
+    });
+
+    inStockStats.forEach((stat) => {
+      const item = getOrCreateItem(stat.collateralTypeId);
+      item.inStockCount += stat._count._all;
+      item.inStockValue += Number(stat._sum.appraisedValue || 0);
+    });
+
+    const assetBreakdown = Array.from(assetBreakdownMap.values());
+
+    // Calculate Global Stats
+    const totalLoansIssued = loansIssuedCount;
+    const totalLoanAmount = loansInQuarter.reduce(
+      (sum, loan) => sum + Number(loan.loanAmount),
+      0,
+    );
+
+    const totalCollateralsReceived = collateralsReceivedStats.reduce(
+      (acc, s) => acc + s._count._all,
+      0,
+    );
+    const totalCollateralsReleased = collateralsReleasedStats.reduce(
+      (acc, s) => acc + s._count._all,
+      0,
+    );
+    const totalLiquidations = liquidatedStats.reduce(
+      (acc, s) => acc + s._count._all,
+      0,
     );
 
     // Revenue breakdown
@@ -439,12 +588,17 @@ export class ReportsService {
         case 'LATE_FEE':
           revenueBreakdown.lateFee += amount;
           break;
+        case 'LIQUIDATION_EXCESS':
+        case 'LIQUIDATION_SALE':
+        case 'EXCESS_REFUND': // Negative value for refunds
+          revenueBreakdown.liquidationProfit += amount;
+          break;
       }
     });
 
     // Compliance metrics
     const averageLTV =
-      loansIssued > 0
+      totalLoansIssued > 0
         ? loansInQuarter.reduce((sum, loan) => {
             const totalAppraisedValue = loan.collaterals.reduce(
               (colSum, col) => colSum + Number(col.appraisedValue),
@@ -456,15 +610,15 @@ export class ReportsService {
                 ? Number(loan.loanAmount) / totalAppraisedValue
                 : 0)
             );
-          }, 0) / loansIssued
+          }, 0) / totalLoansIssued
         : 0;
 
     const averageInterestRate =
-      loansIssued > 0
+      totalLoansIssued > 0
         ? loansInQuarter.reduce(
             (sum, loan) => sum + Number(loan.appliedInterestRate),
             0,
-          ) / loansIssued
+          ) / totalLoansIssued
         : 0;
 
     return {
@@ -473,19 +627,28 @@ export class ReportsService {
         year,
         period: `Q${quarter} ${year}`,
         statistics: {
-          totalLoansIssued: loansIssued,
-          totalLoanAmount: Math.ceil(totalLoanAmount),
+          totalLoansIssued: totalLoansIssued,
+          totalLoanAmount: Math.round(totalLoanAmount),
           totalLoansClosed: loansClosed,
           totalLoansActive: loansActive,
           totalLoansOverdue: loansOverdue,
-          totalCollateralsReceived: collateralsReceived,
-          totalCollateralsReleased: collateralsReleased,
-          totalLiquidations: liquidations,
-          totalRevenue: Math.ceil(totalRevenue),
+          totalCollateralsReceived,
+          totalCollateralsReleased,
+          totalLiquidations,
+          totalRevenue: Math.round(totalRevenue),
           revenueBreakdown: {
             interest: Math.ceil(revenueBreakdown.interest),
             serviceFee: Math.ceil(revenueBreakdown.serviceFee),
             lateFee: Math.ceil(revenueBreakdown.lateFee),
+          },
+          assetBreakdown,
+          employees: {
+            total: totalEmployees,
+            male: 0, // Not tracked
+            female: 0, // Not tracked
+          },
+          security: {
+            count: 0, // Not tracked
           },
         },
         compliance: {

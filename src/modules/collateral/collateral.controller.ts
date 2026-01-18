@@ -7,7 +7,6 @@ import {
   Post,
   Put,
   Query,
-  Req,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
@@ -23,6 +22,7 @@ import { CreateLiquidationRequest } from './dto/request/liquidation.request';
 import { SellCollateralRequest } from './dto/request/sell-collateral.request';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { CurrentUserId } from 'src/common/decorators/current-user-id.decorator';
 import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.decorator';
 import {
   ApiOkResponse,
@@ -100,9 +100,9 @@ export class CollateralController {
   createCollateral(
     @Body() body: CreateCollateralDTO,
     @UploadedFiles() files: MulterFile[],
-    @CurrentUser() user: CurrentUserInfo,
+    @CurrentUserId() userId: string,
   ) {
-    return this.collateralService.create(body, files, user);
+    return this.collateralService.create(body, files, userId);
   }
 
   @Patch('/:id')
@@ -214,11 +214,7 @@ export class LiquidationController {
     },
   })
   @Roles(Role.MANAGER)
-  sellCollateral(
-    @Param('id') id: string,
-    @Body() body: SellCollateralRequest,
-    @CurrentUser() user: CurrentUserInfo,
-  ) {
-    return this.collateralService.sellCollateral(id, body, user);
+  sellCollateral(@Param('id') id: string, @Body() body: SellCollateralRequest) {
+    return this.collateralService.sellCollateral(id, body);
   }
 }

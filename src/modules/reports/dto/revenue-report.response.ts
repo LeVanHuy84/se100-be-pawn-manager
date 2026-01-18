@@ -9,6 +9,21 @@ class RevenueBreakdown {
 
   @ApiProperty({ description: 'Late fee revenue', example: 500000 })
   lateFee: number;
+
+  @ApiProperty({ description: 'Liquidation excess revenue', example: 200000 })
+  liquidationExcess: number;
+
+  @ApiProperty({
+    description: 'Total amount received from liquidation sale',
+    example: 15000000,
+  })
+  liquidationSale: number;
+
+  @ApiProperty({
+    description: 'Amount refunded to customer from excess (negative value)',
+    example: -500000,
+  })
+  excessRefund: number;
 }
 
 class ExpenseBreakdown {
@@ -64,6 +79,24 @@ class RevenueSummary {
 
   @ApiProperty({ description: 'Total late fee revenue', example: 8000000 })
   totalLateFee: number;
+
+  @ApiProperty({
+    description: 'Total liquidation excess revenue',
+    example: 2000000,
+  })
+  totalLiquidationExcess: number;
+
+  @ApiProperty({
+    description: 'Total liquidation sale amount',
+    example: 30000000,
+  })
+  totalLiquidationSale: number;
+
+  @ApiProperty({
+    description: 'Total excess refunded to customers (negative value)',
+    example: -5000000,
+  })
+  totalExcessRefund: number;
 
   @ApiProperty({
     description: 'Total expenses across all periods',

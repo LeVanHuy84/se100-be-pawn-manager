@@ -39,6 +39,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       details = (res as any).errors ?? (res as any).details;
       code = HttpStatus[status] ?? 'HTTP_EXCEPTION';
+
+      this.logger.warn(
+        `[HttpException] ${request.method} ${request.url} - Status: ${status} - Message: ${message}`,
+      );
     } else if (exception instanceof ZodError) {
       /**
        * 2️⃣ Zod
@@ -47,6 +51,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       code = 'VALIDATION_ERROR';
       message = 'Validation failed';
       details = exception.flatten();
+
+      this.logger.warn(
+        `[ValidationError] ${request.method} ${request.url} - Details: ${JSON.stringify(details)}`,
+      );
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       /**
        * 3️⃣ Prisma
