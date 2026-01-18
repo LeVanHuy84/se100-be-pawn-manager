@@ -322,15 +322,16 @@ export class CustomerService {
         }
       }
     }
+    if (data.wardId) {
+      const location = await this.prisma.location.findFirst({
+        where: { id: data.wardId },
+      });
 
-    const location = await this.prisma.location.findFirst({
-      where: { id: data.wardId },
-    });
-
-    if (location?.parentId == null) {
-      throw new BadRequestException(
-        'Invalid wardId: must be a ward-level location',
-      );
+      if (location?.parentId == null) {
+        throw new BadRequestException(
+          'Invalid wardId: must be a ward-level location',
+        );
+      }
     }
 
     try {
@@ -565,6 +566,11 @@ export class CustomerService {
         }
         if (shouldUpdateImages) {
           newValue.imagesUpdated = true;
+        }
+
+        if (data.wardId !== undefined && existing.wardId !== data.wardId) {
+          oldValue.wardId = existing.wardId;
+          newValue.wardId = data.wardId;
         }
 
         if (Object.keys(newValue).length > 0) {

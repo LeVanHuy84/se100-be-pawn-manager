@@ -209,14 +209,16 @@ export class StoreService {
       }
     }
 
-    const location = await this.prisma.location.findFirst({
-      where: { id: data.wardId },
-    });
+    if (data.wardId) {
+      const location = await this.prisma.location.findFirst({
+        where: { id: data.wardId },
+      });
 
-    if (location?.parentId == null) {
-      throw new BadRequestException(
-        'Invalid wardId: must be a ward-level location',
-      );
+      if (location?.parentId == null) {
+        throw new BadRequestException(
+          'Invalid wardId: must be a ward-level location',
+        );
+      }
     }
 
     try {
