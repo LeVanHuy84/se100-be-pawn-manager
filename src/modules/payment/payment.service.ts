@@ -171,6 +171,7 @@ export class PaymentService {
       referenceCode: p.referenceCode,
       customerName: (p as any).loan?.customer?.fullName,
       customerPhone: (p as any).loan?.customer?.phone,
+      notes: p.notes,
     }));
 
     const totalPages = Math.ceil(totalItems / limit);

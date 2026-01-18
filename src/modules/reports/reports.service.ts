@@ -572,6 +572,7 @@ export class ReportsService {
       interest: 0,
       serviceFee: 0,
       lateFee: 0,
+      liquidationProfit: 0,
     };
 
     let totalRevenue = 0;

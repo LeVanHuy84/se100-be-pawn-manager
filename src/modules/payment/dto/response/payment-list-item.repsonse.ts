@@ -61,4 +61,12 @@ export class PaymentListItem {
     required: false,
   })
   customerPhone?: string;
+
+  @ApiProperty({
+    description: 'Notes about the payment',
+    example: 'Payment for liquidation of collateral',
+    required: false,
+    nullable: true,
+  })
+  notes?: string | null;
 }

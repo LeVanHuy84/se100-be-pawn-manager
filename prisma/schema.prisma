@@ -290,6 +290,7 @@ model LoanPayment {
   paidAt             DateTime      @default(now())
   referenceCode      String?
   recorderEmployeeId String? // clerk user id (string)
+  notes              String?       // Notes about the payment (e.g., liquidation details)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @default(now())
 

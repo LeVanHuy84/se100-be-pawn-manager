@@ -26,6 +26,7 @@ import {
   PaymentMethod,
   PaymentComponent,
   DisbursementMethod,
+  AuditEntityType,
 } from '../../../generated/prisma';
 import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -190,7 +191,9 @@ export class CollateralService {
   async update(
     id: string,
     data: PatchCollateralDTO,
-    files?: MulterFile[],    user?: CurrentUserInfo,  ): Promise<BaseResult<CollateralAssetResponse>> {
+    files?: MulterFile[],
+    user?: CurrentUserInfo,
+  ): Promise<BaseResult<CollateralAssetResponse>> {
     // Check if collateral exists
     const existing = await this.prisma.collateral.findUnique({
       where: { id },
@@ -253,15 +256,25 @@ export class CollateralService {
           oldValue.status = existing.status;
           newValue.status = data.status;
         }
-        if (data.appraisedValue !== undefined && existing.appraisedValue !== data.appraisedValue as unknown as Decimal) {
+        if (
+          data.appraisedValue !== undefined &&
+          existing.appraisedValue !==
+            (data.appraisedValue as unknown as Decimal)
+        ) {
           oldValue.appraisedValue = existing.appraisedValue;
           newValue.appraisedValue = data.appraisedValue;
         }
-        if (data.appraisalNotes !== undefined && existing.appraisalNotes !== data.appraisalNotes) {
+        if (
+          data.appraisalNotes !== undefined &&
+          existing.appraisalNotes !== data.appraisalNotes
+        ) {
           oldValue.appraisalNotes = existing.appraisalNotes;
           newValue.appraisalNotes = data.appraisalNotes;
         }
-        if (data.sellPrice !== undefined && existing.sellPrice !== data.sellPrice as unknown as Decimal) {
+        if (
+          data.sellPrice !== undefined &&
+          existing.sellPrice !== (data.sellPrice as unknown as Decimal)
+        ) {
           oldValue.sellPrice = existing.sellPrice;
           newValue.sellPrice = data.sellPrice;
         }
@@ -281,7 +294,9 @@ export class CollateralService {
               entityType: AuditEntityType.COLLATERAL,
               entityName: `${existing.ownerName} - ${id.substring(0, 8)}`,
               actorId: user?.userId || null,
-              actorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null,
+              actorName: user
+                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                : null,
               oldValue,
               newValue,
               description: `Cập nhật thông tin tài sản thế chấp ${existing.ownerName}`,
@@ -320,7 +335,7 @@ export class CollateralService {
       };
 
       if (data.status) updateData.status = data.status as CollateralStatus;
-      
+
       await this.prisma.$transaction(async (tx) => {
         await tx.collateral.update({
           where: { id },
@@ -346,7 +361,9 @@ export class CollateralService {
             entityType: AuditEntityType.COLLATERAL,
             entityName: `${existing.ownerName} - ${id.substring(0, 8)}`,
             actorId: user?.userId || null,
-            actorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null,
+            actorName: user
+              ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+              : null,
             oldValue,
             newValue,
             description: `Cập nhật vị trí lưu trữ: ${data.location}`,
@@ -362,6 +379,7 @@ export class CollateralService {
 
   async createLiquidation(
     data: CreateLiquidationRequest,
+    user?: CurrentUserInfo,
   ): Promise<BaseResult<LiquidationCollateralResponse>> {
     // Validate collateral exists
     const collateral = await this.prisma.collateral.findUnique({
@@ -415,7 +433,9 @@ export class CollateralService {
             entityType: AuditEntityType.COLLATERAL,
             entityName: `${collateral.ownerName} - ${data.collateralId.substring(0, 8)}`,
             actorId: user?.userId || null,
-            actorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null,
+            actorName: user
+              ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+              : null,
             oldValue: {
               status: collateral.status,
               sellPrice: collateral.sellPrice,
@@ -585,6 +605,7 @@ export class CollateralService {
             referenceCode: paymentRefCode,
             idempotencyKey: `LIQUIDATION-${id}-${Date.now()}`,
             recorderEmployeeId: null, // System action
+            notes: `Thanh toán từ thanh lý tài sản. Giá bán: ${sellPrice.toLocaleString('vi-VN')} VND. Số tiền này được dùng để tất toán khoản vay ${loan.loanCode}.`,
           },
         });
 
@@ -664,6 +685,17 @@ export class CollateralService {
             },
           });
         }
+
+        // 7.1 Record the gross sale amount (LIQUIDATION_SALE)
+        // This records the full sell price for financial reporting
+        await tx.revenueLedger.create({
+          data: {
+            type: RevenueType.LIQUIDATION_SALE,
+            amount: Math.round(sellPrice),
+            refId: loanPayment.id,
+            storeId: loan.storeId,
+          },
+        });
 
         // 8. If there's excess, create a Disbursement to refund the customer (MONEY OUT)
         if (excessAmount > 0) {
