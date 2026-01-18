@@ -57,6 +57,9 @@ async function main() {
 
   const findStore = (name: string) => stores.find((s) => s.name.includes(name));
 
+  const findCollateral = (ownerName: string) =>
+    collaterals.find((c) => c.ownerName === ownerName);
+
   // Lấy tham số hệ thống
   const latePaymentPenaltyRateParam = await prisma.systemParameter.findFirst({
     where: { paramKey: 'PENALTY_INTEREST_RATE' },
@@ -68,7 +71,7 @@ async function main() {
   // === Loan 1: ACTIVE - Trả góp đều (Equal Installment) ===
   const loan1Customer = findCustomer('079090001234'); // Nguyen Van A
   const loan1Type = findLoanType('VEHICLE_BIKE_STANDARD_12M');
-  const loan1Store = findStore('Hội Sở Chính');
+  const loan1Store = findStore('Hội Sở Chính - TP.HCM');
 
   if (loan1Customer && loan1Type && loan1Store) {
     const loanAmount = 30000000; // 30 triệu
@@ -113,9 +116,10 @@ async function main() {
     console.log(`✅ Created Loan: ${loan1.loanCode}`);
 
     // Gắn collateral vào loan nếu có
-    if (collaterals.length > 0) {
+    const loan1Collateral = findCollateral('Nguyen Van A');
+    if (loan1Collateral) {
       await prisma.collateral.update({
-        where: { id: collaterals[0].id },
+        where: { id: loan1Collateral.id },
         data: {
           loanId: loan1.id,
           status: 'PLEDGED',
@@ -198,7 +202,7 @@ async function main() {
   // === Loan 2: ACTIVE - Trả lãi trước (Interest Only) ===
   const loan2Customer = findCustomer('079090001235'); // Tran Thi B
   const loan2Type = findLoanType('GOLD_STANDARD_6M');
-  const loan2Store = findStore('Nguyễn Trãi');
+  const loan2Store = findStore('PGD Nguyễn Trãi - TP.HCM');
 
   if (loan2Customer && loan2Type && loan2Store) {
     const loanAmount = 50000000; // 50 triệu
@@ -213,7 +217,7 @@ async function main() {
 
     const loan2 = await prisma.loan.create({
       data: {
-        loanCode: 'LN-2026-0002',
+        loanCode: 'LN-2026-000002',
         customerId: loan2Customer.id,
         loanAmount: loanAmount,
         repaymentMethod: RepaymentMethod.INTEREST_ONLY,
@@ -240,9 +244,10 @@ async function main() {
     console.log(`✅ Created Loan: ${loan2.loanCode}`);
 
     // Gắn collateral vào loan nếu có
-    if (collaterals.length > 1) {
+    const loan2Collateral = findCollateral('Tran Thi B');
+    if (loan2Collateral) {
       await prisma.collateral.update({
-        where: { id: collaterals[1].id },
+        where: { id: loan2Collateral.id },
         data: {
           loanId: loan2.id,
           status: 'PLEDGED',
@@ -294,7 +299,7 @@ async function main() {
   // === Loan 3: PENDING - Chưa duyệt ===
   const loan3Customer = findCustomer('079090001236'); // Le Thi C
   const loan3Type = findLoanType('ELECTRONICS_PHONE_3M');
-  const loan3Store = findStore('Nguyễn Trãi');
+  const loan3Store = findStore('PGD Nguyễn Trãi - TP.HCM');
 
   if (loan3Customer && loan3Type && loan3Store) {
     const loanAmount = 8000000; // 8 triệu
@@ -335,7 +340,7 @@ async function main() {
   // === Loan 4: OVERDUE - Quá hạn ===
   const loan4Customer = findCustomer('079090001237'); // Pham Van D
   const loan4Type = findLoanType('VEHICLE_CAR_STANDARD_12M');
-  const loan4Store = findStore('Hội Sở Chính');
+  const loan4Store = findStore('Hội Sở Chính - TP.HCM');
 
   if (loan4Customer && loan4Type && loan4Store) {
     const loanAmount = 100000000; // 100 triệu
@@ -474,7 +479,7 @@ async function main() {
   // === Loan 5: REJECTED - Bị từ chối ===
   const loan5Customer = findCustomer('079090001238'); // Hoang Thi E
   const loan5Type = findLoanType('VEHICLE_BIKE_STANDARD_12M');
-  const loan5Store = findStore('Tân Bình');
+  const loan5Store = findStore('Chi nhánh Tân Bình - TP.HCM');
 
   if (loan5Customer && loan5Type && loan5Store) {
     await prisma.loan.create({
@@ -506,7 +511,7 @@ async function main() {
   // === Loan 6: CLOSED - Đã hoàn tất ===
   const loan6Customer = findCustomer('079090001239'); // Ngo Van F
   const loan6Type = findLoanType('ELECTRONICS_PHONE_3M');
-  const loan6Store = findStore('Bình Thạnh');
+  const loan6Store = findStore('Chi nhánh Bình Thạnh - TP.HCM');
 
   if (loan6Customer && loan6Type && loan6Store) {
     const loanAmount = 10000000;
@@ -592,7 +597,7 @@ async function main() {
   // === Loan 7: WRITTEN_OFF - Đã xóa nợ ===
   const loan7Customer = findCustomer('079090001240'); // Dang Thi G
   const loan7Type = findLoanType('VEHICLE_BIKE_STANDARD_12M');
-  const loan7Store = findStore('Thủ Đức');
+  const loan7Store = findStore('Chi nhánh Thủ Đức - TP.HCM');
 
   if (loan7Customer && loan7Type && loan7Store) {
     const loanAmount = 20000000;

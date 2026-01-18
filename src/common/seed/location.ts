@@ -1,44 +1,75 @@
-import { PrismaClient } from '../../../generated/prisma';
+import { PrismaClient, LocationLevel } from '../../../generated/prisma';
 import data from './locations.json';
-import { LocationLevel } from 'generated/prisma';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  console.time('⏱ location-seed');
+
+  /**
+   * =========================
+   * 1. CREATE PROVINCES
+   * =========================
+   */
   const provinceMap = new Map<string, string>();
 
-  // 1. Seed PROVINCES (1 lần mỗi tỉnh)
-  for (const row of data) {
-    if (!provinceMap.has(row.provinceCode)) {
-      const province = await prisma.location.upsert({
-        where: { code: row.provinceCode },
-        update: {},
-        create: {
-          code: row.provinceCode,
-          name: row.provinceName,
+  const provinceData = Array.from(
+    new Map(
+      data.map((r) => [
+        r.provinceCode,
+        {
+          code: r.provinceCode,
+          name: r.provinceName,
           level: LocationLevel.PROVINCE,
         },
-      });
-      provinceMap.set(row.provinceCode, province.id);
-    }
+      ]),
+    ).values(),
+  );
+
+  await prisma.location.createMany({
+    data: provinceData,
+    skipDuplicates: true,
+  });
+
+  /**
+   * =========================
+   * 2. LOAD PROVINCE MAP
+   * =========================
+   */
+  const provinces = await prisma.location.findMany({
+    where: { level: LocationLevel.PROVINCE },
+    select: { id: true, code: true },
+  });
+
+  for (const p of provinces) {
+    provinceMap.set(p.code, p.id);
   }
 
-  // 2. Seed WARDS
-  for (const row of data) {
-    await prisma.location.upsert({
-      where: { code: row.wardCode },
-      update: {},
-      create: {
-        code: row.wardCode,
-        name: row.wardName,
-        level: LocationLevel.WARD,
-        parentId: provinceMap.get(row.provinceCode)!,
-      },
+  /**
+   * =========================
+   * 3. CREATE WARDS (BATCH)
+   * =========================
+   */
+  const wards = data.map((r) => ({
+    code: r.wardCode,
+    name: r.wardName,
+    level: LocationLevel.WARD,
+    parentId: provinceMap.get(r.provinceCode)!,
+  }));
+
+  const BATCH_SIZE = 1000;
+
+  for (let i = 0; i < wards.length; i += BATCH_SIZE) {
+    await prisma.location.createMany({
+      data: wards.slice(i, i + BATCH_SIZE),
+      skipDuplicates: true,
     });
   }
+
+  console.timeEnd('⏱ location-seed');
 }
 
 main()
-  .then(() => console.log('✅ Seed admin units xong'))
+  .then(() => console.log('✅ Seed location xong (fast mode)'))
   .catch(console.error)
   .finally(() => prisma.$disconnect());
