@@ -496,7 +496,7 @@ export class PaymentService {
       }
 
       if (isNowClosed && !wasClosedBefore) {
-        // audit log
+        // audit log for loan closure
         await tx.auditLog.create({
           data: {
             action: 'CLOSE_LOAN',
@@ -513,6 +513,45 @@ export class PaymentService {
             description: `Khoản vay ${loan.loanCode} đã được đóng khi thanh toán hết dư nợ.`,
           },
         });
+
+        // --- AUTOMATIC COLLATERAL RELEASE ---
+        // Release assets if they are not being liquidated
+        const associatedCollaterals = await tx.collateral.findMany({
+          where: { loanId },
+          select: {
+            id: true,
+            status: true,
+            collateralType: { select: { name: true } },
+          },
+        });
+
+        for (const col of associatedCollaterals) {
+          if (
+            col.status !== 'LIQUIDATING' &&
+            col.status !== 'SOLD' &&
+            col.status !== 'RELEASED'
+          ) {
+            await tx.collateral.update({
+              where: { id: col.id },
+              data: { status: 'RELEASED' },
+            });
+
+            // Audit log for collateral release
+            await tx.auditLog.create({
+              data: {
+                action: 'RELEASE_COLLATERAL',
+                entityId: col.id,
+                entityType: 'COLLATERAL',
+                entityName: col.collateralType?.name ?? 'Asset',
+                actorId: employee?.id ?? null,
+                actorName: employee?.name ?? 'System',
+                oldValue: { status: col.status },
+                newValue: { status: 'RELEASED' },
+                description: `Tài sản tự động được giải phóng khi khoản vay ${loan.loanCode} tất toán.`,
+              },
+            });
+          }
+        }
       }
 
       // 8.1) Validate balance consistency (auto-heal if needed)

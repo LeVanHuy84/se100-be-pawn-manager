@@ -26,94 +26,174 @@ async function main() {
   console.log('🚀 Bắt đầu quá trình khởi tạo dữ liệu mẫu...');
 
   const dataPath = path.join(__dirname, 'seed-data.json');
-  const data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
-  const employees = data.employees || [
+  const items = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
+  const employees = items.employees || [
     { id: 'emp-001', name: 'Quản lý Hùng', role: 'MANAGER' },
     { id: 'emp-002', name: 'Nhân viên Mai', role: 'STAFF' },
   ];
 
-  // 0. Seed Locations
-  console.log('🌱 Khởi tạo Địa điểm (Locations)...');
-  let city = await prisma.location.findUnique({ where: { code: '79' } });
-  if (!city) {
-    city = await prisma.location.create({
-      data: {
-        code: '79',
-        name: 'Hồ Chí Minh',
-        level: LocationLevel.PROVINCE,
-      },
+  // 0. Seed Locations from locations.json
+  console.log('🌱 Khởi tạo Địa điểm (Locations) từ locations.json...');
+  const locationsPath = path.join(__dirname, 'locations.json');
+  const locationData = JSON.parse(fs.readFileSync(locationsPath, 'utf-8'));
+
+  // Deduplicate Provinces
+  const provincesMap = new Map<string, string>(); // code -> name
+  for (const item of locationData) {
+    if (!provincesMap.has(item.provinceCode)) {
+      provincesMap.set(item.provinceCode, item.provinceName);
+    }
+  }
+
+  // Create Provinces
+  for (const [code, name] of provincesMap) {
+    await prisma.location.upsert({
+      where: { code },
+      update: { name, level: LocationLevel.PROVINCE },
+      create: { code, name, level: LocationLevel.PROVINCE },
     });
   }
-  let ward = await prisma.location.findFirst({ where: { code: '26734' } });
-  if (!ward) {
-    ward = await prisma.location.create({
-      data: {
-        code: '26734',
-        name: 'Phường Bến Nghé',
+
+  // Get Province IDs
+  const allProvinces = await prisma.location.findMany({
+    where: { level: LocationLevel.PROVINCE },
+  });
+  const provinceCodeToId = new Map<string, string>();
+  for (const p of allProvinces) {
+    provinceCodeToId.set(p.code, p.id);
+  }
+
+  // Create Wards
+  // To avoid massive loops, we can use createMany for speed if possible, but upsert is safer for idempotency.
+  // Given 20k items, createMany with skipDuplicates is best.
+  // However, SQLite/Postgres support varies for skipDuplicates. Assuming Postgres.
+
+  const wardsToCreate = [];
+  const seenWards = new Set<string>(); // code is unique? wardCode is unique in list?
+  // locations.json wardCode seems unique (e.g., 10105001).
+
+  for (const item of locationData) {
+    const pId = provinceCodeToId.get(item.provinceCode);
+    if (!pId) continue;
+
+    if (!seenWards.has(item.wardCode)) {
+      seenWards.add(item.wardCode);
+      wardsToCreate.push({
+        code: item.wardCode,
+        name: item.wardName,
         level: LocationLevel.WARD,
-        parentId: city.id,
-      },
-    });
-  }
-  const defaultWardId = ward.id;
-
-  // 1. Seed Stores
-  console.log('🌱 Khởi tạo Cửa hàng (Stores)...');
-  const createdStores = [];
-  for (const store of data.stores) {
-    const existing = await prisma.store.findFirst({
-      where: { name: store.name },
-    });
-    if (!existing) {
-      createdStores.push(
-        await prisma.store.create({
-          data: { ...store, wardId: defaultWardId },
-        }),
-      );
-    } else {
-      createdStores.push(existing);
+        parentId: pId,
+      });
     }
   }
 
-  // 2. Seed LoanTypes
-  console.log('🌱 Khởi tạo Loại hình vay (LoanTypes)...');
-  const allLoanTypes = [];
-  for (const loanType of data.loanTypes) {
-    const existing = await prisma.loanType.findUnique({
-      where: { name: loanType.name },
+  // Batch insert wards (chunking to avoid parameter limit)
+  const CHUNK_SIZE = 1000;
+  for (let i = 0; i < wardsToCreate.length; i += CHUNK_SIZE) {
+    const chunk = wardsToCreate.slice(i, i + CHUNK_SIZE);
+    await prisma.location.createMany({
+      data: chunk,
+      skipDuplicates: true,
     });
-    if (!existing) {
-      const { id, ...dataWithoutId } = loanType;
-      // Remove ID to let autoincrement work if needed, or keep it if using @id
-      allLoanTypes.push(await prisma.loanType.create({ data: dataWithoutId }));
-    } else {
-      allLoanTypes.push(existing);
-    }
+  }
+  console.log(
+    `✅ Đã khởi tạo ${provincesMap.size} Tỉnh/TP và ${wardsToCreate.length} Phường/Xã.`,
+  );
+
+  // 1.1 Get Default Ward (for fallback)
+  const defaultWard = await prisma.location.findFirst({
+    where: { level: LocationLevel.WARD },
+  });
+  const defaultWardId = defaultWard?.id;
+
+  if (!defaultWardId) {
+    console.warn('⚠️ Không tìm thấy phường xã nào để làm mặc định.');
   }
 
-  // 3. Seed CollateralTypes
-  console.log('🌱 Khởi tạo Loại tài sản (CollateralTypes)...');
-  const allCollateralTypes = [];
-  for (const type of data.commonCollateralTypes) {
-    const existing = await prisma.collateralType.findFirst({
-      where: { name: type.name },
+  // 1. Run External Seeds (Stores, Configuration, Collateral Types)
+  console.log(
+    '🔄 Đang chạy script seed bổ sung (Store, Configuration, CollateralType)...',
+  );
+  const { execSync } = require('child_process');
+
+  try {
+    console.log('   Running store.js...');
+    execSync('node prisma/store.js', { stdio: 'inherit', cwd: process.cwd() });
+
+    console.log('   Running configuration.js...');
+    execSync('node prisma/configuration.js', {
+      stdio: 'inherit',
+      cwd: process.cwd(),
     });
-    if (!existing) {
-      allCollateralTypes.push(
-        await prisma.collateralType.create({ data: type }),
-      );
-    } else {
-      allCollateralTypes.push(existing);
-    }
+
+    console.log('   Running collateral-type.js...');
+    execSync('node prisma/collateral-type.js', {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+    });
+  } catch (error) {
+    console.error('❌ Lỗi khi chạy script seed bổ sung:', error);
+    process.exit(1);
   }
 
-  // 4. Seed SystemParameters
-  if (data.systemParameters) {
-    console.log('🌱 Khởi tạo Tham số hệ thống (SystemParameters)...');
-    for (const param of data.systemParameters) {
-      if (param.paramKey === 'SUPPORTED_LOAN_PRODUCTS') {
-        param.paramValue = JSON.stringify(allLoanTypes);
+  // 2. Fetch seeded data for Loan Generation dependency
+  const createdStores = await prisma.store.findMany();
+  const allCollateralTypes = await prisma.collateralType.findMany();
+
+  if (createdStores.length === 0) {
+    console.error(
+      '⚠️ Không tìm thấy cửa hàng nào sau khi chạy seed store.js. Sẽ thử tạo từ seed-data.json...',
+    );
+  }
+
+  // 2.1 Seed Data Fallback/Merge from seed-data.json
+
+  // -- Stores --
+  console.log('🔄 Sáp nhập Cửa hàng từ seed-data.json...');
+  if (items.stores && Array.isArray(items.stores)) {
+    for (const store of items.stores) {
+      const existing = await prisma.store.findFirst({
+        where: { name: store.name },
+      });
+      if (!existing) {
+        const newStore = await prisma.store.create({
+          data: {
+            name: store.name,
+            address: store.address,
+            storeInfo: store.storeInfo,
+            isActive: store.isActive,
+            wardId: defaultWardId as string, // Force cast string, validation handled by prisma if undefined
+          },
+        });
+        createdStores.push(newStore);
+        console.log(`   + Đã thêm cửa hàng bổ sung: ${store.name}`);
       }
+    }
+  }
+
+  // -- Collateral Types --
+  console.log('🔄 Sáp nhập Loại tài sản từ seed-data.json...');
+  if (
+    items.commonCollateralTypes &&
+    Array.isArray(items.commonCollateralTypes)
+  ) {
+    for (const type of items.commonCollateralTypes) {
+      const existing = await prisma.collateralType.findFirst({
+        where: { name: type.name },
+      });
+      if (!existing) {
+        const newType = await prisma.collateralType.create({ data: type });
+        allCollateralTypes.push(newType);
+        console.log(`   + Đã thêm loại tài sản bổ sung: ${type.name}`);
+      }
+    }
+  }
+
+  // -- System Parameters --
+  console.log('🔄 Sáp nhập Tham số hệ thống từ seed-data.json...');
+  if (items.systemParameters && Array.isArray(items.systemParameters)) {
+    for (const param of items.systemParameters) {
+      if (param.paramKey === 'SUPPORTED_LOAN_PRODUCTS') continue; // Handled specially later
 
       const exists = await prisma.systemParameter.findFirst({
         where: { paramGroup: param.paramGroup, paramKey: param.paramKey },
@@ -121,55 +201,88 @@ async function main() {
       if (!exists) {
         await prisma.systemParameter.create({ data: param });
       } else {
-        if (param.paramKey === 'SUPPORTED_LOAN_PRODUCTS') {
-          await prisma.systemParameter.update({
-            where: { id: exists.id },
-            data: { paramValue: param.paramValue },
-          });
-        }
+        // Optional: Update if exists? Or skip?
+        // User said "don't collide". If we update, we might overwrite configuration.js settings.
+        // Usually configuration.js is more code-driven/specific. seed-data.json might be generic.
+        // We will SKIP if exists to preserve configuration.js values.
+        console.log(`   . Tham số ${param.paramKey} đã tồn tại, giữ nguyên.`);
       }
     }
-    // Ensure SUPPORTED_LOAN_TYPE
-    const supportedLoanTypeJson = JSON.stringify(allLoanTypes);
-    const existingTypeParam = await prisma.systemParameter.findFirst({
-      where: { paramGroup: 'SYSTEM', paramKey: 'SUPPORTED_LOAN_TYPE' },
-    });
+  }
 
-    if (existingTypeParam) {
-      await prisma.systemParameter.update({
-        where: { id: existingTypeParam.id },
-        data: { paramValue: supportedLoanTypeJson },
-      });
+  if (createdStores.length === 0) {
+    console.error('❌ Không có cửa hàng nào được tạo. Không thể tiếp tục.');
+    return;
+  }
+
+  // 3. Seed LoanTypes (From seed-data.json, retained logic)
+  console.log('🌱 Khởi tạo Loại hình vay (LoanTypes)...');
+  const allLoanTypes = [];
+  for (const loanType of items.loanTypes) {
+    const existing = await prisma.loanType.findUnique({
+      where: { name: loanType.name },
+    });
+    if (!existing) {
+      const { id, ...dataWithoutId } = loanType;
+      allLoanTypes.push(await prisma.loanType.create({ data: dataWithoutId }));
     } else {
-      await prisma.systemParameter.create({
-        data: {
-          paramGroup: 'SYSTEM',
-          paramKey: 'SUPPORTED_LOAN_TYPE',
-          paramValue: supportedLoanTypeJson,
-          dataType: 'JSON',
-          description:
-            'Crucial: List of supported loan types for loan creation configuration',
-        },
-      });
+      allLoanTypes.push(existing);
     }
+  }
+
+  // 4. Update SUPPORTED_LOAN_PRODUCTS in SystemParameter
+  const supportedLoanTypeJson = JSON.stringify(allLoanTypes);
+  const existingTypeParam = await prisma.systemParameter.findFirst({
+    where: { paramGroup: 'SYSTEM', paramKey: 'SUPPORTED_LOAN_PRODUCTS' },
+  });
+  if (existingTypeParam) {
+    await prisma.systemParameter.update({
+      where: { id: existingTypeParam.id },
+      data: { paramValue: supportedLoanTypeJson },
+    });
+  } else {
+    // If configuration.js didn't create it for some reason
+    await prisma.systemParameter.create({
+      data: {
+        paramGroup: 'SYSTEM',
+        paramKey: 'SUPPORTED_LOAN_PRODUCTS',
+        paramValue: supportedLoanTypeJson,
+        dataType: 'JSON',
+        description: 'Cấu hình sản phẩm vay (sẽ được cập nhật tự động)',
+      },
+    });
+  }
+
+  // Also update SUPPORTED_LOAN_TYPE if it exists (legacy?)
+  const legacyParam = await prisma.systemParameter.findFirst({
+    where: { paramGroup: 'SYSTEM', paramKey: 'SUPPORTED_LOAN_TYPE' },
+  });
+  if (legacyParam) {
+    await prisma.systemParameter.update({
+      where: { id: legacyParam.id },
+      data: { paramValue: supportedLoanTypeJson },
+    });
   }
 
   // 5. Seed Customers
   console.log('🌱 Khởi tạo Khách hàng (Customers)...');
+  // Get a fallback Ward ID (e.g., from first store) - already have defaultWardId globally
+  // const defaultWardId = ... (removed)
+  const customerWardId = createdStores[0].wardId || defaultWardId;
+
   const allCustomers = [];
-  for (const customer of data.customers) {
+  for (const customer of items.customers) {
     if (customer.email === null) {
       delete customer.email;
     }
 
-    // Check by nationalId
     const exists = await prisma.customer.findUnique({
       where: { nationalId: customer.nationalId },
     });
     if (!exists) {
       allCustomers.push(
         await prisma.customer.create({
-          data: { ...customer, wardId: defaultWardId },
+          data: { ...customer, wardId: customerWardId as string },
         }),
       );
     } else {
@@ -183,12 +296,12 @@ async function main() {
   const statuses: LoanStatus[] = [
     'ACTIVE',
     'ACTIVE',
-    'ACTIVE', // Bias towards Active
+    'ACTIVE',
     'ACTIVE',
     'CLOSED',
     'CLOSED',
     'OVERDUE',
-    'OVERDUE', // Increased Overdue frequency slightly
+    'OVERDUE',
     'PENDING',
     'REJECTED',
   ];
@@ -206,13 +319,11 @@ async function main() {
       const status = getRandomElement(statuses);
       const createdByEmp = getRandomElement(employees);
 
-      // New: Varied Repayment Method
       const repaymentMethod =
         Math.random() > 0.7
           ? RepaymentMethod.EQUAL_INSTALLMENT
           : RepaymentMethod.INTEREST_ONLY;
 
-      // New: Liquidation Scenario (rare)
       let isLiquidation = false;
       if (status === 'CLOSED' && Math.random() > 0.8) {
         isLiquidation = true;
@@ -221,14 +332,16 @@ async function main() {
       const uniqueSuffix = `${Date.now().toString().slice(-6)}${Math.floor(
         Math.random() * 1000,
       )}`;
-      const loanCode = `HĐ-${store.name
-        .substring(0, 3)
-        .toUpperCase()}-${uniqueSuffix}`;
+
+      // Handle store name abbreviation safely
+      const storeAbbr = store.name
+        ? store.name.substring(0, 3).toUpperCase()
+        : 'STO';
+      const loanCode = `HĐ-${storeAbbr}-${uniqueSuffix}`;
 
       const existing = await prisma.loan.findUnique({ where: { loanCode } });
       if (existing) continue;
 
-      // Determine Amount
       let baseAmount = 5000000;
       if (loanType.name.includes('CAR')) baseAmount = 100000000;
       else if (loanType.name.includes('BIKE')) baseAmount = 20000000;
@@ -241,7 +354,6 @@ async function main() {
         500000,
       );
 
-      // Create
       await createFullLoan(prisma, {
         loanCode,
         customer,
@@ -250,8 +362,8 @@ async function main() {
         collateralType,
         loanAmount,
         status,
-        repaymentMethod, // Pass distinct method
-        isLiquidation, // Pass liquidation flag
+        repaymentMethod,
+        isLiquidation,
         employees,
         createdByEmp,
       });
