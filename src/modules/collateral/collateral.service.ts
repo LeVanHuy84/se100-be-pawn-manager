@@ -31,12 +31,18 @@ import { PatchCollateralDTO } from './dto/request/patch-collateral.request';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import pLimit from 'p-limit';
 import { ImageItem } from 'src/common/interfaces/media.interface';
+import { CurrentUserInfo } from 'src/common/decorators/current-user.decorator';
+import { Decimal } from 'generated/prisma/runtime/library';
+import { PaymentService } from '../payment/payment.service';
+import { DisbursementService } from '../disbursement/disbursement.service';
 
 @Injectable()
 export class CollateralService {
   constructor(
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
+    private paymentService: PaymentService,
+    private disbursementService: DisbursementService,
   ) {}
 
   async findAll(
@@ -184,8 +190,7 @@ export class CollateralService {
   async update(
     id: string,
     data: PatchCollateralDTO,
-    files?: MulterFile[],
-  ): Promise<BaseResult<CollateralAssetResponse>> {
+    files?: MulterFile[],    user?: CurrentUserInfo,  ): Promise<BaseResult<CollateralAssetResponse>> {
     // Check if collateral exists
     const existing = await this.prisma.collateral.findUnique({
       where: { id },
@@ -234,9 +239,57 @@ export class CollateralService {
         updateData.images = updatedImages as unknown as Prisma.InputJsonValue;
       }
 
-      const collateral = await this.prisma.collateral.update({
-        where: { id },
-        data: updateData,
+      const collateral = await this.prisma.$transaction(async (tx) => {
+        const updatedCollateral = await tx.collateral.update({
+          where: { id },
+          data: updateData,
+        });
+
+        // Log only changed fields
+        const oldValue: Record<string, any> = {};
+        const newValue: Record<string, any> = {};
+
+        if (data.status !== undefined && existing.status !== data.status) {
+          oldValue.status = existing.status;
+          newValue.status = data.status;
+        }
+        if (data.appraisedValue !== undefined && existing.appraisedValue !== data.appraisedValue as unknown as Decimal) {
+          oldValue.appraisedValue = existing.appraisedValue;
+          newValue.appraisedValue = data.appraisedValue;
+        }
+        if (data.appraisalNotes !== undefined && existing.appraisalNotes !== data.appraisalNotes) {
+          oldValue.appraisalNotes = existing.appraisalNotes;
+          newValue.appraisalNotes = data.appraisalNotes;
+        }
+        if (data.sellPrice !== undefined && existing.sellPrice !== data.sellPrice as unknown as Decimal) {
+          oldValue.sellPrice = existing.sellPrice;
+          newValue.sellPrice = data.sellPrice;
+        }
+        if (data.collateralInfo !== undefined) {
+          oldValue.collateralInfo = existing.collateralInfo;
+          newValue.collateralInfo = data.collateralInfo;
+        }
+        if (files && files.length > 0) {
+          newValue.imagesAdded = files.length;
+        }
+
+        if (Object.keys(newValue).length > 0) {
+          await tx.auditLog.create({
+            data: {
+              action: 'UPDATE_COLLATERAL',
+              entityId: id,
+              entityType: AuditEntityType.COLLATERAL,
+              entityName: `${existing.ownerName} - ${id.substring(0, 8)}`,
+              actorId: user?.userId || null,
+              actorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null,
+              oldValue,
+              newValue,
+              description: `Cập nhật thông tin tài sản thế chấp ${existing.ownerName}`,
+            },
+          });
+        }
+
+        return updatedCollateral;
       });
 
       return {
@@ -250,6 +303,7 @@ export class CollateralService {
   async updateLocation(
     id: string,
     data: UpdateLocationRequest,
+    user?: CurrentUserInfo,
   ): Promise<BaseResult<boolean>> {
     // Check if collateral exists
     const existing = await this.prisma.collateral.findUnique({
@@ -266,9 +320,38 @@ export class CollateralService {
       };
 
       if (data.status) updateData.status = data.status as CollateralStatus;
-      await this.prisma.collateral.update({
-        where: { id },
-        data: updateData,
+      
+      await this.prisma.$transaction(async (tx) => {
+        await tx.collateral.update({
+          where: { id },
+          data: updateData,
+        });
+
+        const oldValue: Record<string, any> = {
+          storageLocation: existing.storageLocation,
+        };
+        const newValue: Record<string, any> = {
+          storageLocation: data.location,
+        };
+
+        if (data.status && existing.status !== data.status) {
+          oldValue.status = existing.status;
+          newValue.status = data.status;
+        }
+
+        await tx.auditLog.create({
+          data: {
+            action: 'UPDATE_COLLATERAL_LOCATION',
+            entityId: id,
+            entityType: AuditEntityType.COLLATERAL,
+            entityName: `${existing.ownerName} - ${id.substring(0, 8)}`,
+            actorId: user?.userId || null,
+            actorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null,
+            oldValue,
+            newValue,
+            description: `Cập nhật vị trí lưu trữ: ${data.location}`,
+          },
+        });
       });
 
       return { data: true };
@@ -316,12 +399,34 @@ export class CollateralService {
 
     try {
       // Update collateral status to indicate liquidation process started
-      await this.prisma.collateral.update({
-        where: { id: data.collateralId },
-        data: {
-          status: CollateralStatus.LIQUIDATING,
-          sellPrice: data.minimumSalePrice,
-        },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.collateral.update({
+          where: { id: data.collateralId },
+          data: {
+            status: CollateralStatus.LIQUIDATING,
+            sellPrice: data.minimumSalePrice,
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            action: 'START_LIQUIDATION',
+            entityId: data.collateralId,
+            entityType: AuditEntityType.COLLATERAL,
+            entityName: `${collateral.ownerName} - ${data.collateralId.substring(0, 8)}`,
+            actorId: user?.userId || null,
+            actorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null,
+            oldValue: {
+              status: collateral.status,
+              sellPrice: collateral.sellPrice,
+            },
+            newValue: {
+              status: CollateralStatus.LIQUIDATING,
+              minimumSalePrice: data.minimumSalePrice,
+            },
+            description: `Bắt đầu thanh lý tài sản với giá tối thiểu ${data.minimumSalePrice}`,
+          },
+        });
       });
 
       return {
@@ -342,6 +447,7 @@ export class CollateralService {
   async sellCollateral(
     id: string,
     data: SellCollateralRequest,
+    user?: CurrentUserInfo,
   ): Promise<BaseResult<CollateralAssetResponse>> {
     // Validate collateral exists with loan and schedule included
     const collateral = await this.prisma.collateral.findUnique({
@@ -623,6 +729,12 @@ export class CollateralService {
 
         return soldCollateral;
       });
+
+      if (!updatedCollateral) {
+        throw new NotFoundException(
+          `Collateral asset with ID ${id} not found after update`,
+        );
+      }
 
       return {
         data: CollateralMapper.toResponse(updatedCollateral),

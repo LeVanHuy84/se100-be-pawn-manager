@@ -11,7 +11,9 @@ import { UpdateCollateralTypeDTO } from './dto/request/update-collateral-type.re
 import { CollateralTypeResponse } from './dto/response/collateral-type.response';
 import { CollateralTypeMapper } from './collateral-type.mapper';
 import { BaseResult } from 'src/common/dto/base.response';
-import { Prisma } from '../../../generated/prisma';
+import { Prisma, AuditEntityType } from '../../../generated/prisma';
+import { Decimal } from 'generated/prisma/runtime/library';
+import { CurrentUserInfo } from 'src/common/decorators/current-user.decorator';
 
 @Injectable()
 export class CollateralTypeService {
@@ -70,18 +72,17 @@ export class CollateralTypeService {
     });
 
     if (!collateralType) {
-      throw new NotFoundException(
-        `Collateral type with ID ${id} not found`,
-      );
+      throw new NotFoundException(`Collateral type with ID ${id} not found`);
     }
 
     return {
-        data: CollateralTypeMapper.toResponse(collateralType),
+      data: CollateralTypeMapper.toResponse(collateralType),
     };
   }
 
   async create(
     data: CreateCollateralTypeDTO,
+    user?: CurrentUserInfo,
   ): Promise<BaseResult<CollateralTypeResponse>> {
     try {
       // Check for duplicate name
@@ -100,18 +101,41 @@ export class CollateralTypeService {
         );
       }
 
-      const collateralType = await this.prisma.collateralType.create({
-        data: {
-          name: data.name,
-          custodyFeeRateMonthly: data.custodyFeeRateMonthly || 0,
-        },
-        include: {
-          _count: {
-            select: {
-              collaterals: true,
+      const collateralType = await this.prisma.$transaction(async (tx) => {
+        const newCollateralType = await tx.collateralType.create({
+          data: {
+            name: data.name,
+            custodyFeeRateMonthly: data.custodyFeeRateMonthly || 0,
+          },
+          include: {
+            _count: {
+              select: {
+                collaterals: true,
+              },
             },
           },
-        },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            action: 'CREATE_COLLATERAL_TYPE',
+            entityId: newCollateralType.id.toString(),
+            entityType: AuditEntityType.COLLATERAL,
+            entityName: data.name,
+            actorId: user?.userId || null,
+            actorName: user
+              ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+              : null,
+            oldValue: {},
+            newValue: {
+              name: data.name,
+              custodyFeeRateMonthly: data.custodyFeeRateMonthly || 0,
+            },
+            description: `Tạo loại tài sản thế chấp mới: ${data.name}`,
+          },
+        });
+
+        return newCollateralType;
       });
 
       return {
@@ -128,15 +152,14 @@ export class CollateralTypeService {
   async update(
     id: number,
     data: UpdateCollateralTypeDTO,
+    user?: CurrentUserInfo,
   ): Promise<BaseResult<CollateralTypeResponse>> {
     const existing = await this.prisma.collateralType.findUnique({
       where: { id },
     });
 
     if (!existing) {
-      throw new NotFoundException(
-        `Collateral type with ID ${id} not found`,
-      );
+      throw new NotFoundException(`Collateral type with ID ${id} not found`);
     }
 
     // Check for duplicate name (excluding current type)
@@ -169,16 +192,55 @@ export class CollateralTypeService {
       if (data.custodyFeeRateMonthly !== undefined)
         updateData.custodyFeeRateMonthly = data.custodyFeeRateMonthly;
 
-      const collateralType = await this.prisma.collateralType.update({
-        where: { id },
-        data: updateData,
-        include: {
-          _count: {
-            select: {
-              collaterals: true,
+      const collateralType = await this.prisma.$transaction(async (tx) => {
+        const updatedCollateralType = await tx.collateralType.update({
+          where: { id },
+          data: updateData,
+          include: {
+            _count: {
+              select: {
+                collaterals: true,
+              },
             },
           },
-        },
+        });
+
+        // Log only changed fields
+        const oldValue: Record<string, any> = {};
+        const newValue: Record<string, any> = {};
+
+        if (data.name !== undefined && existing.name !== data.name) {
+          oldValue.name = existing.name;
+          newValue.name = data.name;
+        }
+        if (
+          data.custodyFeeRateMonthly !== undefined &&
+          existing.custodyFeeRateMonthly !==
+            (data.custodyFeeRateMonthly as unknown as Decimal)
+        ) {
+          oldValue.custodyFeeRateMonthly = existing.custodyFeeRateMonthly;
+          newValue.custodyFeeRateMonthly = data.custodyFeeRateMonthly;
+        }
+
+        if (Object.keys(newValue).length > 0) {
+          await tx.auditLog.create({
+            data: {
+              action: 'UPDATE_COLLATERAL_TYPE',
+              entityId: id.toString(),
+              entityType: AuditEntityType.COLLATERAL,
+              entityName: existing.name,
+              actorId: user?.userId || null,
+              actorName: user
+                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                : null,
+              oldValue,
+              newValue,
+              description: `Cập nhật loại tài sản thế chấp: ${existing.name}`,
+            },
+          });
+        }
+
+        return updatedCollateralType;
       });
 
       return {

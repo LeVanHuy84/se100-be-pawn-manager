@@ -24,6 +24,11 @@ const seedSteps: SeedStep[] = [
     file: 'src/common/seed/configuration.ts',
     description: 'Tham số hệ thống (Interest rates, Fees, Limits)',
   },
+  // {
+  //   name: 'Location',
+  //   file: 'src/common/seed/location.ts',
+  //   description: 'Tỉnh/Thành phố và Xã/Phường (Administrative units)',
+  // },
   {
     name: 'CollateralType',
     file: 'src/common/seed/collateral-type.ts',

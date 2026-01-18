@@ -55,16 +55,16 @@ export class MarkOverdueProcessor {
     await this.prisma.$transaction(async (tx) => {
       for (const item of candidates) {
         // ===== 1. Tính outstanding =====
-        const principalOutstanding = Math.round(
+        const principalOutstanding = Math.ceil(
           Number(item.principalAmount) - Number(item.paidPrincipal ?? 0),
         );
-        const interestOutstanding = Math.round(
+        const interestOutstanding = Math.ceil(
           Number(item.interestAmount) - Number(item.paidInterest ?? 0),
         );
-        const feeOutstanding = Math.round(
+        const feeOutstanding = Math.ceil(
           Number(item.feeAmount) - Number(item.paidFee ?? 0),
         );
-        const penaltyOutstanding = Math.round(
+        const penaltyOutstanding = Math.ceil(
           Number(item.penaltyAmount ?? 0) - Number(item.paidPenalty ?? 0),
         );
 
@@ -122,7 +122,7 @@ export class MarkOverdueProcessor {
         // penalty = overduePrincipal * rate * days / 30
         // e.g: 1,000,000 * 0.02 * 5 days / 30 = 3,333 VND
         // Note: rate is already in decimal form (0.02 for 2%)
-        const penalty = Math.round(
+        const penalty = Math.ceil(
           (principalOutstanding * penaltyRateMonthly * overdueDays) / 30,
         );
 
@@ -153,7 +153,7 @@ export class MarkOverdueProcessor {
             entityType: 'REPAYMENT_SCHEDULE',
             entityName: `Kì ${item.periodNumber} - ${item.loan.loanCode}`,
             actorId: null, // System action
-            description: `Auto-applied penalty: ${penalty.toLocaleString('vi-VN')} VND (${overdueDays} days overdue on principal ${Math.round(principalOutstanding).toLocaleString('vi-VN')} VND)`,
+            description: `Auto-applied penalty: ${penalty.toLocaleString('vi-VN')} VND (${overdueDays} days overdue on principal ${Math.ceil(principalOutstanding).toLocaleString('vi-VN')} VND)`,
             oldValue: { penaltyAmount: oldPenaltyAmount },
             newValue: { penaltyAmount: newPenaltyAmount },
           },

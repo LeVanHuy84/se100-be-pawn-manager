@@ -18,7 +18,11 @@ async function main() {
   });
 
   const ward5 = await prisma.location.findFirst({
-    where: { name: { contains: 'Tân Sơn Nhì' }, parentId: { not: null }, level: 'WARD' },
+    where: {
+      name: { contains: 'Tân Sơn Nhì' },
+      parentId: { not: null },
+      level: 'WARD',
+    },
   });
 
   // Fallback to any province and ward if HCM not found
@@ -36,7 +40,9 @@ async function main() {
   const wardId5 = ward5?.id || fallbackWard?.id || '';
 
   if (!provinceId || !wardId1) {
-    console.error('No locations found in database. Please run location seed first.');
+    console.error(
+      'No locations found in database. Please run location seed first.',
+    );
     process.exit(1);
   }
 

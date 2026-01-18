@@ -26,6 +26,13 @@ async function generatePaymentReferenceCode(): Promise<string> {
 async function main() {
   console.log('🌱 Start seeding Loan Payments...');
 
+  // Xóa dữ liệu cũ để tránh duplicate
+  console.log('Cleaning old payment data...');
+  await prisma.revenueLedger.deleteMany({});
+  await prisma.paymentAllocation.deleteMany({});
+  await prisma.loanPayment.deleteMany({});
+  console.log('Old payment data cleaned.');
+
   // Lấy các loan đã ACTIVE
   const activeLoans = await prisma.loan.findMany({
     where: {
@@ -276,20 +283,17 @@ async function main() {
       },
     });
 
-    // Phân bổ theo thứ tự: Lãi -> Phí -> Gốc
-    const paidInterest = Math.min(
-      partialAmount,
-      period2.interestAmount.toNumber(),
+    // Phân bổ theo thứ tự: Lãi -> Phí -> Gốc (làm tròn lên)
+    const paidInterest = Math.ceil(
+      Math.min(partialAmount, period2.interestAmount.toNumber()),
     );
     const remainingAfterInterest = partialAmount - paidInterest;
-    const paidFee = Math.min(
-      remainingAfterInterest,
-      period2.feeAmount.toNumber(),
+    const paidFee = Math.ceil(
+      Math.min(remainingAfterInterest, period2.feeAmount.toNumber()),
     );
     const remainingAfterFee = remainingAfterInterest - paidFee;
-    const paidPrincipal = Math.min(
-      remainingAfterFee,
-      period2.principalAmount.toNumber(),
+    const paidPrincipal = Math.ceil(
+      Math.min(remainingAfterFee, period2.principalAmount.toNumber()),
     );
     const allocations: Prisma.PaymentAllocationCreateManyInput[] = [];
     if (paidInterest > 0) {
@@ -316,7 +320,29 @@ async function main() {
 
     await prisma.paymentAllocation.createMany({ data: allocations });
 
-    // Cập nhật repayment schedule (vẫn còn nợ)
+    // Tính penalty cho kỳ overdue (đồng bộ với loan seed)
+    const latePaymentPenaltyRateParam = await prisma.systemParameter.findFirst({
+      where: { paramKey: 'PENALTY_INTEREST_RATE' },
+    });
+    const latePaymentPenaltyRate = latePaymentPenaltyRateParam
+      ? parseFloat(latePaymentPenaltyRateParam.paramValue)
+      : 0.005;
+
+    const daysOverdue = Math.floor(
+      (new Date('2025-12-05').getTime() - period2.dueDate.getTime()) /
+        (1000 * 60 * 60 * 24),
+    );
+
+    const penaltyAmount =
+      daysOverdue > 0
+        ? Math.ceil(
+            period2.beginningBalance.toNumber() *
+              latePaymentPenaltyRate *
+              (daysOverdue / 30),
+          )
+        : 0;
+
+    // Cập nhật repayment schedule (vẫn còn nợ) với penalty
     await prisma.repaymentScheduleDetail.update({
       where: { id: period2.id },
       data: {
@@ -324,6 +350,11 @@ async function main() {
         paidInterest: paidInterest,
         paidFee: paidFee,
         status: RepaymentItemStatus.OVERDUE, // Vẫn overdue vì trả chưa đủ
+        penaltyAmount: penaltyAmount, // Thêm penalty cho đồng bộ
+        totalAmount: {
+          increment: penaltyAmount, // Cộng thêm penalty vào total
+        },
+        lastPenaltyAppliedAt: penaltyAmount > 0 ? new Date('2025-12-05') : null,
       },
     });
 
@@ -358,15 +389,21 @@ async function main() {
 
   // === Payment 5: Thanh toán phí phạt cho Loan 4 kỳ 2 ===
   if (loan4 && loan4.repaymentSchedule.length > 1) {
-    const period2 = loan4.repaymentSchedule[1];
+    // Reload period2 từ DB để lấy penalty đã được update ở Payment 4
+    const period2Updated = await prisma.repaymentScheduleDetail.findFirst({
+      where: {
+        loanId: loan4.id,
+        periodNumber: 2,
+      },
+    });
 
-    if (period2.penaltyAmount.toNumber() > 0) {
+    if (period2Updated && period2Updated.penaltyAmount.toNumber() > 0) {
       const referenceCode5 = await generatePaymentReferenceCode();
       const payment5 = await prisma.loanPayment.create({
         data: {
           loanId: loan4.id,
           storeId: loan4.storeId,
-          amount: period2.penaltyAmount,
+          amount: period2Updated.penaltyAmount,
           paymentType: PaymentType.ADJUSTMENT,
           paymentMethod: PaymentMethod.CASH,
           paidAt: new Date('2026-01-10'),
@@ -379,16 +416,16 @@ async function main() {
         data: {
           paymentId: payment5.id,
           componentType: PaymentComponent.LATE_FEE,
-          amount: period2.penaltyAmount,
+          amount: period2Updated.penaltyAmount,
           note: 'Late payment penalty',
         },
       });
 
       // Cập nhật penalty đã trả
       await prisma.repaymentScheduleDetail.update({
-        where: { id: period2.id },
+        where: { id: period2Updated.id },
         data: {
-          paidPenalty: period2.penaltyAmount,
+          paidPenalty: period2Updated.penaltyAmount,
         },
       });
 
@@ -396,7 +433,7 @@ async function main() {
       await prisma.revenueLedger.create({
         data: {
           type: RevenueType.LATE_FEE,
-          amount: period2.penaltyAmount,
+          amount: period2Updated.penaltyAmount,
           refId: payment5.id,
           storeId: loan4.storeId,
           recordedAt: new Date('2026-01-10'),
@@ -404,7 +441,11 @@ async function main() {
       });
 
       console.log(
-        `✅ Created Penalty Payment: ${payment5.referenceCode} for ${loan4.loanCode}`,
+        `✅ Created Penalty Payment: ${payment5.referenceCode} for ${loan4.loanCode} - Penalty: ${period2Updated.penaltyAmount.toNumber()}`,
+      );
+    } else {
+      console.log(
+        `⚠️ Skipped Penalty Payment for ${loan4.loanCode} - No penalty amount found`,
       );
     }
   }

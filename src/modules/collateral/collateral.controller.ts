@@ -14,6 +14,7 @@ import type { File as MulterFile } from 'multer';
 import { CollateralService } from './collateral.service';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { Role } from 'src/modules/employee/enum/role.enum';
+import { CurrentUser, type CurrentUserInfo } from 'src/common/decorators/current-user.decorator';
 import { CollateralQueryDTO } from './dto/request/collateral.query';
 import { CreateCollateralDTO } from './dto/request/create-collateral.request';
 import { UpdateLocationRequest } from './dto/request/update-location.request';
@@ -125,8 +126,9 @@ export class CollateralController {
     @Param('id') id: string,
     @Body() body: PatchCollateralDTO,
     @UploadedFiles() files: MulterFile[],
+    @CurrentUser() user: CurrentUserInfo,
   ) {
-    return this.collateralService.update(id, body, files);
+    return this.collateralService.update(id, body, files, user);
   }
 }
 
@@ -155,8 +157,12 @@ export class CollateralLocationController {
     },
   })
   @Roles(Role.MANAGER, Role.STAFF)
-  updateLocation(@Param('id') id: string, @Body() body: UpdateLocationRequest) {
-    return this.collateralService.updateLocation(id, body);
+  updateLocation(
+    @Param('id') id: string,
+    @Body() body: UpdateLocationRequest,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.collateralService.updateLocation(id, body, user);
   }
 }
 
@@ -185,8 +191,11 @@ export class LiquidationController {
     },
   })
   @Roles(Role.MANAGER, Role.STAFF)
-  createLiquidation(@Body() body: CreateLiquidationRequest) {
-    return this.collateralService.createLiquidation(body);
+  createLiquidation(
+    @Body() body: CreateLiquidationRequest,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
+    return this.collateralService.createLiquidation(body, user);
   }
 
   @Post('/:id/sell')

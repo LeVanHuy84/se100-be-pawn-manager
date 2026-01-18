@@ -10,7 +10,6 @@ import { LoanModule } from './modules/loan/loan.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CollateralModule } from './modules/collateral/collateral.module';
 import { ValuationModule } from './modules/valuation/valuation.module';
-import { ContractModule } from './modules/contract/contract.module';
 import { ConfigurationsModule } from './modules/configurations/configurations.module';
 import { LoanSimulationsModule } from './modules/loan-simulations/loan-simulations.module';
 import { PaymentModule } from './modules/payment/payment.module';
@@ -33,7 +32,6 @@ import { LoggerMiddleware } from './common/middleware/logger.middleware';
     CollateralModule,
     CollateralTypeModule,
     ValuationModule,
-    ContractModule,
     PrismaModule,
     ConfigModule.forRoot({
       isGlobal: true,

@@ -174,7 +174,7 @@ export class ReportsService {
 
       dailyData.push({
         date: dateString,
-        totalRevenue: Math.round(dayTotalRevenue),
+        totalRevenue: Math.ceil(dayTotalRevenue),
         breakdown: {
           interest: Math.round(dayBreakdown.interest),
           serviceFee: Math.round(dayBreakdown.serviceFee),
@@ -183,9 +183,9 @@ export class ReportsService {
           liquidationSale: Math.round(dayBreakdown.liquidationSale),
           excessRefund: Math.round(dayBreakdown.excessRefund),
         },
-        totalExpense: Math.round(dayExpense),
+        totalExpense: Math.ceil(dayExpense),
         expenseBreakdown: {
-          loanDisbursement: Math.round(dayExpense),
+          loanDisbursement: Math.ceil(dayExpense),
         },
       });
 
@@ -333,9 +333,8 @@ export class ReportsService {
         summary: {
           totalNewLoans: newLoans.length,
           totalClosedLoans: closedLoans.length,
-          totalNewLoanAmount: newLoans.reduce(
-            (sum, loan) => sum + Number(loan.loanAmount),
-            0,
+          totalNewLoanAmount: Math.ceil(
+            newLoans.reduce((sum, loan) => sum + Number(loan.loanAmount), 0),
           ),
         },
       },
@@ -573,7 +572,6 @@ export class ReportsService {
       interest: 0,
       serviceFee: 0,
       lateFee: 0,
-      liquidationProfit: 0,
     };
 
     let totalRevenue = 0;
@@ -639,10 +637,9 @@ export class ReportsService {
           totalLiquidations,
           totalRevenue: Math.round(totalRevenue),
           revenueBreakdown: {
-            interest: Math.round(revenueBreakdown.interest),
-            serviceFee: Math.round(revenueBreakdown.serviceFee),
-            lateFee: Math.round(revenueBreakdown.lateFee),
-            liquidationProfit: Math.round(revenueBreakdown.liquidationProfit),
+            interest: Math.ceil(revenueBreakdown.interest),
+            serviceFee: Math.ceil(revenueBreakdown.serviceFee),
+            lateFee: Math.ceil(revenueBreakdown.lateFee),
           },
           assetBreakdown,
           employees: {

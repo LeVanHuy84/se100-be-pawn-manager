@@ -19,9 +19,11 @@ import {
   Prisma,
   RepaymentItemStatus,
   RevenueType,
+  CollateralStatus,
 } from 'generated/prisma';
 import { ReminderProcessor } from '../communication/reminder.processor';
 import { CommunicationService } from '../communication/communication.service';
+import { LiquidationPaymentRequest } from './dto/request/liquidation-payment.request';
 
 interface AllocationDraft {
   componentType: PaymentComponent;
@@ -311,114 +313,13 @@ export class PaymentService {
       }
 
       // 5) Allocate
-      let remainingAmount = Number(amount);
-      const allocations: AllocationDraft[] = [];
-
-      for (const period of allocatableItems) {
-        if (remainingAmount <= 0) break;
-
-        const {
-          interestOut,
-          feeOut,
-          penaltyOut,
-          principalOut,
-
-          paidPenalty,
-        } = this.getOutstandingComponents(period);
-
-        let payInterest = 0,
-          payFee = 0,
-          payLateFee = 0,
-          payPrincipal = 0;
-
-        // Waterfall: LATE_FEE -> INTEREST -> FEE -> PRINCIPAL
-        // Calculate without rounding to preserve precision
-        // Priority 1: Pay penalty first to prevent accumulation
-        if (penaltyOut > 0 && remainingAmount > 0) {
-          payLateFee = Math.min(remainingAmount, penaltyOut);
-          remainingAmount -= payLateFee;
-          allocations.push({
-            componentType: PaymentComponent.LATE_FEE,
-            periodNumber: period.periodNumber,
-            amount: payLateFee,
-            note: notes,
-          });
-        }
-
-        // Priority 2: Pay interest
-        if (interestOut > 0 && remainingAmount > 0) {
-          payInterest = Math.min(remainingAmount, interestOut);
-          remainingAmount -= payInterest;
-          allocations.push({
-            componentType: PaymentComponent.INTEREST,
-            periodNumber: period.periodNumber,
-            amount: payInterest,
-            note: notes,
-          });
-        }
-
-        // Priority 3: Pay service fee
-        if (feeOut > 0 && remainingAmount > 0) {
-          payFee = Math.min(remainingAmount, feeOut);
-          remainingAmount -= payFee;
-          allocations.push({
-            componentType: PaymentComponent.SERVICE_FEE,
-            periodNumber: period.periodNumber,
-            amount: payFee,
-            note: notes,
-          });
-        }
-
-        // Priority 4: Pay principal last
-        if (principalOut > 0 && remainingAmount > 0) {
-          payPrincipal = Math.min(remainingAmount, principalOut);
-          remainingAmount -= payPrincipal;
-          allocations.push({
-            componentType: PaymentComponent.PRINCIPAL,
-            periodNumber: period.periodNumber,
-            amount: payPrincipal,
-            note: notes,
-          });
-        }
-
-        // update item once
-        if (payInterest + payFee + payLateFee + payPrincipal > 0) {
-          // Round only when storing to database
-          const newPaidInterest = Math.round(
-            this.toVnd(period.paidInterest) + payInterest,
-          );
-          const newPaidFee = Math.round(this.toVnd(period.paidFee) + payFee);
-          const newPaidPrincipal = Math.round(
-            this.toVnd(period.paidPrincipal) + payPrincipal,
-          );
-
-          const updateData: any = {
-            paidInterest: newPaidInterest,
-            paidFee: newPaidFee,
-            paidPrincipal: newPaidPrincipal,
-          };
-
-          if ((period as any).paidPenalty !== undefined) {
-            updateData.paidPenalty = Math.round(paidPenalty + payLateFee);
-          }
-
-          const fullyPaid =
-            interestOut - payInterest <= 0.01 &&
-            feeOut - payFee <= 0.01 &&
-            penaltyOut - payLateFee <= 0.01 &&
-            principalOut - payPrincipal <= 0.01;
-
-          if (fullyPaid) {
-            updateData.status = RepaymentItemStatus.PAID;
-            updateData.paidAt = new Date();
-          }
-
-          await tx.repaymentScheduleDetail.update({
-            where: { id: period.id },
-            data: updateData,
-          });
-        }
-      }
+      const { allocations, remainingAmount } =
+        await this.allocatePaymentToSchedule(
+          tx,
+          allocatableItems,
+          Number(amount),
+          notes,
+        );
 
       // 6) Verify all payment was allocated (should not have remainder for any type)
       if (remainingAmount > 1) {
@@ -602,39 +503,14 @@ export class PaymentService {
       return { payment, allocations, balance, nextPayment, allSchedule };
     });
 
-    // Cancel scheduled reminders for periods that were fully paid
-    try {
-      const paidPeriods = result.allSchedule
-        .filter((period) => period.status === RepaymentItemStatus.PAID)
-        .map((period) => period.periodNumber);
-
-      if (paidPeriods.length > 0) {
-        await this.reminderProcessor.cancelRemindersForPayments(
-          loanId,
-          paidPeriods,
-        );
-      }
-    } catch (error) {
-      // Log error but don't fail the payment
-      console.error('Failed to cancel scheduled reminders:', error);
-    }
-
-    // Send payment confirmation notification
-    try {
-      await this.communicationService.schedulePaymentConfirmation(
-        loanId,
-        result.payment.id,
-        amount,
-        result.allocations.map((a) => ({
-          periodNumber: a.periodNumber,
-          component: a.componentType,
-          amount: Math.round(a.amount),
-        })),
-      );
-    } catch (error) {
-      // Log error but don't fail the payment
-      console.error('Failed to send payment confirmation:', error);
-    }
+    // Handle post-payment actions (cancel reminders + send notifications)
+    await this.handlePostPaymentActions(
+      loanId,
+      result.payment.id,
+      amount,
+      result.allocations,
+      result.allSchedule,
+    );
 
     return {
       data: {
@@ -658,6 +534,52 @@ export class PaymentService {
   }
 
   // ===== helpers =====
+  /**
+   * Handle post-payment actions: cancel reminders and send notifications
+   * This is called after payment transaction completes successfully
+   */
+  private async handlePostPaymentActions(
+    loanId: string,
+    paymentId: string,
+    amount: number,
+    allocations: AllocationDraft[],
+    allSchedule: any[],
+  ): Promise<void> {
+    // Cancel scheduled reminders for periods that were fully paid
+    try {
+      const paidPeriods = allSchedule
+        .filter((period) => period.status === RepaymentItemStatus.PAID)
+        .map((period) => period.periodNumber);
+
+      if (paidPeriods.length > 0) {
+        await this.reminderProcessor.cancelRemindersForPayments(
+          loanId,
+          paidPeriods,
+        );
+      }
+    } catch (error) {
+      // Log error but don't fail the payment
+      console.error('Failed to cancel scheduled reminders:', error);
+    }
+
+    // Send payment confirmation notification
+    try {
+      await this.communicationService.schedulePaymentConfirmation(
+        loanId,
+        paymentId,
+        amount,
+        allocations.map((a) => ({
+          periodNumber: a.periodNumber,
+          component: a.componentType,
+          amount: Math.round(a.amount),
+        })),
+      );
+    } catch (error) {
+      // Log error but don't fail the payment
+      console.error('Failed to send payment confirmation:', error);
+    }
+  }
+
   /**
    * Validates and reconciles loan balance against schedule items.
    * If discrepancy detected, automatically heals by trusting calculated value.
@@ -725,7 +647,127 @@ export class PaymentService {
 
   // ---- currency helpers ----
   private toVnd(value: any): number {
-    return Math.round(Number(value ?? 0));
+    return Number(value ?? 0); // No rounding, just convert to number
+  }
+
+  /**
+   * Allocate payment amount to schedule items using waterfall method
+   * Priority: LATE_FEE -> INTEREST -> FEE -> PRINCIPAL
+   * @returns allocations and remaining amount after allocation
+   */
+  private async allocatePaymentToSchedule(
+    tx: any,
+    scheduleItems: any[],
+    paymentAmount: number,
+    notes?: string,
+  ): Promise<{ allocations: AllocationDraft[]; remainingAmount: number }> {
+    let remainingAmount = paymentAmount;
+    const allocations: AllocationDraft[] = [];
+
+    for (const period of scheduleItems) {
+      if (remainingAmount <= 0.01) break; // Use small threshold instead of === 0
+
+      const { interestOut, feeOut, penaltyOut, principalOut, paidPenalty } =
+        this.getOutstandingComponents(period);
+
+      let payInterest = 0,
+        payFee = 0,
+        payLateFee = 0,
+        payPrincipal = 0;
+
+      // Waterfall: LATE_FEE -> INTEREST -> FEE -> PRINCIPAL
+      // Calculate without rounding to preserve precision during allocation
+
+      // Priority 1: Pay penalty first to prevent accumulation
+      if (penaltyOut > 0.01 && remainingAmount > 0.01) {
+        payLateFee = Math.min(remainingAmount, penaltyOut);
+        remainingAmount -= payLateFee;
+        allocations.push({
+          componentType: PaymentComponent.LATE_FEE,
+          periodNumber: period.periodNumber,
+          amount: payLateFee,
+          note: notes,
+        });
+      }
+
+      // Priority 2: Pay interest
+      if (interestOut > 0.01 && remainingAmount > 0.01) {
+        payInterest = Math.min(remainingAmount, interestOut);
+        remainingAmount -= payInterest;
+        allocations.push({
+          componentType: PaymentComponent.INTEREST,
+          periodNumber: period.periodNumber,
+          amount: payInterest,
+          note: notes,
+        });
+      }
+
+      // Priority 3: Pay service fee
+      if (feeOut > 0.01 && remainingAmount > 0.01) {
+        payFee = Math.min(remainingAmount, feeOut);
+        remainingAmount -= payFee;
+        allocations.push({
+          componentType: PaymentComponent.SERVICE_FEE,
+          periodNumber: period.periodNumber,
+          amount: payFee,
+          note: notes,
+        });
+      }
+
+      // Priority 4: Pay principal last
+      if (principalOut > 0.01 && remainingAmount > 0.01) {
+        payPrincipal = Math.min(remainingAmount, principalOut);
+        remainingAmount -= payPrincipal;
+        allocations.push({
+          componentType: PaymentComponent.PRINCIPAL,
+          periodNumber: period.periodNumber,
+          amount: payPrincipal,
+          note: notes,
+        });
+      }
+
+      // Update repayment schedule item (round when storing to database)
+      const totalPaidThisPeriod =
+        payInterest + payFee + payLateFee + payPrincipal;
+      if (totalPaidThisPeriod > 0.01) {
+        const newPaidInterest = Math.round(
+          this.toVnd(period.paidInterest) + payInterest,
+        );
+        const newPaidFee = Math.round(this.toVnd(period.paidFee) + payFee);
+        const newPaidPrincipal = Math.round(
+          this.toVnd(period.paidPrincipal) + payPrincipal,
+        );
+
+        const updateData: any = {
+          paidInterest: newPaidInterest,
+          paidFee: newPaidFee,
+          paidPrincipal: newPaidPrincipal,
+        };
+
+        if (period.paidPenalty !== undefined) {
+          updateData.paidPenalty = Math.round(paidPenalty + payLateFee);
+        }
+
+        // Check if period is fully paid (with small tolerance for floating point errors)
+        const fullyPaid =
+          interestOut - payInterest <= 0.01 &&
+          feeOut - payFee <= 0.01 &&
+          penaltyOut - payLateFee <= 0.01 &&
+          principalOut - payPrincipal <= 0.01;
+
+        if (fullyPaid) {
+          updateData.status = RepaymentItemStatus.PAID;
+          updateData.paidAt = new Date();
+        }
+
+        await tx.repaymentScheduleDetail.update({
+          where: { id: period.id },
+          data: updateData,
+        });
+      }
+    }
+
+    return { allocations, remainingAmount };
   }
 
   private getOutstandingComponents(period: any) {
@@ -738,10 +780,11 @@ export class PaymentService {
     const penalty = this.toVnd((period as any).penaltyAmount);
     const paidPenalty = this.toVnd((period as any).paidPenalty);
 
-    const interestOut = Math.max(0, interest - paidInterest);
-    const feeOut = Math.max(0, fee - paidFee);
-    const penaltyOut = Math.max(0, penalty - paidPenalty);
-    const principalOut = Math.max(0, principal - paidPrincipal);
+    // Outstanding amounts - use Math.ceil (customer owes, round up)
+    const interestOut = Math.ceil(Math.max(0, interest - paidInterest));
+    const feeOut = Math.ceil(Math.max(0, fee - paidFee));
+    const penaltyOut = Math.ceil(Math.max(0, penalty - paidPenalty));
+    const principalOut = Math.ceil(Math.max(0, principal - paidPrincipal));
 
     return {
       interestOut,
@@ -759,7 +802,7 @@ export class PaymentService {
       const out = this.getOutstandingComponents(p);
       total += out.interestOut + out.feeOut + out.penaltyOut + out.principalOut;
     }
-    return total;
+    return total; // Already rounded in getOutstandingComponents
   }
 
   private recalcLoanBalance(allSchedule: any[]) {
@@ -776,16 +819,20 @@ export class PaymentService {
       remainingPenalty += out.penaltyOut;
     }
 
+    // Round individual components (already rounded in getOutstandingComponents, just sum)
+    const roundedPrincipal = remainingPrincipal; // Already rounded
+    const roundedInterest = remainingInterest; // Already rounded
+    const roundedFees = remainingFees; // Already rounded
+    const roundedPenalty = remainingPenalty; // Already rounded
+
     return {
-      remainingPrincipal: Math.round(remainingPrincipal),
-      remainingInterest: Math.round(remainingInterest),
-      remainingFees: Math.round(remainingFees),
-      remainingPenalty: Math.round(remainingPenalty),
+      remainingPrincipal: roundedPrincipal,
+      remainingInterest: roundedInterest,
+      remainingFees: roundedFees,
+      remainingPenalty: roundedPenalty,
+      // Calculate total from rounded values to avoid double rounding
       totalRemaining:
-        remainingPrincipal +
-        remainingInterest +
-        remainingFees +
-        remainingPenalty,
+        roundedPrincipal + roundedInterest + roundedFees + roundedPenalty,
     };
   }
 
@@ -830,7 +877,7 @@ export class PaymentService {
       if (revenueType && allocation.amount > 0) {
         revenueEntries.push({
           type: revenueType,
-          amount: Math.round(allocation.amount), // Round before storing
+          amount: Math.round(allocation.amount), // Round for storage
           refId: paymentId,
           storeId: storeId,
         });
@@ -847,5 +894,230 @@ export class PaymentService {
         `📊 Recorded ${revenueEntries.length} revenue entries for payment ${paymentId}, loan ${loanId}, store ${storeId}`,
       );
     }
+  }
+
+  /**
+   * Process liquidation payment from collateral sale
+   * This handles:
+   * 1. Get loan from collateral
+   * 2. Calculate outstanding amount from repayment schedule
+   * 3. Apply payment to loan (up to outstanding amount)
+   * 4. Calculate excess amount to return to customer (will be disbursed separately)
+   * 5. Update collateral status to SOLD
+   */
+  async processLiquidationPayment(
+    payload: LiquidationPaymentRequest,
+    employee: any,
+  ): Promise<{ message: string; excessAmount: number }> {
+    const { collateralId, sellPrice, paymentMethod, notes } = payload;
+
+    // 1. Get collateral and validate
+    const collateral = await this.prisma.collateral.findUnique({
+      where: { id: collateralId },
+      include: {
+        loan: {
+          select: {
+            id: true,
+            loanCode: true,
+            status: true,
+            storeId: true,
+            remainingAmount: true,
+          },
+        },
+      },
+    });
+
+    if (!collateral) {
+      throw new NotFoundException(
+        `Collateral with ID ${collateralId} not found`,
+      );
+    }
+
+    if (!collateral.loanId || !collateral.loan) {
+      throw new UnprocessableEntityException(
+        'Collateral is not associated with any loan',
+      );
+    }
+
+    if (collateral.status !== CollateralStatus.LIQUIDATING) {
+      throw new UnprocessableEntityException(
+        'Collateral must be in LIQUIDATING status to process payment',
+      );
+    }
+
+    const loan = collateral.loan;
+    const loanId = loan.id;
+
+    // 2. Calculate outstanding amount from repayment schedule
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Lock repayment schedule items
+      await tx.$queryRaw(
+        Prisma.sql`SELECT "id" FROM "RepaymentScheduleDetail" WHERE "loanId" = ${loanId} AND "status" IN (${RepaymentItemStatus.PENDING}, ${RepaymentItemStatus.OVERDUE}) FOR UPDATE`,
+      );
+
+      // Get all outstanding schedule items
+      const scheduleItems = await tx.repaymentScheduleDetail.findMany({
+        where: {
+          loanId,
+          status: {
+            in: [RepaymentItemStatus.PENDING, RepaymentItemStatus.OVERDUE],
+          },
+        },
+        orderBy: [{ dueDate: 'asc' }, { periodNumber: 'asc' }],
+      });
+
+      if (scheduleItems.length === 0) {
+        throw new UnprocessableEntityException(
+          'No outstanding balance on loan. Cannot process liquidation payment.',
+        );
+      }
+
+      // Calculate total outstanding
+      const totalOutstanding = this.calcTotalOutstanding(scheduleItems);
+
+      // 3. Determine amounts
+      const amountPaidToLoan = Math.round(
+        Math.min(sellPrice, totalOutstanding),
+      );
+      const excessAmount = Math.round(
+        Math.max(0, sellPrice - totalOutstanding),
+      );
+
+      // 4. Generate payment reference code
+      const referenceCode = await this.generatePaymentReferenceCode(tx);
+
+      // 5. Create payment record (PAYOFF type for liquidation)
+      const payment = await tx.loanPayment.create({
+        data: {
+          loanId,
+          storeId: loan.storeId,
+          amount: amountPaidToLoan,
+          paymentType: PaymentType.PAYOFF,
+          paymentMethod: paymentMethod as PaymentMethod,
+          referenceCode,
+          recorderEmployeeId: employee.id,
+        },
+      });
+
+      // 6. Allocate payment to schedule items (using shared allocation logic)
+      const { allocations } = await this.allocatePaymentToSchedule(
+        tx,
+        scheduleItems,
+        amountPaidToLoan,
+        notes || 'Payment from collateral liquidation',
+      );
+
+      // 7. Save payment allocations
+      await tx.paymentAllocation.createMany({
+        data: allocations.map((a) => ({
+          paymentId: payment.id,
+          componentType: a.componentType as any,
+          amount: Math.round(a.amount),
+          note: a.note,
+        })),
+      });
+
+      // 8. Record revenue from allocations
+      await this.recordRevenueFromAllocations(
+        tx,
+        payment.id,
+        loanId,
+        loan.storeId,
+        allocations,
+      );
+
+      // 9. Update loan balance and status
+      const allSchedule = await tx.repaymentScheduleDetail.findMany({
+        where: { loanId },
+      });
+
+      const balance = this.recalcLoanBalance(allSchedule);
+      const isNowClosed = balance.totalRemaining <= 0;
+
+      let newStatus = loan.status;
+      if (isNowClosed) {
+        newStatus = 'CLOSED';
+      }
+
+      await tx.loan.update({
+        where: { id: loanId },
+        data: {
+          remainingAmount: balance.totalRemaining,
+          ...(newStatus !== loan.status ? { status: newStatus } : {}),
+        },
+      });
+
+      // 10. Update collateral status to SOLD
+      await tx.collateral.update({
+        where: { id: collateralId },
+        data: {
+          sellPrice: sellPrice,
+          sellDate: new Date(),
+          status: CollateralStatus.SOLD,
+        },
+      });
+
+      // 11. Create audit logs
+      await tx.auditLog.create({
+        data: {
+          action: 'LIQUIDATION_PAYMENT',
+          entityId: payment.id,
+          entityType: 'LOAN_PAYMENT',
+          entityName: `Thanh lý tài sản - ${loan.loanCode}`,
+          actorId: employee.id,
+          actorName: employee.name,
+          newValue: {
+            collateralId,
+            sellPrice,
+            amountPaidToLoan,
+            excessAmount,
+            loanStatus: newStatus,
+          },
+          description: `Thanh lý tài sản ${collateralId}: Bán ${Math.round(sellPrice)} VND, trả nợ ${Math.round(amountPaidToLoan)} VND${excessAmount > 0 ? `, trả lại khách ${Math.round(excessAmount)} VND` : ''}`,
+        },
+      });
+
+      if (isNowClosed) {
+        await tx.auditLog.create({
+          data: {
+            action: 'CLOSE_LOAN',
+            entityId: loanId,
+            entityType: 'LOAN',
+            entityName: loan.loanCode,
+            actorId: employee.id,
+            actorName: employee.name,
+            oldValue: { status: loan.status },
+            newValue: { status: 'CLOSED' },
+            description: `Khoản vay ${loan.loanCode} đã được đóng sau thanh lý tài sản`,
+          },
+        });
+      }
+
+      return {
+        paymentId: payment.id,
+        amountPaidToLoan,
+        excessAmount,
+        allocations,
+        allSchedule,
+      };
+    });
+
+    // Handle post-payment actions (cancel reminders + send notifications)
+    await this.handlePostPaymentActions(
+      loanId,
+      result.paymentId,
+      result.amountPaidToLoan,
+      result.allocations,
+      result.allSchedule,
+    );
+
+    // Return simple result for sellCollateral to handle disbursement
+    return {
+      message:
+        result.excessAmount > 0
+          ? `Thanh toán thanh lý thành công. Đã trả nợ ${Math.round(result.amountPaidToLoan)} VND. Số tiền dư ${Math.round(result.excessAmount)} VND cần trả lại khách hàng.`
+          : `Thanh toán thanh lý thành công. Đã trả nợ ${Math.round(result.amountPaidToLoan)} VND. Không có tiền dư.`,
+      excessAmount: result.excessAmount,
+    };
   }
 }

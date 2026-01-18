@@ -108,7 +108,6 @@ class QuarterlyStatistics {
     interest: number;
     serviceFee: number;
     lateFee: number;
-    liquidationProfit: number;
   };
 
   @ApiProperty({

@@ -10,6 +10,11 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Start seeding Communication/Notification Logs...');
 
+  // Xóa dữ liệu cũ để tránh duplicate
+  console.log('Cleaning old notification data...');
+  await prisma.notificationLog.deleteMany({});
+  console.log('Old notification data cleaned.');
+
   // Lấy các khoản vay đã ACTIVE
   const activeLoans = await prisma.loan.findMany({
     where: {

@@ -93,7 +93,7 @@ export class DisbursementService {
         data: {
           idempotencyKey,
           loanId: dto.loanId,
-          amount: dto.amount,
+          amount: Math.ceil(dto.amount), // Round up disbursement amount
           disbursementMethod: dto.disbursementMethod,
           referenceCode,
           disbursedBy: dto.disbursedBy,

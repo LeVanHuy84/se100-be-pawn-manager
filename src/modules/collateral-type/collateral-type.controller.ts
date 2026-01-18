@@ -27,21 +27,16 @@ import {
   CollateralTypeResponse,
 } from './dto/response/collateral-type.response';
 import { BaseResult } from 'src/common/dto/base.response';
+import { CurrentUser, type CurrentUserInfo } from 'src/common/decorators/current-user.decorator';
 
 @Controller({
   version: '1',
   path: 'collateral-types',
 })
-@ApiExtraModels(
-  BaseResult,
-  CollateralTypeResponse,
-  CollateralTypeListResponse,
-)
+@ApiExtraModels(BaseResult, CollateralTypeResponse, CollateralTypeListResponse)
 @ApiErrorResponses()
 export class CollateralTypeController {
-  constructor(
-    private readonly collateralTypeService: CollateralTypeService,
-  ) {}
+  constructor(private readonly collateralTypeService: CollateralTypeService) {}
 
   @Get()
   @Roles(Role.MANAGER, Role.STAFF)
@@ -89,8 +84,8 @@ export class CollateralTypeController {
       ],
     },
   })
-  createCollateralType(@Body() body: CreateCollateralTypeDTO) {
-    return this.collateralTypeService.create(body);
+  createCollateralType(@Body() body: CreateCollateralTypeDTO, @CurrentUser() user: CurrentUserInfo) {
+    return this.collateralTypeService.create(body, user);
   }
 
   @Patch('/:id')
@@ -112,7 +107,8 @@ export class CollateralTypeController {
   updateCollateralType(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateCollateralTypeDTO,
+    @CurrentUser() user: CurrentUserInfo,
   ) {
-    return this.collateralTypeService.update(id, body);
+    return this.collateralTypeService.update(id, body, user);
   }
 }

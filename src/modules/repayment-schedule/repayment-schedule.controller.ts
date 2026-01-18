@@ -21,6 +21,7 @@ import { ApiErrorResponses } from 'src/common/decorators/api-error-responses.dec
 @ApiExtraModels(BaseResult, RepaymentScheduleItemResponse, PaginationMeta)
 @Controller({
   version: '1',
+  path: 'repayment-schedules',
 })
 @ApiErrorResponses()
 export class RepaymentScheduleController {
@@ -28,7 +29,7 @@ export class RepaymentScheduleController {
     private readonly repaymentScheduleService: RepaymentScheduleService,
   ) {}
 
-  @Get('loans/:loanId/repayment-schedule')
+  @Get('loans/:loanId')
   @ApiOperation({
     summary: 'Get loan repayment schedule',
     description:
