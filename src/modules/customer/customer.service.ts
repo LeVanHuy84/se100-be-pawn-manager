@@ -11,11 +11,16 @@ import { UpdateCustomerRequest } from './dto/request/update-customer.request';
 import { CustomerResponse } from './dto/response/customer.response';
 import { CustomerMapper } from './customer.mapper';
 import { BaseResult } from 'src/common/dto/base.response';
-import { CustomerType, Prisma } from '../../../generated/prisma';
+import {
+  CustomerType,
+  Prisma,
+  AuditEntityType,
+} from '../../../generated/prisma';
 import type { File as MulterFile } from 'multer';
 import pLimit from 'p-limit';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { ImageItem } from 'src/common/interfaces/media.interface';
+import { CurrentUserInfo } from 'src/common/decorators/current-user.decorator';
 
 @Injectable()
 export class CustomerService {
@@ -100,6 +105,7 @@ export class CustomerService {
   async create(
     data: CreateCustomerDTO,
     files?: { mattruoc?: MulterFile[]; matsau?: MulterFile[] },
+    user?: CurrentUserInfo,
   ): Promise<BaseResult<CustomerResponse>> {
     // Validate required images
     if (!files || !files.mattruoc || files.mattruoc.length === 0) {
@@ -211,27 +217,54 @@ export class CustomerService {
         publicId: backResult.public_id,
       });
 
-      const customer = await this.prisma.customer.create({
-        data: {
-          fullName: data.fullName,
-          dob: new Date(data.dob),
-          nationalId: data.nationalId,
-          phone: data.phone,
-          email: data.email,
-          address: data.address,
-          customerType: data.customerType as CustomerType,
-          monthlyIncome: data.monthlyIncome,
-          creditScore: data.creditScore,
-          images: imagesData as Prisma.InputJsonValue,
-          wardId: data.wardId,
-        },
-        include: {
-          ward: {
-            include: {
-              parent: true,
+      const customer = await this.prisma.$transaction(async (tx) => {
+        const newCustomer = await tx.customer.create({
+          data: {
+            fullName: data.fullName,
+            dob: new Date(data.dob),
+            nationalId: data.nationalId,
+            phone: data.phone,
+            email: data.email,
+            address: data.address,
+            customerType: data.customerType as CustomerType,
+            monthlyIncome: data.monthlyIncome,
+            creditScore: data.creditScore,
+            images: imagesData as Prisma.InputJsonValue,
+            wardId: data.wardId,
+          },
+          include: {
+            ward: {
+              include: {
+                parent: true,
+              },
             },
           },
-        },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            action: 'CREATE_CUSTOMER',
+            entityId: newCustomer.id,
+            entityType: AuditEntityType.CUSTOMER,
+            entityName: `${data.fullName} - ${data.nationalId}`,
+            actorId: user?.userId || null,
+            actorName: user
+              ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+              : null,
+            oldValue: {},
+            newValue: {
+              fullName: data.fullName,
+              nationalId: data.nationalId,
+              phone: data.phone,
+              email: data.email,
+              customerType: data.customerType,
+              monthlyIncome: data.monthlyIncome,
+            },
+            description: `Tạo khách hàng mới: ${data.fullName}`,
+          },
+        });
+
+        return newCustomer;
       });
 
       return {
@@ -249,6 +282,7 @@ export class CustomerService {
     id: string,
     data: UpdateCustomerRequest,
     files?: { mattruoc?: MulterFile[]; matsau?: MulterFile[] },
+    user?: CurrentUserInfo,
   ): Promise<BaseResult<CustomerResponse>> {
     // Check if customer exists
     const existing = await this.prisma.customer.findUnique({
@@ -477,17 +511,81 @@ export class CustomerService {
         updateData.images = currentImagesData as Prisma.InputJsonValue;
       }
 
-      const customer = await this.prisma.customer.update({
-        where: { id },
-        data: updateData,
-        include: {
-          loans: true,
-          ward: {
-            include: {
-              parent: true,
+      const customer = await this.prisma.$transaction(async (tx) => {
+        const updatedCustomer = await tx.customer.update({
+          where: { id },
+          data: updateData,
+          include: {
+            loans: true,
+            ward: {
+              include: {
+                parent: true,
+              },
             },
           },
-        },
+        });
+
+        // Log only changed fields
+        const oldValue: Record<string, any> = {};
+        const newValue: Record<string, any> = {};
+
+        if (
+          data.fullName !== undefined &&
+          existing.fullName !== data.fullName
+        ) {
+          oldValue.fullName = existing.fullName;
+          newValue.fullName = data.fullName;
+        }
+        if (data.phone !== undefined && existing.phone !== data.phone) {
+          oldValue.phone = existing.phone;
+          newValue.phone = data.phone;
+        }
+        if (data.email !== undefined && existing.email !== data.email) {
+          oldValue.email = existing.email;
+          newValue.email = data.email;
+        }
+        if (data.address !== undefined && existing.address !== data.address) {
+          oldValue.address = existing.address;
+          newValue.address = data.address;
+        }
+        if (
+          data.customerType !== undefined &&
+          existing.customerType !== data.customerType
+        ) {
+          oldValue.customerType = existing.customerType;
+          newValue.customerType = data.customerType;
+        }
+        if (data.monthlyIncome !== undefined) {
+          oldValue.monthlyIncome = existing.monthlyIncome;
+          newValue.monthlyIncome = data.monthlyIncome;
+        }
+        if (data.creditScore !== undefined) {
+          oldValue.creditScore = existing.creditScore;
+          newValue.creditScore = data.creditScore;
+        }
+        if (shouldUpdateImages) {
+          newValue.imagesUpdated = true;
+        }
+
+        if (Object.keys(newValue).length > 0) {
+          await tx.auditLog.create({
+            data: {
+              action: 'UPDATE_CUSTOMER',
+              entityId: id,
+              entityType: AuditEntityType.CUSTOMER,
+              entityName: `${existing.fullName} - ${existing.nationalId}`,
+              actorId: user?.userId || null,
+              actorName: user
+                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                : null,
+              oldValue,
+              newValue,
+              description: `Cập nhật thông tin khách hàng: ${existing.fullName}`,
+            },
+          });
+        }
+
+        return updatedCustomer;
       });
 
       return {

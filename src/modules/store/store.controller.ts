@@ -26,6 +26,7 @@ import {
   StoreResponse,
 } from './dto/response/store.response';
 import { BaseResult } from 'src/common/dto/base.response';
+import { CurrentUser, type CurrentUserInfo } from 'src/common/decorators/current-user.decorator';
 
 @Controller({
   version: '1',
@@ -82,8 +83,8 @@ export class StoreController {
     },
   })
   @Roles(Role.MANAGER)
-  createStore(@Body() body: CreateStoreDTO) {
-    return this.storeService.create(body);
+  createStore(@Body() body: CreateStoreDTO, @CurrentUser() user: CurrentUserInfo) {
+    return this.storeService.create(body, user);
   }
 
   @Patch('/:id')
@@ -102,7 +103,7 @@ export class StoreController {
     },
   })
   @Roles(Role.MANAGER)
-  updateStore(@Param('id') id: string, @Body() body: UpdateStoreDTO) {
-    return this.storeService.update(id, body);
+  updateStore(@Param('id') id: string, @Body() body: UpdateStoreDTO, @CurrentUser() user: CurrentUserInfo) {
+    return this.storeService.update(id, body, user);
   }
 }

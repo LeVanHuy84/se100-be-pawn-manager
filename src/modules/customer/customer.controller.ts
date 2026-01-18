@@ -31,6 +31,7 @@ import {
 } from './dto/response/customer.response';
 import { BaseResult } from 'src/common/dto/base.response';
 import { PaginationMeta } from 'src/common/dto/pagination.type';
+import { CurrentUser, type CurrentUserInfo } from 'src/common/decorators/current-user.decorator';
 
 @ApiExtraModels(BaseResult, CustomerResponse, PaginationMeta)
 @ApiTags('Customers')
@@ -98,8 +99,9 @@ export class CustomerController {
     @Body() body: CreateCustomerDTO,
     @UploadedFiles()
     files: { mattruoc?: MulterFile[]; matsau?: MulterFile[] },
+    @CurrentUser() user: CurrentUserInfo,
   ) {
-    return this.customerService.create(body, files);
+    return this.customerService.create(body, files, user);
   }
 
   @Patch('/:id')
@@ -129,7 +131,8 @@ export class CustomerController {
     @Body() body: UpdateCustomerRequest,
     @UploadedFiles()
     files: { mattruoc?: MulterFile[]; matsau?: MulterFile[] },
+    @CurrentUser() user: CurrentUserInfo,
   ) {
-    return this.customerService.update(id, body, files);
+    return this.customerService.update(id, body, files, user);
   }
 }
