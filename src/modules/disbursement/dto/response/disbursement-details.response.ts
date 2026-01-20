@@ -11,14 +11,16 @@ export class DisbursementDetailsResponse {
   @ApiProperty({
     description: 'Loan ID',
     example: '550e8400-e29b-41d4-a716-446655440000',
+    nullable: true,
   })
-  loanId: string;
+  loanId: string | null;
 
   @ApiProperty({
     description: 'Loan code',
     example: 'LOAN-2026-000123',
+    nullable: true,
   })
-  loanCode: string;
+  loanCode: string | null;
 
   @ApiProperty({
     description: 'Disbursement amount in VND',

@@ -8,11 +8,19 @@ export class DisbursementListItem {
   })
   id: string;
 
-  @ApiProperty({
-    description: 'Loan ID',
+  @ApiPropertyOptional({
+    description: 'Loan ID (Optional for external expenses)',
     example: '550e8400-e29b-41d4-a716-446655440000',
+    nullable: true,
   })
-  loanId: string;
+  loanId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Loan code for reference (Optional)',
+    example: 'LOAN-2026-000123',
+    nullable: true,
+  })
+  loanCode?: string | null;
 
   @ApiProperty({
     description: 'Disbursement amount in VND',
@@ -59,12 +67,6 @@ export class DisbursementListItem {
     nullable: true,
   })
   notes?: string | null;
-
-  @ApiProperty({
-    description: 'Loan code for reference',
-    example: 'LOAN-2026-000123',
-  })
-  loanCode: string;
 
   @ApiProperty({
     description: 'Created timestamp (ISO 8601)',

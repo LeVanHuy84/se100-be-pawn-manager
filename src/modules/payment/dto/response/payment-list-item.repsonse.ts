@@ -11,8 +11,9 @@ export class PaymentListItem {
   @ApiProperty({
     description: 'Loan ID',
     example: '550e8400-e29b-41d4-a716-446655440000',
+    nullable: true,
   })
-  loanId: string;
+  loanId: string | null;
 
   @ApiProperty({
     description: 'Payment amount in VND',
@@ -61,4 +62,12 @@ export class PaymentListItem {
     required: false,
   })
   customerPhone?: string;
+
+  @ApiProperty({
+    description: 'Notes about the payment',
+    example: 'Payment for liquidation of collateral',
+    required: false,
+    nullable: true,
+  })
+  notes?: string | null;
 }

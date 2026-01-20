@@ -605,6 +605,7 @@ export class CollateralService {
             referenceCode: paymentRefCode,
             idempotencyKey: `LIQUIDATION-${id}-${Date.now()}`,
             recorderEmployeeId: null, // System action
+            notes: `Thanh toán từ thanh lý tài sản. Giá bán: ${sellPrice.toLocaleString('vi-VN')} VND. Số tiền này được dùng để tất toán khoản vay ${loan.loanCode}.`,
           },
         });
 
@@ -684,6 +685,17 @@ export class CollateralService {
             },
           });
         }
+
+        // 7.1 Record the gross sale amount (LIQUIDATION_SALE)
+        // This records the full sell price for financial reporting
+        await tx.revenueLedger.create({
+          data: {
+            type: RevenueType.LIQUIDATION_SALE,
+            amount: Math.round(sellPrice),
+            refId: loanPayment.id,
+            storeId: loan.storeId,
+          },
+        });
 
         // 8. If there's excess, create a Disbursement to refund the customer (MONEY OUT)
         if (excessAmount > 0) {

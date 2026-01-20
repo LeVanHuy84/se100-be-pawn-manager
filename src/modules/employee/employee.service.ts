@@ -125,6 +125,7 @@ export class EmployeeService {
           status: EmployeeStatus.ACTIVE,
           phoneNumber: body.phoneNumber,
           hireDate: hireDate,
+          role: body.role,
         },
         privateMetadata: {
           role: body.role,
@@ -202,6 +203,7 @@ export class EmployeeService {
         ...(body.terminatedDate !== undefined && {
           terminatedDate: body.terminatedDate,
         }),
+        ...(body.role !== undefined && { role: body.role }),
       };
 
       // ========================

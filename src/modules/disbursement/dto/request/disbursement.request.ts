@@ -4,7 +4,7 @@ import { DisbursementMethod } from 'generated/prisma';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export const disbursementRequestSchema = z.object({
-  loanId: z.uuid('loanId must be a valid UUID'),
+  loanId: z.string().optional(),
   storeId: z.uuid('storeId must be a valid UUID'),
   amount: z.number().positive('Amount must be greater than 0'),
   disbursementMethod: z.enum(DisbursementMethod),
@@ -22,11 +22,12 @@ export class DisbursementRequestDto extends createZodDto(
   disbursementRequestSchema,
 ) {
   @ApiProperty({
-    description: 'Loan ID for disbursement',
+    description: 'Loan ID for disbursement (Optional for external expenses)',
     example: '550e8400-e29b-41d4-a716-446655440000',
     format: 'uuid',
+    required: false,
   })
-  loanId: string;
+  loanId?: string;
 
   @ApiProperty({
     description: 'Store ID where disbursement is made',

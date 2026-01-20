@@ -736,6 +736,7 @@ async function createFullLoan(
       // Jitter payment date slightly for realism
       paidDate = new Date(pDate);
       paidDate.setDate(paidDate.getDate() + getRandomInt(-2, 2));
+      if (paidDate > new Date()) paidDate = new Date();
     } else if (status === 'OVERDUE') {
       if (pDate < new Date()) {
         // This schedule is in the past
@@ -753,6 +754,7 @@ async function createFullLoan(
         paidDate = new Date(pDate);
         // Add random jitter to paidDate (-2 to +2 days) to populate daily revenue chart naturally
         paidDate.setDate(paidDate.getDate() + getRandomInt(-2, 2));
+        if (paidDate > new Date()) paidDate = new Date();
       } else {
         itemStatus = 'PENDING';
       }

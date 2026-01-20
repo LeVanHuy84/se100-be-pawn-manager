@@ -16,9 +16,9 @@ import {
   PaymentComponent,
   PaymentMethod,
   PaymentType,
+  RevenueType,
   Prisma,
   RepaymentItemStatus,
-  RevenueType,
   CollateralStatus,
 } from 'generated/prisma';
 import { ReminderProcessor } from '../communication/reminder.processor';
@@ -171,6 +171,7 @@ export class PaymentService {
       referenceCode: p.referenceCode,
       customerName: (p as any).loan?.customer?.fullName,
       customerPhone: (p as any).loan?.customer?.phone,
+      notes: p.notes,
     }));
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -205,86 +206,131 @@ export class PaymentService {
         'Duplicate payment (Idempotency-Key already used)',
       );
 
-    const loan = await this.prisma.loan.findUnique({
-      where: { id: loanId },
-      select: { id: true, loanCode: true, status: true, storeId: true },
-    });
-    if (!loan) throw new NotFoundException('Loan not found');
-    if (loan.status === 'CLOSED')
-      throw new ConflictException('Loan is already closed');
+    // For OTHER payment/income, we do not require a loan
+    let loan: any = null;
+    let targetStoreId: string | null = null;
+    let currentLoanId: string | null = loanId || null;
+
+    if (paymentType === 'OTHER') {
+      if (!(payload as any).storeId) {
+        throw new UnprocessableEntityException(
+          'Store ID is required for OTHER payment type',
+        );
+      }
+      targetStoreId = (payload as any).storeId;
+      currentLoanId = null;
+    } else {
+      loan = await this.prisma.loan.findUnique({
+        where: { id: loanId! }, // loanId is verified by DTO or we check here
+        select: { id: true, loanCode: true, status: true, storeId: true },
+      });
+      if (!loan) throw new NotFoundException('Loan not found');
+      if (
+        loan.status === 'CLOSED' &&
+        paymentType !== 'ADJUSTMENT' &&
+        paymentType !== 'PAYOFF'
+      )
+        throw new ConflictException('Loan is already closed');
+
+      targetStoreId = loan.storeId;
+      currentLoanId = loan.id;
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      // Prevent concurrent payments from allocating the same schedule items.
-      await tx.$queryRaw(
-        Prisma.sql`SELECT "id" FROM "RepaymentScheduleDetail" WHERE "loanId" = ${loanId}::uuid AND "status" IN (${RepaymentItemStatus.PENDING}::"RepaymentItemStatus", ${RepaymentItemStatus.OVERDUE}::"RepaymentItemStatus") FOR UPDATE`,
-      );
+      let allocations: AllocationDraft[] = [];
+      let balance: any = null; // Loan balance
+      let nextPayment: any = null;
+      let allSchedule: any = [];
 
-      // 1) Load schedule outstanding
-      const scheduleItems = await tx.repaymentScheduleDetail.findMany({
-        where: {
-          loanId,
-          status: {
-            in: [RepaymentItemStatus.PENDING, RepaymentItemStatus.OVERDUE],
+      // === LOGIC FOR LOAN-TIED PAYMENTS ===
+      if (paymentType !== 'OTHER') {
+        if (!currentLoanId)
+          throw new Error('Loan ID missing for non-OTHER payment');
+
+        // Prevent concurrent payments from allocating the same schedule items.
+        await tx.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "RepaymentScheduleDetail" WHERE "loanId" = ${currentLoanId}::uuid AND "status" IN (${RepaymentItemStatus.PENDING}::"RepaymentItemStatus", ${RepaymentItemStatus.OVERDUE}::"RepaymentItemStatus") FOR UPDATE`,
+        );
+
+        // 1) Load schedule outstanding
+        const scheduleItems = await tx.repaymentScheduleDetail.findMany({
+          where: {
+            loanId: currentLoanId,
+            status: {
+              in: [RepaymentItemStatus.PENDING, RepaymentItemStatus.OVERDUE],
+            },
           },
-        },
-        orderBy: [{ dueDate: 'asc' }, { periodNumber: 'asc' }],
-      });
+          orderBy: [{ dueDate: 'asc' }, { periodNumber: 'asc' }],
+        });
 
-      if (scheduleItems.length === 0) {
-        throw new UnprocessableEntityException(
-          'No outstanding schedule items to pay',
-        );
-      }
-
-      const earliest = scheduleItems[0];
-
-      // 2) Determine allocatable items based on payment type
-      let allocatableItems;
-      let maxAllocatable = 0;
-
-      if (paymentType === PaymentType.PERIODIC) {
-        // PERIODIC: Only allow payment to earliest period (can be partial)
-        allocatableItems = [earliest];
-        maxAllocatable = this.calcTotalOutstanding([earliest]);
-      } else if (paymentType === PaymentType.EARLY) {
-        // EARLY: Allow payment to multiple periods sequentially, but not beyond what's owed
-        allocatableItems = scheduleItems;
-        maxAllocatable = this.calcTotalOutstanding(scheduleItems);
-      } else if (paymentType === PaymentType.PAYOFF) {
-        // PAYOFF: Must pay ALL outstanding exactly (with small tolerance for rounding)
-        allocatableItems = scheduleItems;
-        const totalOutstandingAll = this.calcTotalOutstanding(scheduleItems);
-        const payoffDiff = Number(amount) - totalOutstandingAll;
-
-        if (Math.abs(payoffDiff) > 1) {
-          if (payoffDiff < 0) {
-            // Trả thiếu
-            throw new UnprocessableEntityException(
-              `PAYOFF yêu cầu thanh toán đủ số nợ còn lại = ${Math.round(totalOutstandingAll)} VND. Số tiền bạn trả: ${Math.round(Number(amount))} VND (thiếu ${Math.round(Math.abs(payoffDiff))} VND)`,
-            );
-          } else {
-            // Trả dư
-            throw new UnprocessableEntityException(
-              `PAYOFF yêu cầu thanh toán đúng số nợ còn lại = ${Math.round(totalOutstandingAll)} VND. Số tiền bạn trả: ${Math.round(Number(amount))} VND (dư ${Math.round(payoffDiff)} VND)`,
-            );
-          }
+        if (scheduleItems.length === 0) {
+          throw new UnprocessableEntityException(
+            'No outstanding schedule items to pay',
+          );
         }
-        maxAllocatable = totalOutstandingAll;
-      } else {
-        // ADJUSTMENT: Allow any amount up to total outstanding
-        allocatableItems = scheduleItems;
-        maxAllocatable = this.calcTotalOutstanding(scheduleItems);
-      }
 
-      // 3) Validate amount does not exceed what can be allocated
-      if (
-        paymentType !== PaymentType.PAYOFF &&
-        Number(amount) > maxAllocatable
-      ) {
-        throw new UnprocessableEntityException(
-          `Payment amount (${Math.round(Number(amount))}) exceeds allocatable outstanding (${Math.round(maxAllocatable)}) for ${paymentType} payment type`,
+        const earliest = scheduleItems[0];
+
+        // 2) Determine allocatable items based on payment type
+        let allocatableItems;
+        let maxAllocatable = 0;
+
+        if (paymentType === PaymentType.PERIODIC) {
+          allocatableItems = [earliest];
+          maxAllocatable = this.calcTotalOutstanding([earliest]);
+        } else if (paymentType === PaymentType.EARLY) {
+          allocatableItems = scheduleItems;
+          maxAllocatable = this.calcTotalOutstanding(scheduleItems);
+        } else if (paymentType === PaymentType.PAYOFF) {
+          allocatableItems = scheduleItems;
+          const totalOutstandingAll = this.calcTotalOutstanding(scheduleItems);
+          const payoffDiff = Number(amount) - totalOutstandingAll;
+
+          if (Math.abs(payoffDiff) > 1) {
+            if (payoffDiff < 0) {
+              // Trả thiếu
+              throw new UnprocessableEntityException(
+                `PAYOFF yêu cầu thanh toán đủ số nợ còn lại = ${Math.round(totalOutstandingAll)} VND. Số tiền bạn trả: ${Math.round(Number(amount))} VND (thiếu ${Math.round(Math.abs(payoffDiff))} VND)`,
+              );
+            } else {
+              // Trả dư
+              throw new UnprocessableEntityException(
+                `PAYOFF yêu cầu thanh toán đúng số nợ còn lại = ${Math.round(totalOutstandingAll)} VND. Số tiền bạn trả: ${Math.round(Number(amount))} VND (dư ${Math.round(payoffDiff)} VND)`,
+              );
+            }
+          }
+          maxAllocatable = totalOutstandingAll;
+        } else {
+          // ADJUSTMENT: Allow any amount up to total outstanding
+          allocatableItems = scheduleItems;
+          maxAllocatable = this.calcTotalOutstanding(scheduleItems);
+        }
+
+        // 3) Validate amount does not exceed what can be allocated
+        if (
+          paymentType !== PaymentType.PAYOFF &&
+          Number(amount) > maxAllocatable
+        ) {
+          throw new UnprocessableEntityException(
+            `Payment amount (${Math.round(Number(amount))}) exceeds allocatable outstanding (${Math.round(maxAllocatable)}) for ${paymentType} payment type`,
+          );
+        }
+
+        // 5) Allocate (Calculated before creation to ensure validity)
+        const allocationResult = await this.allocatePaymentToSchedule(
+          tx,
+          allocatableItems,
+          Number(amount),
+          notes,
         );
-      }
+        allocations = allocationResult.allocations;
+
+        if (allocationResult.remainingAmount > 1) {
+          throw new UnprocessableEntityException(
+            `Payment allocation failed: ${allocationResult.remainingAmount} VND could not be allocated.`,
+          );
+        }
+      } // End if (paymentType !== 'OTHER')
 
       // 4) Generate reference code and create payment header
       const referenceCode = await this.generatePaymentReferenceCode(tx);
@@ -293,14 +339,15 @@ export class PaymentService {
       try {
         payment = await tx.loanPayment.create({
           data: {
-            loanId,
-            storeId: loan.storeId,
+            loanId: currentLoanId, // NullABLE
+            storeId: targetStoreId!,
             amount,
             paymentType,
             paymentMethod: paymentMethod as unknown as PaymentMethod,
             referenceCode,
             idempotencyKey,
             recorderEmployeeId: employee.id,
+            notes,
           },
         });
       } catch (e: any) {
@@ -312,210 +359,210 @@ export class PaymentService {
         throw e;
       }
 
-      // 5) Allocate
-      const { allocations, remainingAmount } =
-        await this.allocatePaymentToSchedule(
+      if (paymentType !== 'OTHER' && currentLoanId) {
+        // 7) Save allocations (round amounts for storage)
+        await tx.paymentAllocation.createMany({
+          data: allocations.map((a) => ({
+            paymentId: payment.id,
+            componentType: a.componentType as any,
+            amount: Math.round(a.amount),
+            note: a.note,
+          })),
+        });
+
+        // 7.1) Record revenue in ledger
+        await this.recordRevenueFromAllocations(
           tx,
-          allocatableItems,
-          Number(amount),
-          notes,
+          payment.id,
+          currentLoanId,
+          targetStoreId!,
+          allocations,
         );
 
-      // 6) Verify all payment was allocated (should not have remainder for any type)
-      if (remainingAmount > 1) {
-        // Allow 1 VND rounding tolerance
-        throw new UnprocessableEntityException(
-          `Payment allocation failed: ${remainingAmount} VND could not be allocated. This should not happen - please contact support.`,
-        );
-      }
+        // 8) Recompute loan remaining + close if 0
+        allSchedule = await tx.repaymentScheduleDetail.findMany({
+          where: { loanId: currentLoanId },
+        });
 
-      // 7) Save allocations (round amounts for storage)
-      await tx.paymentAllocation.createMany({
-        data: allocations.map((a) => ({
-          paymentId: payment.id,
-          componentType: a.componentType as any,
-          amount: Math.round(a.amount),
-          note: a.note,
-        })),
-      });
+        const balanceResult = this.recalcLoanBalance(allSchedule);
+        balance = balanceResult;
 
-      // 7.1) Record revenue in ledger
-      await this.recordRevenueFromAllocations(
-        tx,
-        payment.id,
-        loanId,
-        loan.storeId,
-        allocations,
-      );
+        const wasClosedBefore = loan.status === 'CLOSED';
+        const wasOverdueBefore = loan.status === 'OVERDUE';
+        const isNowClosed = balanceResult.totalRemaining <= 0;
 
-      // 8) Recompute loan remaining + close if 0
-      const allSchedule = await tx.repaymentScheduleDetail.findMany({
-        where: { loanId },
-      });
+        const overdueCount = allSchedule.filter(
+          (item: any) => item.status === RepaymentItemStatus.OVERDUE,
+        ).length;
 
-      const balance = this.recalcLoanBalance(allSchedule);
+        let newStatus = loan.status;
+        if (isNowClosed) {
+          newStatus = 'CLOSED';
+        } else if (overdueCount === 0 && wasOverdueBefore) {
+          newStatus = 'ACTIVE';
+        }
 
-      const wasClosedBefore = loan.status === 'CLOSED';
-      const wasOverdueBefore = loan.status === 'OVERDUE';
-      const isNowClosed = balance.totalRemaining <= 0;
-
-      // Check if there are any overdue items remaining
-      const overdueCount = allSchedule.filter(
-        (item) => item.status === RepaymentItemStatus.OVERDUE,
-      ).length;
-
-      let newStatus = loan.status;
-      if (isNowClosed) {
-        newStatus = 'CLOSED';
-      } else if (overdueCount === 0 && wasOverdueBefore) {
-        // If all overdue items are paid and loan was OVERDUE, revert to ACTIVE
-        newStatus = 'ACTIVE';
-      }
-
-      await tx.loan.update({
-        where: { id: loanId },
-        data: {
-          remainingAmount: balance.totalRemaining,
-          ...(newStatus !== loan.status ? { status: newStatus } : {}),
-        },
-      });
-
-      // Log status changes
-      if (newStatus === 'ACTIVE' && wasOverdueBefore) {
-        await tx.auditLog.create({
+        await tx.loan.update({
+          where: { id: currentLoanId },
           data: {
-            action: 'REVERT_LOAN_STATUS',
-            entityId: loanId,
-            entityType: 'LOAN',
-            entityName: loan.loanCode,
-            actorId: null,
-            oldValue: { status: 'OVERDUE' },
-            newValue: { status: 'ACTIVE' },
-            description: `Khoản vay ${loan.loanCode} được chuyển về ACTIVE sau khi trả hết các kỳ quá hạn.`,
+            remainingAmount: balanceResult.totalRemaining,
+            ...(newStatus !== loan.status ? { status: newStatus } : {}),
           },
         });
-      }
 
-      if (isNowClosed && !wasClosedBefore) {
-        // audit log for loan closure
-        await tx.auditLog.create({
-          data: {
-            action: 'CLOSE_LOAN',
-            entityId: loanId,
-            entityType: 'LOAN',
-            entityName: `${loan.loanCode}`,
-            actorId: null,
-            oldValue: {
-              status: loan.status,
+        // Log status changes
+        if (newStatus === 'ACTIVE' && wasOverdueBefore) {
+          await tx.auditLog.create({
+            data: {
+              action: 'REVERT_LOAN_STATUS',
+              entityId: currentLoanId,
+              entityType: 'LOAN',
+              entityName: loan.loanCode,
+              actorId: null,
+              oldValue: { status: 'OVERDUE' },
+              newValue: { status: 'ACTIVE' },
+              description: `Khoản vay ${loan.loanCode} được chuyển về ACTIVE sau khi trả hết các kỳ quá hạn.`,
             },
-            newValue: {
-              status: 'CLOSED',
-            },
-            description: `Khoản vay ${loan.loanCode} đã được đóng khi thanh toán hết dư nợ.`,
-          },
-        });
+          });
+        }
 
-        // --- AUTOMATIC COLLATERAL RELEASE ---
-        // Release assets if they are not being liquidated
-        const associatedCollaterals = await tx.collateral.findMany({
-          where: { loanId },
-          select: {
-            id: true,
-            status: true,
-            collateralType: { select: { name: true } },
-          },
-        });
-
-        for (const col of associatedCollaterals) {
-          if (
-            col.status !== 'LIQUIDATING' &&
-            col.status !== 'SOLD' &&
-            col.status !== 'RELEASED'
-          ) {
-            await tx.collateral.update({
-              where: { id: col.id },
-              data: { status: 'RELEASED' },
-            });
-
-            // Audit log for collateral release
-            await tx.auditLog.create({
-              data: {
-                action: 'RELEASE_COLLATERAL',
-                entityId: col.id,
-                entityType: 'COLLATERAL',
-                entityName: col.collateralType?.name ?? 'Asset',
-                actorId: employee?.id ?? null,
-                actorName: employee?.name ?? 'System',
-                oldValue: { status: col.status },
-                newValue: { status: 'RELEASED' },
-                description: `Tài sản tự động được giải phóng khi khoản vay ${loan.loanCode} tất toán.`,
+        if (isNowClosed && !wasClosedBefore) {
+          // audit log for loan closure
+          await tx.auditLog.create({
+            data: {
+              action: 'CLOSE_LOAN',
+              entityId: currentLoanId,
+              entityType: 'LOAN',
+              entityName: `${loan.loanCode}`,
+              actorId: null,
+              oldValue: {
+                status: loan.status,
               },
-            });
+              newValue: {
+                status: 'CLOSED',
+              },
+              description: `Khoản vay ${loan.loanCode} đã được đóng khi thanh toán hết dư nợ.`,
+            },
+          });
+
+          // --- AUTOMATIC COLLATERAL RELEASE ---
+          const associatedCollaterals = await tx.collateral.findMany({
+            where: { loanId: currentLoanId },
+            select: {
+              id: true,
+              status: true,
+              collateralType: { select: { name: true } },
+            },
+          });
+
+          for (const col of associatedCollaterals) {
+            if (
+              col.status !== 'LIQUIDATING' &&
+              col.status !== 'SOLD' &&
+              col.status !== 'RELEASED'
+            ) {
+              await tx.collateral.update({
+                where: { id: col.id },
+                data: { status: 'RELEASED' },
+              });
+
+              // Audit log for collateral release
+              await tx.auditLog.create({
+                data: {
+                  action: 'RELEASE_COLLATERAL',
+                  entityId: col.id,
+                  entityType: 'COLLATERAL',
+                  entityName: col.collateralType?.name ?? 'Asset',
+                  actorId: employee?.id ?? null,
+                  actorName: employee?.name ?? 'System',
+                  oldValue: { status: col.status },
+                  newValue: { status: 'RELEASED' },
+                  description: `Tài sản tự động được giải phóng khi khoản vay ${loan.loanCode} tất toán.`,
+                },
+              });
+            }
           }
         }
+
+        // 8.1) Validate balance consistency (auto-heal if needed)
+        await this.validateAndReconcileLoanBalance(
+          tx,
+          currentLoanId,
+          allSchedule,
+        );
+
+        // ✅ 8.2) CREATE AUDIT LOG HERE
+        await tx.auditLog.create({
+          data: {
+            action: 'CREATE_PAYMENT',
+            entityId: payment.id,
+            entityType: 'LOAN_PAYMENT',
+            entityName: `Thanh toán - ${loan.loanCode} ${payment.referenceCode ?? '(' + payment.referenceCode + ')'}`,
+            actorId: employee.id,
+            actorName: employee.name,
+            newValue: {
+              loanId: currentLoanId,
+              loanCode: loan.loanCode,
+              amount: Number(amount),
+              paymentType: paymentType,
+              paymentMethod: paymentMethod,
+            },
+            description: `Thanh toán ${Math.round(
+              Number(amount),
+            )} VND cho khoản vay ${loan.loanCode}`,
+          },
+        });
+
+        // 9) Next payment
+        const next = await tx.repaymentScheduleDetail.findFirst({
+          where: {
+            loanId: currentLoanId,
+            status: {
+              in: [RepaymentItemStatus.PENDING, RepaymentItemStatus.OVERDUE],
+            },
+          },
+          orderBy: [{ dueDate: 'asc' }, { periodNumber: 'asc' }],
+        });
+
+        nextPayment = next
+          ? {
+              dueDate: next.dueDate.toISOString().slice(0, 10),
+              amount: this.calcTotalOutstanding([next]),
+              periodNumber: next.periodNumber,
+            }
+          : { dueDate: null, amount: null, periodNumber: null };
+      } else {
+        // === LOGIC FOR OTHER PAYMENTS ===
+        // Just record revenue
+        await tx.revenueLedger.create({
+          data: {
+            storeId: targetStoreId!,
+            amount: amount,
+            type: RevenueType.OTHER,
+            refId: payment.id,
+            recordedAt: new Date(),
+          },
+        });
       }
-
-      // 8.1) Validate balance consistency (auto-heal if needed)
-      // Pass allSchedule to avoid redundant query
-      await this.validateAndReconcileLoanBalance(tx, loanId, allSchedule);
-
-      // ✅ 8.2) CREATE AUDIT LOG HERE
-      await tx.auditLog.create({
-        data: {
-          action: 'CREATE_PAYMENT',
-          entityId: payment.id,
-          entityType: 'LOAN_PAYMENT',
-          entityName: `Thanh toán - ${loan.loanCode} ${payment.referenceCode ?? '(' + payment.referenceCode + ')'}`,
-          actorId: employee.id,
-          actorName: employee.name,
-          newValue: {
-            loanId: loanId,
-            loanCode: loan.loanCode,
-            amount: Number(amount),
-            paymentType: paymentType,
-            paymentMethod: paymentMethod,
-          },
-          description: `Thanh toán ${Math.round(
-            Number(amount),
-          )} VND cho khoản vay ${loan.loanCode}`,
-        },
-      });
-
-      // 9) Next payment
-      const next = await tx.repaymentScheduleDetail.findFirst({
-        where: {
-          loanId,
-          status: {
-            in: [RepaymentItemStatus.PENDING, RepaymentItemStatus.OVERDUE],
-          },
-        },
-        orderBy: [{ dueDate: 'asc' }, { periodNumber: 'asc' }],
-      });
-
-      const nextPayment = next
-        ? {
-            dueDate: next.dueDate.toISOString().slice(0, 10),
-            amount: this.calcTotalOutstanding([next]),
-            periodNumber: next.periodNumber,
-          }
-        : { dueDate: null, amount: null, periodNumber: null };
 
       return { payment, allocations, balance, nextPayment, allSchedule };
     });
 
-    // Handle post-payment actions (cancel reminders + send notifications)
-    await this.handlePostPaymentActions(
-      loanId,
-      result.payment.id,
-      amount,
-      result.allocations,
-      result.allSchedule,
-    );
+    if (currentLoanId) {
+      // Handle post-payment actions (cancel reminders + send notifications)
+      await this.handlePostPaymentActions(
+        currentLoanId,
+        result.payment.id,
+        amount,
+        result.allocations,
+        result.allSchedule,
+      );
+    }
 
     return {
       data: {
         transactionId: result.payment.id,
-        loanId,
+        loanId: currentLoanId,
         amount,
         paymentMethod: result.payment.paymentMethod,
         paymentType: result.payment.paymentType as any,
