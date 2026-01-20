@@ -1,0 +1,545 @@
+// ==================================================
+// GENERATOR & DATASOURCE
+// ==================================================
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================================================
+// ENUMS
+// ==================================================
+enum CustomerType {
+  REGULAR
+  VIP
+}
+
+enum RepaymentMethod {
+  EQUAL_INSTALLMENT
+  INTEREST_ONLY
+}
+
+enum LoanStatus {
+  PENDING
+  REJECTED
+  ACTIVE
+  CLOSED
+  OVERDUE
+}
+
+enum RepaymentItemStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum PaymentType {
+  PERIODIC
+  EARLY
+  PAYOFF
+  ADJUSTMENT
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+enum PaymentComponent {
+  PRINCIPAL
+  INTEREST
+  LATE_FEE
+  SERVICE_FEE
+}
+
+enum CollateralStatus {
+  PROPOSED
+  PLEDGED
+  STORED
+  RELEASED
+  REJECTED
+  LIQUIDATING
+  SOLD
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DisbursementMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+enum AuditEntityType {
+  LOAN
+  LOAN_PAYMENT
+  REPAYMENT_SCHEDULE
+  COLLATERAL
+  CUSTOMER
+  DISBURSEMENT
+  LOAN_TYPE
+  CONFIGURATION
+}
+
+enum RevenueType {
+  INTEREST
+  LATE_FEE
+  SERVICE_FEE
+  LIQUIDATION_EXCESS    // Net profit from liquidation (after paying off debt and refund)
+  LIQUIDATION_SALE      // Total amount received from selling collateral
+  EXCESS_REFUND         // Amount refunded to customer (recorded as negative/outflow)
+}
+
+enum NotificationType {
+  LOAN_APPROVED // Thông báo khoản vay được duyệt
+  INTEREST_REMINDER // Nhắc trả lãi sắp tới hạn
+  OVERDUE_REMINDER // Nhắc nợ quá hạn
+  LIQUIDATION_WARNING // Cảnh báo sắp thanh lý
+  PAYMENT_CONFIRMATION // Xác nhận thanh toán
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  PHONE_CALL
+  IN_PERSON
+}
+
+enum NotificationStatus {
+  PENDING // Chờ gửi
+  SENT // Đã gửi (SMS/Email)
+  DELIVERED // Đã nhận (SMS/Email confirmed)
+  FAILED // Gửi thất bại
+  ANSWERED // Khách nghe máy (Phone)
+  NO_ANSWER // Không nghe máy (Phone)
+  PROMISE_TO_PAY // Khách hứa trả
+}
+
+enum LocationLevel {
+  PROVINCE
+  WARD
+}
+
+// ==================================================
+// LOAN PRODUCT TYPE
+// ==================================================
+model LoanType {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  description String?
+
+  durationMonths      Int
+  interestRateMonthly Decimal @db.Decimal(7, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  loans Loan[]
+}
+
+// ==================================================
+// CUSTOMER
+// ==================================================
+model Customer {
+  id            String       @id @default(uuid()) @db.Uuid
+  fullName      String
+  dob           DateTime     @db.Date
+  nationalId    String       @unique
+  phone         String?      @unique
+  email         String?      @unique
+  address       String?
+  customerType  CustomerType
+  monthlyIncome Decimal?
+  creditScore   Int?
+  images        Json
+  wardId        String        
+
+  ward          Location      @relation("CustomerWard", fields: [wardId], references: [id])
+
+  loans            Loan[]
+  notificationLogs NotificationLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  @@index([wardId])
+}
+
+// ==================================================
+// LOAN
+// ==================================================
+model LoanSequence {
+  year  Int   @id
+  value Int
+}
+
+model PaymentSequence {
+  year  Int   @id
+  value Int
+}
+
+model DisbursementSequence {
+  year  Int   @id
+  value Int
+}
+
+model Loan {
+  id         String @id @default(uuid()) @db.Uuid
+  loanCode   String @unique
+  customerId String @db.Uuid
+
+  // ---- LOAN TERMS (SNAPSHOT) ----
+  loanAmount      Decimal
+  repaymentMethod RepaymentMethod
+  loanTypeId      Int
+
+  durationMonths      Int // snapshot
+  appliedInterestRate Decimal // snapshot
+
+  // rate phi phat
+  latePaymentPenaltyRate Decimal @db.Decimal(7, 4) // snapshot
+
+  // ---- CALCULATED SNAPSHOT ----
+  totalInterest  Decimal
+  totalFees      Decimal
+  totalRepayment Decimal
+  monthlyPayment Decimal
+
+  // ---- LIFECYCLE ----
+  startDate DateTime?
+  status    LoanStatus @default(PENDING)
+
+  approvedAt DateTime?
+  approvedBy String?
+  rejectedAt DateTime?
+  rejectedBy String?
+
+  activatedAt     DateTime?
+  remainingAmount Decimal   @default(0)
+
+  // ---- DISBURSEMENT TRACKING ----
+  disbursedAt        DateTime?
+  disbursedBy        String?
+  disbursementMethod DisbursementMethod?
+  disbursementNote   String?
+
+  notes String?
+
+  storeId String @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  createdBy String?
+
+  // ---- RELATIONS ----
+  loanType          LoanType                  @relation(fields: [loanTypeId], references: [id] )
+  customer          Customer                  @relation(fields: [customerId], references: [id])
+  repaymentSchedule RepaymentScheduleDetail[]
+  payments          LoanPayment[]
+  disbursements     Disbursement[]
+  collaterals       Collateral[]
+
+  notificationLogs NotificationLog[]
+
+  store Store @relation(fields: [storeId], references: [id])
+}
+
+// ==================================================
+// REPAYMENT SCHEDULE
+// ==================================================
+model RepaymentScheduleDetail {
+  id                   String              @id @default(uuid()) @db.Uuid
+  loanId               String              @db.Uuid
+  periodNumber         Int
+  dueDate              DateTime            @db.Date
+  beginningBalance     Decimal
+  principalAmount      Decimal
+  interestAmount       Decimal
+  feeAmount            Decimal             @default(0) // mgmt + custody fee cho kỳ này
+  penaltyAmount        Decimal             @default(0)
+  totalAmount          Decimal
+  status               RepaymentItemStatus @default(PENDING)
+  paidPrincipal        Decimal?            @default(0)
+  paidInterest         Decimal?            @default(0)
+  paidFee              Decimal?            @default(0)
+  paidPenalty          Decimal?            @default(0)
+  paidAt               DateTime?
+  lastPenaltyAppliedAt DateTime?           @db.Date
+
+  loan Loan @relation(fields: [loanId], references: [id])
+}
+
+// ==================================================
+// PAYMENTS
+// ==================================================
+model LoanPayment {
+  id                 String        @id @default(uuid()) @db.Uuid
+  idempotencyKey     String?       @unique
+  loanId             String        @db.Uuid
+  storeId            String        @db.Uuid
+  amount             Decimal
+  paymentType        PaymentType
+  paymentMethod      PaymentMethod
+  paidAt             DateTime      @default(now())
+  referenceCode      String?
+  recorderEmployeeId String? // clerk user id (string)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @default(now())
+
+  loan        Loan                @relation(fields: [loanId], references: [id])
+  store       Store               @relation(fields: [storeId], references: [id])
+  allocations PaymentAllocation[]
+
+  @@index([storeId])
+  @@index([loanId])
+  @@index([paidAt])
+}
+
+// Allocation per payment
+model PaymentAllocation {
+  id            String           @id @default(uuid()) @db.Uuid
+  paymentId     String           @db.Uuid
+  componentType PaymentComponent
+  amount        Decimal
+  note          String?
+
+  payment LoanPayment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+}
+
+// ==================================================
+// DISBURSEMENT LOG (Chi tiền)
+// ==================================================
+model Disbursement {
+  id                   String             @id @default(uuid()) @db.Uuid
+  idempotencyKey       String?            @unique // Prevent duplicate disbursements
+  loanId               String             @db.Uuid
+  storeId              String             @db.Uuid
+  amount               Decimal            // Số tiền giải ngân
+  disbursementMethod   DisbursementMethod // CASH hoặc BANK_TRANSFER
+  disbursedAt          DateTime           @default(now())
+  referenceCode        String?            @unique // DSB-2026-000001
+  disbursedBy          String?            // Clerk user ID
+  recipientName        String             // Tên người nhận (customer)
+  recipientIdNumber    String?            // CMND/CCCD người nhận
+  witnessName          String?            // Người chứng kiến (nếu có)
+  notes                String?            // Ghi chú
+  bankTransferRef      String?            // Mã giao dịch ngân hàng (nếu chuyển khoản)
+  bankAccountNumber    String?            // Số tài khoản nhận (nếu chuyển khoản)
+  bankName             String?            // Tên ngân hàng (nếu chuyển khoản)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  loan  Loan  @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([loanId])
+  @@index([storeId])
+  @@index([disbursedAt])
+  @@index([disbursementMethod])
+}
+
+// ==================================================
+// COLLATERAL & APPRAISAL
+// ==================================================
+model CollateralType {
+  id                    Int          @id @default(autoincrement())
+  name                  String
+  // mgmtFeeRateMonthly    Decimal @default(0) @db.Decimal(7, 4)  -> Parameter
+  custodyFeeRateMonthly Decimal      @default(0) @db.Decimal(7, 4)
+  collaterals           Collateral[]
+}
+
+model Store {
+  id        String  @id @default(uuid()) @db.Uuid
+  name      String
+  address   String?
+  storeInfo Json
+  isActive  Boolean @default(true)
+  wardId        String        
+
+  ward          Location      @relation("StoreWard", fields: [wardId], references: [id])
+
+  collaterals   Collateral[]
+  loans         Loan[]
+  payments      LoanPayment[]
+  disbursements Disbursement[]
+  revenues      RevenueLedger[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([wardId])
+}
+
+// model Storage {
+//   id          String  @id @default(uuid()) @db.Uuid
+//   name        String
+//   address     String
+//   storageInfo Json
+//   isActive    Boolean @default(true)
+
+//   collaterals Collateral[]
+
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+// }
+
+model Collateral {
+  id               String @id @default(uuid()) @db.Uuid
+  collateralTypeId Int
+  ownerName        String
+
+  collateralInfo Json
+
+  status          CollateralStatus @default(PROPOSED)
+  loanId          String?          @db.Uuid
+  storageLocation String?
+  receivedDate    DateTime?        @db.Date
+
+  appraisedValue Decimal?
+  ltvRatio       Decimal?
+  appraisalDate  DateTime?
+  appraisalNotes String?
+
+  images Json
+
+  sellPrice Decimal?
+  sellDate  DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  loan           Loan?          @relation(fields: [loanId], references: [id])
+  collateralType CollateralType @relation(fields: [collateralTypeId], references: [id])
+  store          Store?         @relation(fields: [storeId], references: [id])
+  storeId        String?        @db.Uuid
+}
+
+// ==================================================
+// DOCUMENT RECORD
+// ==================================================
+// model DocumentRecord {
+//   id          String        @id @default(uuid()) @db.Uuid
+//   entityType  DocumentEntity
+//   entityId    String        @db.Uuid
+//   docType     String
+//   docNumber   String
+//   issuedDate  DateTime      @db.Date
+//   expiryDate  DateTime?
+//   isValid     Boolean       @default(true)
+//   createdAt   DateTime      @default(now())
+// }
+
+// ==================================================
+// SYSTEM PARAMETER
+// ==================================================
+model SystemParameter {
+  id          Int      @id @default(autoincrement())
+  paramGroup  String?
+  paramKey    String
+  paramValue  String
+  dataType    String?  @default("STRING")
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  @@unique([paramGroup, paramKey])
+}
+
+// ==================================================
+// AUDIT LOG
+// ==================================================
+model AuditLog {
+  id          String          @id @default(uuid()) @db.Uuid
+  action      String // e.g., "SYSTEM_PENALTY", "UPDATE_LOAN", "LIQUIDATION"
+  entityId    String // ID của đối tượng bị tác động (LoanID, RepaymentID)
+  entityType  AuditEntityType // "LOAN", "REPAYMENT_SCHEDULE"
+  entityName  String? // Tên đối tượng bị tác động (ví dụ: Loan Code hoặc mô tả ngắn)
+  actorId     String? // NULL nếu là SYSTEM (Cronjob), UserID nếu là nhân viên
+  actorName   String? // Tên nhân viên hoặc "SYSTEM"
+  oldValue    Json? // Dữ liệu trước khi thay đổi
+  newValue    Json? // Dữ liệu sau khi thay đổi
+  description String? // "Applied penalty: 50,000 VND for 2 days overdue"
+  createdAt   DateTime        @default(now())
+}
+
+// ==================================================
+// REVENUE LEDGER
+// ==================================================
+model RevenueLedger {
+  id         String      @id @default(uuid()) @db.Uuid
+  type       RevenueType // "INTEREST", "SERVICE_FEE", "LATE_FEE"
+  amount     Decimal
+  refId      String // LoanID hoặc PaymentID
+  storeId    String      @db.Uuid
+  recordedAt DateTime    @default(now())
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId])
+  @@index([type])
+  @@index([recordedAt])
+}
+
+// ==================================================
+// NOTIFICATION / COMMUNICATION LOG
+// ==================================================
+model NotificationLog {
+  id      String              @id @default(uuid()) @db.Uuid
+  type    NotificationType // Loại thông báo
+  channel NotificationChannel // Kênh liên lạc
+  status  NotificationStatus  @default(PENDING)
+
+  // Liên kết
+  loanId     String   @db.Uuid
+  loan       Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  // Nội dung
+  subject          String? // Tiêu đề (Email) hoặc mục đích
+  message          String? // Nội dung tin nhắn
+  recipientContact String? // Sđt hoặc email nhận
+
+  // Kết quả (cho Phone Call)
+  callDuration     Int? // Thời lượng gọi (giây)
+  employeeId       String? // Nhân viên xử lý (nếu Phone/In-person)
+  notes            String? // Ghi chú kết quả: "Khách hứa thứ Hai trả"
+  promiseToPayDate DateTime? // Ngày khách hứa trả
+
+  // Metadata
+  sentAt    DateTime? // Thời điểm gửi/gọi
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([loanId, type])
+  @@index([customerId])
+  @@index([status])
+}
+
+model Location {
+  id        String      @id @default(uuid())
+  code      String      @unique
+  name      String
+  level     LocationLevel
+  parentId  String?
+  parent    Location? @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children  Location[] @relation("LocationHierarchy")
+
+  @@index([parentId])
+
+  Customer Customer[] @relation("CustomerWard")
+
+  Store    Store[]    @relation("StoreWard")
+}

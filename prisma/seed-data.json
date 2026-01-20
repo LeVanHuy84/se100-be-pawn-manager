@@ -1,0 +1,451 @@
+{
+  "stores": [
+    {
+      "name": "Cầm đồ Trung Tâm",
+      "address": "123 Lê Lợi, Quận 1, TP.HCM",
+      "storeInfo": { "phone": "02838221234", "email": "central@pawnshop.com" },
+      "isActive": true
+    },
+    {
+      "name": "Cầm đồ Phía Tây",
+      "address": "456 Nguyễn Văn Linh, Quận 7, TP.HCM",
+      "storeInfo": { "phone": "02837775678", "email": "west@pawnshop.com" },
+      "isActive": true
+    }
+  ],
+  "loanTypes": [
+    {
+      "id": 1,
+      "name": "VEHICLE_BIKE_STANDARD_6M",
+      "description": "Cầm xe máy tiêu chuẩn - 6 tháng",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.8
+    },
+    {
+      "id": 2,
+      "name": "VEHICLE_BIKE_STANDARD_12M",
+      "description": "Cầm xe máy tiêu chuẩn - 12 tháng",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.8
+    },
+    {
+      "id": 3,
+      "name": "VEHICLE_BIKE_PREMIUM_6M",
+      "description": "Cầm xe máy cao cấp - 6 tháng",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.4
+    },
+    {
+      "id": 4,
+      "name": "VEHICLE_CAR_STANDARD_12M",
+      "description": "Cầm ô tô tiêu chuẩn - 12 tháng",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.3
+    },
+    {
+      "id": 5,
+      "name": "VEHICLE_CAR_PREMIUM_12M",
+      "description": "Cầm ô tô cao cấp - 12 tháng",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.1
+    },
+    {
+      "id": 6,
+      "name": "GOLD_SHORT_3M",
+      "description": "Cầm vàng ngắn hạn (<= 3 tháng)",
+      "durationMonths": 3,
+      "interestRateMonthly": 1.5
+    },
+    {
+      "id": 7,
+      "name": "GOLD_STANDARD_6M",
+      "description": "Cầm vàng tiêu chuẩn - 6 tháng",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.7
+    },
+    {
+      "id": 8,
+      "name": "GOLD_LONG_12M",
+      "description": "Cầm vàng dài hạn - 12 tháng",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.9
+    },
+    {
+      "id": 9,
+      "name": "SALARY_STANDARD_6M",
+      "description": "Vay tín chấp theo lương - 6 tháng",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.2
+    },
+    {
+      "id": 10,
+      "name": "SALARY_JUNIOR_6M",
+      "description": "Vay cho nhân viên mới/Fresher - 6 tháng",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.5
+    },
+    {
+      "id": 11,
+      "name": "SALARY_SENIOR_12M",
+      "description": "Vay cho nhân viên lâu năm/Thu nhập ổn định - 12 tháng",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.0
+    },
+    {
+      "id": 12,
+      "name": "ELECTRONICS_PHONE_3M",
+      "description": "Cầm điện thoại thông minh - 3 tháng",
+      "durationMonths": 3,
+      "interestRateMonthly": 2.2
+    },
+    {
+      "id": 13,
+      "name": "ELECTRONICS_LAPTOP_6M",
+      "description": "Cầm Laptop - 6 tháng",
+      "durationMonths": 6,
+      "interestRateMonthly": 2.0
+    },
+    {
+      "id": 14,
+      "name": "HOME_APPLIANCE_3M",
+      "description": "Cầm đồ gia dụng (TV, Tủ lạnh...) - 3 tháng",
+      "durationMonths": 3,
+      "interestRateMonthly": 2.1
+    },
+    {
+      "id": 15,
+      "name": "HOME_APPLIANCE_6M",
+      "description": "Cầm đồ gia dụng (TV, Tủ lạnh...) - 6 tháng",
+      "durationMonths": 6,
+      "interestRateMonthly": 2.0
+    },
+    {
+      "id": 16,
+      "name": "SME_MICRO_6M",
+      "description": "Vay vốn lưu động doanh nghiệp siêu nhỏ - 6 tháng",
+      "durationMonths": 6,
+      "interestRateMonthly": 1.9
+    },
+    {
+      "id": 17,
+      "name": "SME_SMALL_12M",
+      "description": "Vay vốn lưu động doanh nghiệp nhỏ - 12 tháng",
+      "durationMonths": 12,
+      "interestRateMonthly": 1.6
+    },
+    {
+      "id": 18,
+      "name": "SME_SECURED_18M",
+      "description": "Vay doanh nghiệp có thế chấp - 18 tháng",
+      "durationMonths": 18,
+      "interestRateMonthly": 1.5
+    }
+  ],
+  "commonCollateralTypes": [
+    { "name": "Đồ điện tử", "custodyFeeRateMonthly": 0.01 },
+    { "name": "Trang sức", "custodyFeeRateMonthly": 0.005 },
+    { "name": "Xe cộ", "custodyFeeRateMonthly": 0.02 },
+    { "name": "Bất động sản", "custodyFeeRateMonthly": 0.001 },
+    { "name": "Đồng hồ", "custodyFeeRateMonthly": 0.015 }
+  ],
+  "systemParameters": [
+    {
+      "paramGroup": "RATES",
+      "paramKey": "BIKE_DEFAULT_INTEREST",
+      "paramValue": "1.6",
+      "dataType": "DECIMAL",
+      "description": "Lãi suất mặc định cho cầm xe máy (%/tháng)"
+    },
+    {
+      "paramGroup": "RATES",
+      "paramKey": "PENALTY_INTEREST_RATE",
+      "paramValue": "0.05",
+      "dataType": "DECIMAL",
+      "description": "Lãi suất phạt quá hạn (%/tháng)"
+    },
+    {
+      "paramGroup": "RATES",
+      "paramKey": "LEGAL_INTEREST_CAP",
+      "paramValue": "20.0",
+      "dataType": "DECIMAL",
+      "description": "Trần lãi suất theo Bộ luật Dân sự 2015 (%)"
+    },
+    {
+      "paramGroup": "RATES",
+      "paramKey": "MANAGEMENT_FEE_PERCENT",
+      "paramValue": "0.02",
+      "dataType": "DECIMAL",
+      "description": "Phí quản lý trên số tiền vay (%)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "BIKE_MAX_LTV",
+      "paramValue": "70",
+      "dataType": "DECIMAL",
+      "description": "Tỷ lệ vay/tài sản (LTV) tối đa cho xe máy (%)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "CAR_MAX_LTV",
+      "paramValue": "80",
+      "dataType": "DECIMAL",
+      "description": "Tỷ lệ vay/tài sản (LTV) tối đa cho ô tô (%)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "GOLD_MAX_LTV",
+      "paramValue": "85",
+      "dataType": "DECIMAL",
+      "description": "Tỷ lệ vay/tài sản (LTV) tối đa cho vàng (%)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "MIN_INCOME_REQUIRED",
+      "paramValue": "5000000",
+      "dataType": "DECIMAL",
+      "description": "Thu nhập tối thiểu yêu cầu (VND)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "SALARY_INCOME_MULTIPLIER",
+      "paramValue": "3.0",
+      "dataType": "DECIMAL",
+      "description": "Hệ số nhân thu nhập tối đa"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "MAX_ACTIVE_LOANS_PER_CUSTOMER",
+      "paramValue": "3",
+      "dataType": "INTEGER",
+      "description": "Số khoản vay tối đa trên mỗi khách hàng"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "MAX_TENOR_MONTHS",
+      "paramValue": "24",
+      "dataType": "INTEGER",
+      "description": "Thời hạn vay tối đa (tháng)"
+    },
+    {
+      "paramGroup": "LIMITS",
+      "paramKey": "MAX_TOTAL_OUTSTANDING_PER_CUSTOMER",
+      "paramValue": "100000000",
+      "dataType": "DECIMAL",
+      "description": "Tổng dư nợ tối đa trên mỗi khách hàng (VND)"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "CURRENCY",
+      "paramValue": "VND",
+      "dataType": "STRING",
+      "description": "Đơn vị tiền tệ mặc định"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "TIMEZONE",
+      "paramValue": "Asia/Ho_Chi_Minh",
+      "dataType": "STRING",
+      "description": "Múi giờ hệ thống"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "AGE_REQUIREMENT_MIN",
+      "paramValue": "18",
+      "dataType": "INTEGER",
+      "description": "Độ tuổi tối thiểu"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "ENABLE_AUTO_APPROVAL",
+      "paramValue": "false",
+      "dataType": "BOOLEAN",
+      "description": "Bật tự động duyệt vay rủi ro thấp"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "AUTO_APPROVAL_MAX_AMOUNT",
+      "paramValue": "20000000",
+      "dataType": "DECIMAL",
+      "description": "Hạn mức tối đa duyệt tự động (VND)"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "REMINDER_DAYS_BEFORE_DUE",
+      "paramValue": "2",
+      "dataType": "INTEGER",
+      "description": "Số ngày nhắc trước hạn"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "REMINDER_DAYS_AFTER_OVERDUE",
+      "paramValue": "1",
+      "dataType": "INTEGER",
+      "description": "Số ngày nhắc sau khi quá hạn"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "MAX_LOGIN_ATTEMPTS",
+      "paramValue": "5",
+      "dataType": "INTEGER",
+      "description": "Số lần đăng nhập sai tối đa"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "SUPPORTED_ASSET_TYPES",
+      "paramValue": "[\"CAR\",\"MOTORBIKE\",\"GOLD\"]",
+      "dataType": "JSON",
+      "description": "Danh sách loại tài sản hỗ trợ"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "SUPPORTED_LOAN_PRODUCTS",
+      "paramValue": "[]",
+      "dataType": "JSON",
+      "description": "Cấu hình sản phẩm vay (sẽ được cập nhật tự động)"
+    },
+    {
+      "paramGroup": "SYSTEM",
+      "paramKey": "DASHBOARD_DEFAULT_DATE_RANGE",
+      "paramValue": "LAST_30_DAYS",
+      "dataType": "STRING",
+      "description": "Khoảng thời gian mặc định cho Dashboard"
+    }
+  ],
+  "customers": [
+    {
+      "fullName": "Nguyễn Văn An",
+      "dob": "1990-01-01T00:00:00.000Z",
+      "nationalId": "079090000001",
+      "phone": "0901111111",
+      "email": "nguyenvana@example.com",
+      "address": "123 Lê Lợi, P. Bến Nghé, Quận 1",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Trần Thị Bình",
+      "dob": "1985-05-15T00:00:00.000Z",
+      "nationalId": "079085000002",
+      "phone": "0902222222",
+      "email": "tranthib@example.com",
+      "address": "456 Nguyễn Văn Linh, P. Tân Phong, Quận 7",
+      "customerType": "VIP",
+      "monthlyIncome": 50000000,
+      "creditScore": 750,
+      "images": {}
+    },
+    {
+      "fullName": "Lê Văn Cường",
+      "dob": "2000-10-20T00:00:00.000Z",
+      "nationalId": "079200000003",
+      "phone": "0903333333",
+      "email": "levanc@example.com",
+      "address": "789 Hoàng Diệu, Quận 4",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Phạm Thị Dung",
+      "dob": "1992-03-10T00:00:00.000Z",
+      "nationalId": "079192000004",
+      "phone": "0904444444",
+      "email": "phamthid@example.com",
+      "address": "321 Trần Hưng Đạo, Quận 5",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Hoàng Văn Em",
+      "dob": "1988-08-08T00:00:00.000Z",
+      "nationalId": "079188000005",
+      "phone": "0905555555",
+      "email": "hoangvane@example.com",
+      "address": "654 Thảo Điền, Quận 2",
+      "customerType": "VIP",
+      "monthlyIncome": 45000000,
+      "creditScore": 720,
+      "images": {}
+    },
+    {
+      "fullName": "Vũ Thị Hoa",
+      "dob": "1995-12-12T00:00:00.000Z",
+      "nationalId": "079195000006",
+      "phone": "0906666666",
+      "email": "vuthif@example.com",
+      "address": "987 Hai Bà Trưng, Quận 1",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Đặng Văn Giàu",
+      "dob": "1991-07-07T00:00:00.000Z",
+      "nationalId": "079191000007",
+      "phone": "0907777777",
+      "email": "dangvang@example.com",
+      "address": "147 Huỳnh Tấn Phát, Quận 7",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Bùi Thị Hạnh",
+      "dob": "1998-09-09T00:00:00.000Z",
+      "nationalId": "079198000008",
+      "phone": "0908888888",
+      "email": "buithih@example.com",
+      "address": "258 Cách Mạng Tháng 8, Quận 3",
+      "customerType": "VIP",
+      "monthlyIncome": 60000000,
+      "creditScore": 780,
+      "images": {}
+    },
+    {
+      "fullName": "Ngô Văn Ích",
+      "dob": "1983-04-04T00:00:00.000Z",
+      "nationalId": "079183000009",
+      "phone": "0909999999",
+      "email": "ngovani@example.com",
+      "address": "369 Tôn Đản, Quận 4",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Đỗ Thị Kiều",
+      "dob": "1996-06-06T00:00:00.000Z",
+      "nationalId": "079196000010",
+      "phone": "0900000000",
+      "email": "dothik@example.com",
+      "address": "741 Nguyễn Trãi, Quận 5",
+      "customerType": "REGULAR",
+      "images": {}
+    },
+    {
+      "fullName": "Trần Văn Rủi Ro",
+      "dob": "1980-01-01T00:00:00.000Z",
+      "nationalId": "079999999999",
+      "phone": "0999666666",
+      "email": "risk_guy@example.com",
+      "address": "Không xác định",
+      "customerType": "REGULAR",
+      "creditScore": 250,
+      "images": {}
+    },
+    {
+      "fullName": "Nguyễn Không Email",
+      "dob": "1995-05-05T00:00:00.000Z",
+      "nationalId": "079888888888",
+      "phone": "0988888888",
+      "email": null,
+      "address": "Huyện Hóc Môn",
+      "customerType": "REGULAR",
+      "images": {}
+    }
+  ],
+  "employees": [
+    { "id": "emp-001", "name": "Quản lý Hùng", "role": "MANAGER" },
+    { "id": "emp-002", "name": "Nhân viên Mai", "role": "STAFF" },
+    { "id": "emp-003", "name": "Nhân viên Tuấn", "role": "STAFF" },
+    { "id": "emp-004", "name": "Giao dịch viên Lan", "role": "TELLER" },
+    { "id": "emp-005", "name": "Quản trị hệ thống", "role": "ADMIN" },
+    { "id": "emp-099", "name": "Nhân viên cũ Lý", "role": "STAFF" }
+  ]
+}
