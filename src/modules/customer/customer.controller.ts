@@ -31,7 +31,10 @@ import {
 } from './dto/response/customer.response';
 import { BaseResult } from 'src/common/dto/base.response';
 import { PaginationMeta } from 'src/common/dto/pagination.type';
-import { CurrentUser, type CurrentUserInfo } from 'src/common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  type CurrentUserInfo,
+} from 'src/common/decorators/current-user.decorator';
 
 @ApiExtraModels(BaseResult, CustomerResponse, PaginationMeta)
 @ApiTags('Customers')

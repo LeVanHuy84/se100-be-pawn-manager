@@ -27,7 +27,10 @@ import {
   CollateralTypeResponse,
 } from './dto/response/collateral-type.response';
 import { BaseResult } from 'src/common/dto/base.response';
-import { CurrentUser, type CurrentUserInfo } from 'src/common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  type CurrentUserInfo,
+} from 'src/common/decorators/current-user.decorator';
 
 @Controller({
   version: '1',
@@ -84,7 +87,10 @@ export class CollateralTypeController {
       ],
     },
   })
-  createCollateralType(@Body() body: CreateCollateralTypeDTO, @CurrentUser() user: CurrentUserInfo) {
+  createCollateralType(
+    @Body() body: CreateCollateralTypeDTO,
+    @CurrentUser() user: CurrentUserInfo,
+  ) {
     return this.collateralTypeService.create(body, user);
   }
 

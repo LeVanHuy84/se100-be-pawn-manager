@@ -97,7 +97,10 @@ export class StoreService {
     };
   }
 
-  async create(data: CreateStoreDTO, user?: CurrentUserInfo): Promise<BaseResult<StoreResponse>> {
+  async create(
+    data: CreateStoreDTO,
+    user?: CurrentUserInfo,
+  ): Promise<BaseResult<StoreResponse>> {
     try {
       // Check for duplicate store name
       const existing = await this.prisma.store.findFirst({
@@ -148,7 +151,9 @@ export class StoreService {
             entityType: AuditEntityType.LOAN, // Note: Schema doesn't have STORE type, using LOAN as placeholder
             entityName: data.name,
             actorId: user?.userId || null,
-            actorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null,
+            actorName: user
+              ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+              : null,
             oldValue: {},
             newValue: {
               name: data.name,
@@ -258,7 +263,10 @@ export class StoreService {
           oldValue.address = existing.address;
           newValue.address = data.address;
         }
-        if (data.isActive !== undefined && existing.isActive !== data.isActive) {
+        if (
+          data.isActive !== undefined &&
+          existing.isActive !== data.isActive
+        ) {
           oldValue.isActive = existing.isActive;
           newValue.isActive = data.isActive;
         }
@@ -279,7 +287,9 @@ export class StoreService {
               entityType: AuditEntityType.LOAN, // Note: Schema doesn't have STORE type
               entityName: existing.name,
               actorId: user?.userId || null,
-              actorName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null,
+              actorName: user
+                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                : null,
               oldValue,
               newValue,
               description: `Cập nhật thông tin cửa hàng: ${existing.name}`,

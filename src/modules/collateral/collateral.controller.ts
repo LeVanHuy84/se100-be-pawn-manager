@@ -14,7 +14,10 @@ import type { File as MulterFile } from 'multer';
 import { CollateralService } from './collateral.service';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { Role } from 'src/modules/employee/enum/role.enum';
-import { CurrentUser, type CurrentUserInfo } from 'src/common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  type CurrentUserInfo,
+} from 'src/common/decorators/current-user.decorator';
 import { CollateralQueryDTO } from './dto/request/collateral.query';
 import { CreateCollateralDTO } from './dto/request/create-collateral.request';
 import { UpdateLocationRequest } from './dto/request/update-location.request';
