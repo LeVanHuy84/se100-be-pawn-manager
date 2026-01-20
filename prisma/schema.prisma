@@ -42,7 +42,9 @@ enum PaymentType {
   PERIODIC
   EARLY
   PAYOFF
+
   ADJUSTMENT
+  OTHER // Income not tied to loan
 }
 
 enum PaymentMethod {
@@ -95,6 +97,7 @@ enum RevenueType {
   LIQUIDATION_EXCESS    // Net profit from liquidation (after paying off debt and refund)
   LIQUIDATION_SALE      // Total amount received from selling collateral
   EXCESS_REFUND         // Amount refunded to customer (recorded as negative/outflow)
+  OTHER                 // Other income (e.g. adding capital)
 }
 
 enum NotificationType {
@@ -282,7 +285,7 @@ model RepaymentScheduleDetail {
 model LoanPayment {
   id                 String        @id @default(uuid()) @db.Uuid
   idempotencyKey     String?       @unique
-  loanId             String        @db.Uuid
+  loanId             String?       @db.Uuid
   storeId            String        @db.Uuid
   amount             Decimal
   paymentType        PaymentType
@@ -294,7 +297,7 @@ model LoanPayment {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @default(now())
 
-  loan        Loan                @relation(fields: [loanId], references: [id])
+  loan        Loan?               @relation(fields: [loanId], references: [id])
   store       Store               @relation(fields: [storeId], references: [id])
   allocations PaymentAllocation[]
 
@@ -322,7 +325,7 @@ model PaymentAllocation {
 model Disbursement {
   id                   String             @id @default(uuid()) @db.Uuid
   idempotencyKey       String?            @unique // Prevent duplicate disbursements
-  loanId               String             @db.Uuid
+  loanId               String?            @db.Uuid
   storeId              String             @db.Uuid
   amount               Decimal            // Số tiền giải ngân
   disbursementMethod   DisbursementMethod // CASH hoặc BANK_TRANSFER
@@ -340,7 +343,7 @@ model Disbursement {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  loan  Loan  @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loan       Loan?    @relation(fields: [loanId], references: [id], onDelete: Cascade)
   store Store @relation(fields: [storeId], references: [id])
 
   @@index([loanId])

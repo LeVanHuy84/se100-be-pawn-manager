@@ -131,12 +131,13 @@ export class CustomerService {
     }
 
     try {
-      // Check for duplicate nationalId or phone
+      // Check for duplicate nationalId, phone, or email
       const existing = await this.prisma.customer.findFirst({
         where: {
           OR: [
             { nationalId: data.nationalId },
             ...(data.phone ? [{ phone: data.phone }] : []),
+            ...(data.email ? [{ email: data.email }] : []),
           ],
         },
       });
@@ -150,6 +151,11 @@ export class CustomerService {
         if (existing.phone === data.phone) {
           throw new ConflictException(
             'Customer with this phone number already exists',
+          );
+        }
+        if (existing.email === data.email) {
+          throw new ConflictException(
+            'Customer with this email address already exists',
           );
         }
       }

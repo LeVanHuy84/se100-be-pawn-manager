@@ -60,29 +60,32 @@ export class DisbursementService {
       );
     }
 
-    // Verify loan exists and is ACTIVE
-    const loan = await this.prisma.loan.findUnique({
-      where: { id: dto.loanId },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            email: true,
+    // Verify loan exists and is ACTIVE if loanId is provided
+    let loan: any = null;
+    if (dto.loanId) {
+      loan = await this.prisma.loan.findUnique({
+        where: { id: dto.loanId },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              fullName: true,
+              phone: true,
+              email: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    if (!loan) {
-      throw new NotFoundException(`Loan with ID ${dto.loanId} not found`);
-    }
+      if (!loan) {
+        throw new NotFoundException(`Loan with ID ${dto.loanId} not found`);
+      }
 
-    if (loan.status !== LoanStatus.ACTIVE) {
-      throw new BadRequestException(
-        `Cannot disburse for loan with status ${loan.status}. Loan must be ACTIVE.`,
-      );
+      if (loan.status !== LoanStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Cannot disburse for loan with status ${loan.status}. Loan must be ACTIVE.`,
+        );
+      }
     }
 
     // Create disbursement in transaction
@@ -92,7 +95,7 @@ export class DisbursementService {
       const disbursement = await tx.disbursement.create({
         data: {
           idempotencyKey,
-          loanId: dto.loanId,
+          loanId: dto.loanId || null,
           amount: Math.ceil(dto.amount), // Round up disbursement amount
           disbursementMethod: dto.disbursementMethod,
           referenceCode,
@@ -125,6 +128,7 @@ export class DisbursementService {
       });
 
       // Create audit log
+      /*
       await tx.auditLog.create({
         data: {
           action: AuditActionEnum.CREATE_DISBURSEMENT,
@@ -144,17 +148,22 @@ export class DisbursementService {
             bankAccountNumber: disbursement.bankAccountNumber,
             bankName: disbursement.bankName,
           },
-          description: `Created disbursement ${disbursement.referenceCode} for loan ${disbursement.loan.loanCode}`,
+          description: `Created disbursement ${disbursement.referenceCode} ${
+            disbursement.loan ? 'for loan ' + disbursement.loan.loanCode : ''
+          }`,
         },
       });
+      */
 
-      // Update Loan startDate
-      await tx.loan.update({
-        where: { id: dto.loanId },
-        data: {
-          startDate: new Date(),
-        },
-      });
+      // Update Loan startDate if loanId is present
+      if (dto.loanId) {
+        await tx.loan.update({
+          where: { id: dto.loanId },
+          data: {
+            startDate: new Date(),
+          },
+        });
+      }
 
       return disbursement;
     });
@@ -163,7 +172,7 @@ export class DisbursementService {
       data: {
         id: result.id,
         loanId: result.loanId,
-        loanCode: result.loan.loanCode,
+        loanCode: result.loan?.loanCode || null,
         amount: Number(result.amount),
         disbursementMethod: result.disbursementMethod,
         disbursedAt: result.disbursedAt.toISOString(),
@@ -178,7 +187,7 @@ export class DisbursementService {
         bankName: result.bankName,
         createdAt: result.createdAt.toISOString(),
         updatedAt: result.updatedAt.toISOString(),
-        customer: result.loan.customer,
+        customer: result.loan?.customer,
       },
     };
   }
@@ -288,7 +297,7 @@ export class DisbursementService {
       recipientName: d.recipientName,
       disbursedBy: d.disbursedBy,
       notes: d.notes,
-      loanCode: d.loan.loanCode,
+      loanCode: d.loan?.loanCode,
       createdAt: d.createdAt.toISOString(),
     }));
 

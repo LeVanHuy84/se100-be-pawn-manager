@@ -37,7 +37,6 @@ package "Nghiệp vụ Cầm đồ (Core Business)" {
     usecase "Tạo Hồ sơ vay (Cầm đồ)" as UC_Create_Loan
     usecase "Duyệt / Từ chối khoản vay" as UC_Approve_Loan
     usecase "Thu nợ (Gốc/Lãi/Phí)" as UC_Collect_Payment
-    usecase "Gia hạn / Đảo nợ" as UC_Rollover
     usecase "Nhắc nợ & Xử lý quá hạn" as UC_Remind_Debt
 }
 
@@ -67,7 +66,6 @@ Staff --> UC_Credit_Check
 Staff --> UC_Appraise_Asset
 Staff --> UC_Create_Loan
 Staff --> UC_Collect_Payment
-Staff --> UC_Rollover
 Staff --> UC_Remind_Debt
 Staff --> UC_Warehousing
 
@@ -94,20 +92,20 @@ end note
 ## Giải thích các tác nhân (Actors):
 
 1.  **Nhân viên (Loan Officer/Clerk):**
-    *   Là người trực tiếp giao dịch với khách hàng tại cửa hàng.
-    *   Nhiệm vụ chính: Tạo hồ sơ khách hàng, thẩm định sơ bộ tài sản, tạo hợp đồng vay, thu tiền lãi/gốc định kỳ, và quản lý việc cất giữ/trả lại tài sản trong kho.
+    - Là người trực tiếp giao dịch với khách hàng tại cửa hàng.
+    - Nhiệm vụ chính: Tạo hồ sơ khách hàng, thẩm định sơ bộ tài sản, tạo hợp đồng vay, thu tiền lãi/gốc định kỳ, và quản lý việc cất giữ/trả lại tài sản trong kho.
 
 2.  **Quản lý (Store Manager):**
-    *   Chịu trách nhiệm về hoạt động của một cửa hàng cụ thể.
-    *   Có toàn quyền của Nhân viên, cộng thêm quyền phê duyệt các khoản vay (đặc biệt các khoản giá trị lớn), quyết định thanh lý tài sản quá hạn, và xem các báo cáo tài chính chi tiết của cửa hàng.
+    - Chịu trách nhiệm về hoạt động của một cửa hàng cụ thể.
+    - Có toàn quyền của Nhân viên, cộng thêm quyền phê duyệt các khoản vay (đặc biệt các khoản giá trị lớn), quyết định thanh lý tài sản quá hạn, và xem các báo cáo tài chính chi tiết của cửa hàng.
 
 3.  **Quản trị viên (Admin):**
-    *   Người quản lý cấu hình toàn hệ thống.
-    *   Nhiệm vụ chính: Thiết lập danh sách cửa hàng, tạo tài khoản cho nhân viên/quản lý, cấu hình các loại tài sản (tỷ lệ định giá, lãi suất khung), và xem báo cáo tổng hợp toàn chuỗi.
+    - Người quản lý cấu hình toàn hệ thống.
+    - Nhiệm vụ chính: Thiết lập danh sách cửa hàng, tạo tài khoản cho nhân viên/quản lý, cấu hình các loại tài sản (tỷ lệ định giá, lãi suất khung), và xem báo cáo tổng hợp toàn chuỗi.
 
 ## Các phân hệ chính:
 
-*   **Quản trị hệ thống & Danh mục:** Nơi thiết lập nền tảng dữ liệu (Cửa hàng, Loại tài sản, Nhân sự).
-*   **Nghiệp vụ Cầm đồ:** Luồng chính của phần mềm từ lúc khách đến vay, thẩm định, tạo hợp đồng cho đến khi thanh toán.
-*   **Quản lý Kho & Thanh lý:** Quản lý vòng đời vật lý của tài sản cầm cố.
-*   **Báo cáo:** Cung cấp số liệu ra quyết định cho quản lý.
+- **Quản trị hệ thống & Danh mục:** Nơi thiết lập nền tảng dữ liệu (Cửa hàng, Loại tài sản, Nhân sự).
+- **Nghiệp vụ Cầm đồ:** Luồng chính của phần mềm từ lúc khách đến vay, thẩm định, tạo hợp đồng cho đến khi thanh toán.
+- **Quản lý Kho & Thanh lý:** Quản lý vòng đời vật lý của tài sản cầm cố.
+- **Báo cáo:** Cung cấp số liệu ra quyết định cho quản lý.
